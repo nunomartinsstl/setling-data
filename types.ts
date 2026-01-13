@@ -22,6 +22,7 @@ export interface StockItem {
   sku: string;
   description: string;
   quantity: number;
+  batch: string; // Added batch (Lote)
   lastUpdated: string;
 }
 

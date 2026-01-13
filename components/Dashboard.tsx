@@ -27,10 +27,18 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole }) => {
   }, [orders, stock]);
 
   const stockData = useMemo(() => {
-    return stock.slice(0, 10).map(item => ({
-      name: item.sku,
-      qty: item.quantity
-    }));
+    // Since stock now contains individual batches, we must aggregate by SKU for the top 10 chart
+    const aggregation = new Map<string, number>();
+    
+    stock.forEach(item => {
+        const current = aggregation.get(item.sku) || 0;
+        aggregation.set(item.sku, current + item.quantity);
+    });
+
+    return Array.from(aggregation.entries())
+        .map(([name, qty]) => ({ name, qty }))
+        .sort((a, b) => b.qty - a.qty)
+        .slice(0, 10);
   }, [stock]);
 
   const orderStatusData = [
@@ -91,7 +99,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole }) => {
 
         {!isManagement && (
           <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 h-96">
-            <h3 className="text-lg font-bold text-slate-800 mb-4">Níveis de Estoque (Top 10)</h3>
+            <h3 className="text-lg font-bold text-slate-800 mb-4">Níveis de Estoque (Top 10 SKUs)</h3>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stockData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} />

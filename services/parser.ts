@@ -39,6 +39,7 @@ export const ParserService = {
                 sku,
                 description,
                 quantity,
+                batch: '-', // Default batch for legacy CSV parser
                 lastUpdated: new Date().toISOString()
             });
         }

@@ -51,41 +51,32 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
             throw new Error(`Formato inválido. Colunas faltando: ${missingColumns.join(', ')}`);
         }
 
-        // Process Data & Aggregate by SKU (summing up quantities from different batches)
-        const stockMap = new Map<string, StockItem>();
+        // Process Data WITHOUT AGGREGATION
+        const newStock: StockItem[] = [];
 
-        data.forEach((row, index) => {
+        data.forEach((row) => {
             const sku = row['Material']?.toString().trim();
             const description = row['Texto breve material']?.toString().trim() || 'Sem descrição';
-            // Handle number parsing (sometimes comes as string with commas/dots in European formats if not parsed correctly by Excel)
+            const batch = row['Lote']?.toString().trim() || '-';
+            
+            // Handle number parsing
             let qty = row['Utilização livre'];
-
             if (typeof qty === 'string') {
-                // Remove thousands separator (check if it's dot or comma based on locale, but standard SAP export often uses comma for decimal)
-                // If standard number, XLSX parses it. If string, likely formatting.
-                // Simple heuristics: remove non-numeric chars except dot/comma, then normalize.
-                // Assuming standard Excel number format usually works, but let's be safe.
                 qty = parseFloat(qty);
             }
             
             if (sku) {
                 const currentQty = isNaN(Number(qty)) ? 0 : Number(qty);
                 
-                if (stockMap.has(sku)) {
-                    const existing = stockMap.get(sku)!;
-                    existing.quantity += currentQty;
-                } else {
-                    stockMap.set(sku, {
-                        sku,
-                        description,
-                        quantity: currentQty,
-                        lastUpdated: new Date().toISOString()
-                    });
-                }
+                newStock.push({
+                    sku,
+                    description,
+                    quantity: currentQty,
+                    batch: batch,
+                    lastUpdated: new Date().toISOString()
+                });
             }
         });
-
-        const newStock = Array.from(stockMap.values());
 
         if (newStock.length === 0) {
           throw new Error("Nenhum item válido encontrado nas linhas.");
@@ -95,7 +86,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
         await StorageService.replaceStock(newStock);
         
         refreshData();
-        setMessage({ type: 'success', text: `Estoque substituído com sucesso. ${newStock.length} SKUs únicos carregados.` });
+        setMessage({ type: 'success', text: `Estoque substituído com sucesso. ${newStock.length} linhas carregadas.` });
         if (fileInputRef.current) fileInputRef.current.value = '';
 
       } catch (err: any) {
@@ -117,7 +108,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
           <Package className="text-amber-500" /> Estoque Atual
         </h2>
         <span className="text-sm font-normal text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-            {stock.length} itens únicos
+            {stock.length} lotes registrados
         </span>
       </div>
 
@@ -188,16 +179,17 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
           <table className="w-full text-left text-sm text-slate-600">
             <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-700">
               <tr>
-                <th className="p-4">SKU</th>
+                <th className="p-4">SKU (Material)</th>
                 <th className="p-4">Descrição</th>
-                <th className="p-4 text-right">Quantidade Total</th>
-                <th className="p-4">Última Atualização</th>
+                <th className="p-4">Lote</th>
+                <th className="p-4 text-right">Qtd</th>
+                <th className="p-4">Atualizado em</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {stock.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="p-8 text-center text-slate-400">
+                  <td colSpan={5} className="p-8 text-center text-slate-400">
                     Armazém vazio.
                   </td>
                 </tr>
@@ -206,6 +198,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
                   <tr key={idx} className="hover:bg-slate-50 transition-colors">
                     <td className="p-4 font-medium text-slate-800">{item.sku}</td>
                     <td className="p-4">{item.description}</td>
+                    <td className="p-4 font-mono text-xs text-amber-700">{item.batch}</td>
                     <td className="p-4 text-right font-bold text-slate-900">{item.quantity}</td>
                     <td className="p-4 text-xs text-slate-400">
                       {item.lastUpdated ? new Date(item.lastUpdated).toLocaleString('pt-BR') : '-'}
