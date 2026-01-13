@@ -11,30 +11,32 @@ interface LayoutProps {
   isConnected: boolean;
 }
 
+// Moved outside component to prevent re-creation on every render
+const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void }) => {
+  return (
+    <button
+      onClick={onClick}
+      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+        isActive 
+          ? 'bg-brand-50 text-brand-700 font-semibold' 
+          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+      }`}
+    >
+      <Icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-slate-400'}`} />
+      <span>{label}</span>
+    </button>
+  );
+};
+
 const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
-  const NavItem = ({ view, icon: Icon, label }: { view: ViewState, icon: any, label: string }) => {
-    const isActive = currentView === view;
-    return (
-      <button
-        onClick={() => {
-          onNavigate(view);
-          setMobileMenuOpen(false);
-        }}
-        className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-          isActive 
-            ? 'bg-brand-50 text-brand-700 font-semibold' 
-            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-        }`}
-      >
-        <Icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-slate-400'}`} />
-        <span>{label}</span>
-      </button>
-    );
-  };
-
   const isManagement = user.role === UserRole.MANAGEMENT;
+
+  const handleNavClick = (view: ViewState) => {
+    onNavigate(view);
+    setMobileMenuOpen(false);
+  };
 
   return (
     <div className="flex h-screen bg-slate-50">
@@ -66,15 +68,45 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </div>
 
             <nav className="space-y-1">
-              <NavItem view="DASHBOARD" icon={LayoutDashboard} label="Painel" />
-              <NavItem view="OPEN_ORDERS" icon={ShoppingCart} label="Pedidos Abertos" />
-              <NavItem view="FINISHED_ORDERS" icon={CheckCircle} label="Pedidos Finalizados" />
+              <NavItem 
+                view="DASHBOARD" 
+                icon={LayoutDashboard} 
+                label="Painel" 
+                isActive={currentView === 'DASHBOARD'} 
+                onClick={() => handleNavClick('DASHBOARD')} 
+              />
+              <NavItem 
+                view="OPEN_ORDERS" 
+                icon={ShoppingCart} 
+                label="Pedidos Abertos" 
+                isActive={currentView === 'OPEN_ORDERS'} 
+                onClick={() => handleNavClick('OPEN_ORDERS')} 
+              />
+              <NavItem 
+                view="FINISHED_ORDERS" 
+                icon={CheckCircle} 
+                label="Pedidos Finalizados" 
+                isActive={currentView === 'FINISHED_ORDERS'} 
+                onClick={() => handleNavClick('FINISHED_ORDERS')} 
+              />
               
               {!isManagement && (
-                <NavItem view="STOCK" icon={Package} label="Estoque" />
+                <NavItem 
+                  view="STOCK" 
+                  icon={Package} 
+                  label="Estoque" 
+                  isActive={currentView === 'STOCK'} 
+                  onClick={() => handleNavClick('STOCK')} 
+                />
               )}
               
-              <NavItem view="QUERY" icon={Search} label="Busca" />
+              <NavItem 
+                view="QUERY" 
+                icon={Search} 
+                label="Busca" 
+                isActive={currentView === 'QUERY'} 
+                onClick={() => handleNavClick('QUERY')} 
+              />
             </nav>
           </div>
 
