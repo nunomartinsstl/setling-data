@@ -1,6 +1,6 @@
 import { OrderItem, StockItem } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, set, child } from 'firebase/database';
+import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
 
 // --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
@@ -40,20 +40,42 @@ const toArray = <T>(data: any): T[] => {
   return Object.values(data);
 };
 
+// Helper: Timeout wrapper to prevent hanging promises
+const withTimeout = <T>(promise: Promise<T>, ms: number = 5000): Promise<T> => {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error("Timeout de conexão"));
+        }, ms);
+
+        promise
+            .then((value) => {
+                clearTimeout(timer);
+                resolve(value);
+            })
+            .catch((reason) => {
+                clearTimeout(timer);
+                reject(reason);
+            });
+    });
+};
+
 export const StorageService = {
   isConnected: () => isFirebaseActive,
 
   getOrders: async (): Promise<OrderItem[]> => {
     if (isFirebaseActive) {
       try {
-        const snapshot = await get(child(ref(db), KEYS.ORDERS));
+        // Wrap the fetch in a timeout so it doesn't spin forever
+        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.ORDERS)), 5000);
+        
         if (snapshot.exists()) {
           return toArray<OrderItem>(snapshot.val());
         }
         return [];
       } catch (error) {
-        console.error("Erro ao buscar pedidos:", error);
-        return [];
+        console.warn("Erro ao buscar pedidos (ou timeout):", error);
+        // Fallback to local storage or empty array if Firebase fails/times out
+        return []; 
       }
     } else {
       const data = localStorage.getItem(KEYS.ORDERS);
@@ -90,13 +112,14 @@ export const StorageService = {
   getStock: async (): Promise<StockItem[]> => {
     if (isFirebaseActive) {
       try {
-        const snapshot = await get(child(ref(db), KEYS.STOCK));
+        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.STOCK)), 5000);
+        
         if (snapshot.exists()) {
           return toArray<StockItem>(snapshot.val());
         }
         return [];
       } catch (error) {
-        console.error("Erro ao buscar estoque:", error);
+        console.warn("Erro ao buscar estoque (ou timeout):", error);
         return [];
       }
     } else {
