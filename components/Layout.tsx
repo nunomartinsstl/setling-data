@@ -31,11 +31,25 @@ const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewSta
 const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
+  // Helper booleans
+  const isAdmin = user.role === UserRole.ADMIN;
   const isManagement = user.role === UserRole.MANAGEMENT;
-
+  
   const handleNavClick = (view: ViewState) => {
     onNavigate(view);
     setMobileMenuOpen(false);
+  };
+
+  const getRoleLabel = () => {
+    if (isAdmin) return 'Administrador';
+    if (isManagement) return 'Gerência';
+    return 'Armazém';
+  };
+
+  const getRoleColor = () => {
+     if (isAdmin) return 'bg-purple-100 text-purple-700';
+     if (isManagement) return 'bg-blue-100 text-blue-700';
+     return 'bg-amber-100 text-amber-700';
   };
 
   return (
@@ -60,10 +74,8 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             <div className="mb-6 px-4 py-3 bg-slate-50 rounded-lg border border-slate-100">
               <p className="text-xs text-slate-500 uppercase font-semibold">Logado como</p>
               <p className="font-medium text-slate-800 truncate">{user.username}</p>
-              <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${
-                isManagement ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
-              }`}>
-                {isManagement ? 'Gerência' : 'Armazém'}
+              <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${getRoleColor()}`}>
+                {getRoleLabel()}
               </span>
             </div>
 
@@ -90,7 +102,8 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 onClick={() => handleNavClick('FINISHED_ORDERS')} 
               />
               
-              {!isManagement && (
+              {/* Show Stock for Admin OR Warehouse */}
+              {(isAdmin || !isManagement) && (
                 <NavItem 
                   view="STOCK" 
                   icon={Package} 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
@@ -19,6 +19,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [lastName, setLastName] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
+  const [accessCode, setAccessCode] = useState(''); // New security field
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -44,10 +45,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     e.preventDefault();
     setError('');
     
-    if (!firstName || !lastName || !regPassword) {
-        setError("Preencha todos os campos.");
+    if (!firstName || !lastName || !regPassword || !accessCode) {
+        setError("Todos os campos são obrigatórios, incluindo o Código de Acesso.");
         return;
     }
+
+    // --- SECURITY CHECK ---
+    // Prevent unauthorized creation of high-level profiles
+    if ((role === UserRole.ADMIN || role === UserRole.MANAGEMENT) && accessCode !== 'admin97') {
+        setError("Código de acesso inválido para perfil de Administrador/Coordenação.");
+        return;
+    }
+
+    if (role === UserRole.WAREHOUSE && accessCode !== 'setling2025' && accessCode !== 'admin97') {
+        setError("Código de equipe inválido. Peça ao supervisor.");
+        return;
+    }
+    // ----------------------
 
     setIsLoading(true);
 
@@ -103,7 +117,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             value={firstName}
                             onChange={(e) => setFirstName(e.target.value)}
                             className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                            placeholder="Ex: João"
+                            placeholder="Ex: Nuno"
                         />
                     </div>
                     <div>
@@ -113,8 +127,29 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             value={lastName}
                             onChange={(e) => setLastName(e.target.value)}
                             className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                            placeholder="Ex: Silva"
+                            placeholder="Ex: Martins"
                         />
+                    </div>
+                </div>
+
+                <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">Função</label>
+                    <div className="grid grid-cols-3 gap-2">
+                        <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                            <input type="radio" name="role" className="hidden" checked={role === UserRole.ADMIN} onChange={() => setRole(UserRole.ADMIN)} />
+                            <ShieldCheck className="w-4 h-4" />
+                            <span className="font-semibold text-[10px]">Admin</span>
+                        </label>
+                        <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                            <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
+                            <UserIcon className="w-4 h-4" />
+                            <span className="font-semibold text-[10px]">Coord.</span>
+                        </label>
+                        <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                            <input type="radio" name="role" className="hidden" checked={role === UserRole.WAREHOUSE} onChange={() => setRole(UserRole.WAREHOUSE)} />
+                            <Lock className="w-4 h-4" />
+                            <span className="font-semibold text-[10px]">Logística</span>
+                        </label>
                     </div>
                 </div>
 
@@ -126,37 +161,33 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     </div>
                 </div>
 
-                <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Função</label>
-                    <div className="grid grid-cols-2 gap-3">
-                        <label className={`cursor-pointer border rounded-md p-3 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}>
-                            <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
-                            <span className="font-semibold text-sm">Coordenação</span>
-                            <span className="text-[10px] text-slate-400">Admin/Gerência</span>
-                        </label>
-                        <label className={`cursor-pointer border rounded-md p-3 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}>
-                            <input type="radio" name="role" className="hidden" checked={role === UserRole.WAREHOUSE} onChange={() => setRole(UserRole.WAREHOUSE)} />
-                            <span className="font-semibold text-sm">Logística</span>
-                            <span className="text-[10px] text-slate-400">Estoque/Operação</span>
-                        </label>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Senha Pessoal</label>
+                        <input
+                            type="password"
+                            value={regPassword}
+                            onChange={(e) => setRegPassword(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                            placeholder="Sua senha"
+                        />
                     </div>
-                </div>
-
-                <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Senha</label>
-                    <input
-                        type="password"
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
-                        placeholder="Crie uma senha"
-                    />
+                    <div>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1 text-red-500">Código de Acesso</label>
+                        <input
+                            type="password"
+                            value={accessCode}
+                            onChange={(e) => setAccessCode(e.target.value)}
+                            className="w-full px-3 py-2 border border-red-200 bg-red-50 rounded-md focus:ring-2 focus:ring-red-500 outline-none text-sm"
+                            placeholder="Chave da Empresa"
+                        />
+                    </div>
                 </div>
 
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                    className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2 mt-2"
                 >
                     {isLoading ? 'Criando...' : <><UserPlus className="w-4 h-4" /> Criar Usuário</>}
                 </button>

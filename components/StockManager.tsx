@@ -99,7 +99,8 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
     reader.readAsBinaryString(file);
   };
 
-  const isWarehouse = userRole === UserRole.WAREHOUSE;
+  // PERMISSION CHECK: Warehouse OR Admin
+  const canEdit = userRole === UserRole.WAREHOUSE || userRole === UserRole.ADMIN;
 
   return (
     <div className="space-y-6">
@@ -112,14 +113,14 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
         </span>
       </div>
 
-      <div className={`bg-white p-6 rounded-xl shadow-sm border ${isWarehouse ? 'border-amber-200' : 'border-slate-200'}`}>
+      <div className={`bg-white p-6 rounded-xl shadow-sm border ${canEdit ? 'border-amber-200' : 'border-slate-200'}`}>
         <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
           <Upload className="w-5 h-5" /> Atualizar Estoque (Excel)
         </h3>
         
-        {!isWarehouse ? (
+        {!canEdit ? (
           <div className="p-4 bg-slate-50 rounded-lg text-slate-500 text-sm">
-            Apenas pessoal do Armazém pode atualizar o estoque.
+            Apenas pessoal do Armazém ou Admins podem atualizar o estoque.
           </div>
         ) : (
           <div className="space-y-4 animate-fade-in">

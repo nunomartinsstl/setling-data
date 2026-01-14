@@ -23,7 +23,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredOrders = orders.filter(o => type === 'OPEN' ? o.status === 'OPEN' : o.status === 'FINISHED');
-  const isManagement = userRole === UserRole.MANAGEMENT;
+  
+  // PERMISSION CHECK: Management OR Admin
+  const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -159,14 +161,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
       </div>
 
       {type === 'OPEN' && (
-        <div className={`bg-white p-6 rounded-xl shadow-sm border ${isManagement ? 'border-brand-200' : 'border-slate-200'}`}>
+        <div className={`bg-white p-6 rounded-xl shadow-sm border ${canEdit ? 'border-brand-200' : 'border-slate-200'}`}>
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Upload className="w-5 h-5" /> Importar Pedidos
           </h3>
           
-          {!isManagement ? (
+          {!canEdit ? (
             <div className="p-4 bg-slate-50 rounded-lg text-slate-500 text-sm">
-              Apenas usuários da Gerência podem importar novos pedidos.
+              Apenas usuários da Gerência ou Admins podem importar novos pedidos.
             </div>
           ) : (
             <div>
