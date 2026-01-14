@@ -72,7 +72,7 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'DASHBOARD':
-        return <Dashboard orders={orders} stock={stock} userRole={user.role} />;
+        return <Dashboard orders={orders} stock={stock} userRole={user.role} onNavigate={setView} />;
       case 'OPEN_ORDERS':
         return (
           <OrderManager 
@@ -110,7 +110,7 @@ const App: React.FC = () => {
       case 'SETTINGS':
         return <Settings />;
       default:
-        return <Dashboard orders={orders} stock={stock} userRole={user.role} />;
+        return <Dashboard orders={orders} stock={stock} userRole={user.role} onNavigate={setView} />;
     }
   };
 

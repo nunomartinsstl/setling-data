@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Order, StockItem, UserRole } from '../types';
+import { Order, StockItem, UserRole, ViewState } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { ShoppingCart, CheckCircle } from 'lucide-react';
 
@@ -7,9 +7,10 @@ interface DashboardProps {
   orders: Order[];
   stock: StockItem[];
   userRole?: UserRole;
+  onNavigate: (view: ViewState) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNavigate }) => {
   const stats = useMemo(() => {
     const openOrders = orders.filter(o => o.status === 'OPEN');
     const finishedOrders = orders.filter(o => o.status === 'FINISHED');
@@ -25,8 +26,11 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole }) => {
     { name: 'Finalizados', value: stats.finishedCount },
   ];
 
-  const StatCard = ({ title, value, icon: Icon, color }: any) => (
-    <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4">
+  const StatCard = ({ title, value, icon: Icon, color, onClick }: any) => (
+    <div 
+      onClick={onClick}
+      className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center space-x-4 cursor-pointer hover:shadow-md transition-shadow hover:bg-slate-50"
+    >
       <div className={`p-4 rounded-full ${color}`}>
         <Icon className="w-6 h-6 text-white" />
       </div>
@@ -42,8 +46,20 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole }) => {
       <h2 className="text-2xl font-bold text-slate-800">Visão Geral</h2>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <StatCard title="Pedidos Abertos" value={stats.openCount} icon={ShoppingCart} color="bg-blue-500" />
-        <StatCard title="Pedidos Finalizados" value={stats.finishedCount} icon={CheckCircle} color="bg-green-500" />
+        <StatCard 
+            title="Pedidos Abertos" 
+            value={stats.openCount} 
+            icon={ShoppingCart} 
+            color="bg-blue-500" 
+            onClick={() => onNavigate('OPEN_ORDERS')}
+        />
+        <StatCard 
+            title="Pedidos Finalizados" 
+            value={stats.finishedCount} 
+            icon={CheckCircle} 
+            color="bg-green-500" 
+            onClick={() => onNavigate('FINISHED_ORDERS')}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6">

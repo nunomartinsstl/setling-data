@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial } from '../types';
 import { StorageService } from '../services/storageService';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, FileSpreadsheet, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
@@ -16,7 +16,7 @@ interface OrderManagerProps {
 
 interface ManualRow {
     sku: string;
-    qty: string | number; // Changed to allow empty string for display
+    qty: string | number;
     isCustom: boolean;
     customDesc: string;
 }
@@ -46,8 +46,27 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const isAdmin = userRole === UserRole.ADMIN;
 
+  // --- MEMOIZED OPTIONS ---
+  // Combine Master List and Stock for the dropdown, prioritizing Master List (Catalogue)
+  const materialOptions = useMemo(() => {
+    const optionsMap = new Map<string, string>();
+    
+    // 1. Load Master List (Canonical)
+    masterList.forEach(m => {
+        optionsMap.set(m.sku, m.description);
+    });
+
+    // 2. Load Stock items (only if not already in Master)
+    stock.forEach(s => {
+        if (!optionsMap.has(s.sku)) {
+            optionsMap.set(s.sku, s.description);
+        }
+    });
+
+    return Array.from(optionsMap.entries()).map(([sku, desc]) => ({ sku, desc }));
+  }, [masterList, stock]);
+
   // --- DRAFT LOGIC ---
-  // Load draft on mount
   useEffect(() => {
     const savedRows = localStorage.getItem('draft_rows');
     const savedTitle = localStorage.getItem('draft_title');
@@ -57,7 +76,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     if (savedTitle) setOrderTitle(savedTitle);
   }, []);
 
-  // Save draft on change
   useEffect(() => {
     localStorage.setItem('draft_rows', JSON.stringify(manualRows));
   }, [manualRows]);
@@ -82,18 +100,22 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     return d.toISOString().split('T')[0];
   };
 
+  // Availability check always looks at STOCK
   const getStockCount = (sku: string) => {
     const item = stock.find(s => s.sku === sku);
     return item ? item.quantity : 0;
   };
 
+  // Description lookup prefers Catalogue
   const getMaterialDescription = (sku: string): string => {
-      const stockItem = stock.find(s => s.sku === sku);
-      if (stockItem) return stockItem.description;
-      
+      // 1. Try Master Catalogue
       const masterItem = masterList.find(m => m.sku === sku);
       if (masterItem) return masterItem.description;
 
+      // 2. Try Stock
+      const stockItem = stock.find(s => s.sku === sku);
+      if (stockItem) return stockItem.description;
+      
       return "Material Desconhecido";
   };
 
@@ -120,9 +142,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             const qtd = row['QTD'] || row['Qtd'] || row['Quantidade'] || row['Quantity'];
 
             if (material && qtd) {
-                // Check if it exists in stock OR master list
                 const skuStr = material.toString();
-                const exists = stock.some(s => s.sku === skuStr) || masterList.some(m => m.sku === skuStr);
+                // Exists if in Master OR Stock
+                const exists = masterList.some(m => m.sku === skuStr) || stock.some(s => s.sku === skuStr);
                 
                 newRows.push({
                     sku: exists ? skuStr : '',
@@ -135,9 +157,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
         if (newRows.length === 0) throw new Error("Nenhum dado válido encontrado.");
 
-        // Instead of finalizing, we load into the Editable List
         setManualRows(newRows);
-        setImportMode('MANUAL'); // Switch view so user sees the list
+        setImportMode('MANUAL');
         setMessage({ type: 'success', text: `${newRows.length} itens importados para a lista. Verifique e finalize.` });
 
       } catch (err: any) {
@@ -212,6 +233,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
         await StorageService.addOrders([newOrder]);
         refreshData();
+        clearDraft(); // Success!
 
         // --- NOTIFICATION LOGIC ---
         const needsNotification = pendingItems.some(item => {
@@ -229,12 +251,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     `Pedido: ${newOrder.title}\nData Para: ${dueDate}\n\nItens:\n` +
                     pendingItems.map(i => `- ${i.description} (${i.quantity})`).join('\n')
                 );
-                window.open(`mailto:${settings.notificationEmail}?subject=${subject}&body=${body}`);
+                
+                // Uses window.location.href to bypass pop-up blockers (standard mailto behavior)
+                window.location.href = `mailto:${settings.notificationEmail}?subject=${subject}&body=${body}`;
+                setMessage({ type: 'success', text: `Pedido criado. Se o e-mail não abriu, verifique seu app de e-mail.` });
+            } else {
+                 setMessage({ type: 'success', text: `Pedido criado. (Sem e-mail configurado para alerta).` });
             }
+        } else {
+             setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
         }
-        
-        clearDraft(); // Success!
-        setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
         
     } catch (err: any) {
         setMessage({ type: 'error', text: err.message });
@@ -334,11 +360,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   return (
     <div className="space-y-6">
       <datalist id="stock-options">
-        {stock.map((item, idx) => (
-            <option key={`s-${idx}`} value={item.sku}>{item.description}</option>
-        ))}
-        {masterList.map((item, idx) => (
-            <option key={`m-${idx}`} value={item.sku}>{item.description} (Catálogo)</option>
+        {materialOptions.map((opt) => (
+            <option key={opt.sku} value={opt.sku}>{opt.desc}</option>
         ))}
       </datalist>
 
@@ -423,8 +446,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         </div>
                         {manualRows.map((row, idx) => {
                             const stockQty = getStockCount(row.sku);
-                            const inMaster = masterList.some(m => m.sku === row.sku);
-                            const known = stockQty > 0 || inMaster;
+                            // Known if in Master OR Stock
+                            const known = masterList.some(m => m.sku === row.sku) || stock.some(s => s.sku === row.sku);
 
                             return (
                                 <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-md">
