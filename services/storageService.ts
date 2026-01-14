@@ -1,4 +1,4 @@
-import { OrderItem, StockItem } from '../types';
+import { OrderItem, StockItem, User, UserRole } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
 
@@ -22,15 +22,24 @@ try {
     const app = initializeApp(firebaseConfig);
     db = getDatabase(app);
     isFirebaseActive = true;
-    console.log("Firebase inicializado.");
+    console.log("Firebase: Cliente inicializado.");
   }
 } catch (e) {
-  console.error("Erro ao iniciar Firebase:", e);
+  console.error("Firebase: Erro crítico na inicialização:", e);
 }
 
 const KEYS = {
   ORDERS: 'nexus_orders',
   STOCK: 'nexus_stock',
+  USERS: 'nexus_users'
+};
+
+// Helper: SHA-256 Hash for simple password security
+const hashPassword = async (password: string): Promise<string> => {
+    const msgBuffer = new TextEncoder().encode(password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 };
 
 // Helper to convert Firebase Object/Array response to Array always
@@ -40,57 +49,118 @@ const toArray = <T>(data: any): T[] => {
   return Object.values(data);
 };
 
-// Helper: Timeout wrapper to prevent hanging promises
-const withTimeout = <T>(promise: Promise<T>, ms: number = 5000): Promise<T> => {
+// Helper: Timeout wrapper
+const withTimeout = <T>(promise: Promise<T>, ms: number = 3000): Promise<T> => {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-            reject(new Error("Timeout de conexão"));
+            reject(new Error("Timeout: O banco de dados não respondeu a tempo."));
         }, ms);
-
-        promise
-            .then((value) => {
-                clearTimeout(timer);
-                resolve(value);
-            })
-            .catch((reason) => {
-                clearTimeout(timer);
-                reject(reason);
-            });
+        promise.then((value) => { clearTimeout(timer); resolve(value); })
+               .catch((reason) => { clearTimeout(timer); reject(reason); });
     });
 };
 
 export const StorageService = {
   isConnected: () => isFirebaseActive,
 
+  // --- AUTHENTICATION ---
+
+  registerUser: async (firstName: string, lastName: string, password: string, role: UserRole): Promise<User> => {
+    const username = `${firstName.trim().toLowerCase()}-${lastName.trim().toLowerCase()}`;
+    const hashedPassword = await hashPassword(password);
+    
+    const newUser = {
+        username,
+        firstName,
+        lastName,
+        role,
+        password: hashedPassword
+    };
+
+    if (isFirebaseActive) {
+        // Check if exists
+        const userRef = ref(db, `${KEYS.USERS}/${username}`);
+        const snapshot = await get(userRef);
+        if (snapshot.exists()) {
+            throw new Error(`O usuário "${username}" já existe.`);
+        }
+        await set(userRef, newUser);
+    } else {
+        // Local fallback (simple simulation)
+        const localUsers = JSON.parse(localStorage.getItem(KEYS.USERS) || '{}');
+        if (localUsers[username]) throw new Error("Usuário já existe (local).");
+        localUsers[username] = newUser;
+        localStorage.setItem(KEYS.USERS, JSON.stringify(localUsers));
+    }
+
+    return { username, role };
+  },
+
+  authenticateUser: async (username: string, password: string): Promise<User> => {
+    const hashedPassword = await hashPassword(password);
+    const targetUsername = username.toLowerCase().trim();
+
+    if (isFirebaseActive) {
+        try {
+            const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), `${KEYS.USERS}/${targetUsername}`)));
+            if (snapshot.exists()) {
+                const userData = snapshot.val();
+                if (userData.password === hashedPassword) {
+                    return { username: userData.username, role: userData.role };
+                }
+            }
+        } catch (e) {
+            console.warn("Erro ao autenticar online, tentando localmente:", e);
+        }
+    }
+
+    // Fallback or Offline Auth
+    const localUsers = JSON.parse(localStorage.getItem(KEYS.USERS) || '{}');
+    const user = localUsers[targetUsername];
+    if (user && user.password === hashedPassword) {
+        return { username: user.username, role: user.role };
+    }
+
+    throw new Error("Usuário ou senha incorretos.");
+  },
+
+  // --- DATA METHODS ---
+
   getOrders: async (): Promise<OrderItem[]> => {
+    let data: OrderItem[] = [];
+    try {
+        const localData = localStorage.getItem(KEYS.ORDERS);
+        if (localData) {
+            data = JSON.parse(localData);
+        }
+    } catch(e) { console.error("Erro lendo cache local", e); }
+
     if (isFirebaseActive) {
       try {
-        // Wrap the fetch in a timeout so it doesn't spin forever
-        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.ORDERS)), 5000);
-        
+        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.ORDERS)), 4000);
         if (snapshot.exists()) {
-          return toArray<OrderItem>(snapshot.val());
+          data = toArray<OrderItem>(snapshot.val());
+          localStorage.setItem(KEYS.ORDERS, JSON.stringify(data));
         }
-        return [];
-      } catch (error) {
-        console.warn("Erro ao buscar pedidos (ou timeout):", error);
-        // Fallback to local storage or empty array if Firebase fails/times out
-        return []; 
+      } catch (error: any) {
+        console.warn("Firebase Falhou (Leitura Pedidos):", error.code || error.message);
       }
-    } else {
-      const data = localStorage.getItem(KEYS.ORDERS);
-      return data ? JSON.parse(data) : [];
     }
+    return data;
   },
 
   addOrders: async (newOrders: OrderItem[]) => {
     const current = await StorageService.getOrders();
     const updated = [...current, ...newOrders];
-    
+    localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
+
     if (isFirebaseActive) {
-      await set(ref(db, KEYS.ORDERS), updated);
-    } else {
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
+      try {
+        await set(ref(db, KEYS.ORDERS), updated);
+      } catch(error: any) {
+        console.error("Firebase Falhou (Escrita Pedidos):", error.code || error.message);
+        if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
+      }
     }
     return updated;
   },
@@ -100,39 +170,51 @@ export const StorageService = {
     const updated = current.map(order => 
       order.id === orderId ? { ...order, status: newStatus } : order
     );
+    localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
 
     if (isFirebaseActive) {
-      await set(ref(db, KEYS.ORDERS), updated);
-    } else {
-      localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
+      try {
+        await set(ref(db, KEYS.ORDERS), updated);
+      } catch (error: any) {
+         console.warn("Firebase Falhou (Update Status):", error.message);
+      }
     }
     return updated;
   },
 
   getStock: async (): Promise<StockItem[]> => {
+    let data: StockItem[] = [];
+    try {
+        const localData = localStorage.getItem(KEYS.STOCK);
+        if (localData) {
+            data = JSON.parse(localData);
+        }
+    } catch(e) { console.error("Erro lendo cache local", e); }
+
     if (isFirebaseActive) {
       try {
-        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.STOCK)), 5000);
-        
+        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.STOCK)), 4000);
         if (snapshot.exists()) {
-          return toArray<StockItem>(snapshot.val());
+          data = toArray<StockItem>(snapshot.val());
+          localStorage.setItem(KEYS.STOCK, JSON.stringify(data));
         }
-        return [];
-      } catch (error) {
-        console.warn("Erro ao buscar estoque (ou timeout):", error);
-        return [];
+      } catch (error: any) {
+        console.warn("Firebase Falhou (Leitura Estoque):", error.message);
       }
-    } else {
-      const data = localStorage.getItem(KEYS.STOCK);
-      return data ? JSON.parse(data) : [];
     }
+    return data;
   },
 
   replaceStock: async (newStock: StockItem[]) => {
+    localStorage.setItem(KEYS.STOCK, JSON.stringify(newStock));
+
     if (isFirebaseActive) {
-      await set(ref(db, KEYS.STOCK), newStock);
-    } else {
-      localStorage.setItem(KEYS.STOCK, JSON.stringify(newStock));
+      try {
+        await set(ref(db, KEYS.STOCK), newStock);
+      } catch (error: any) {
+        console.error("Firebase Falhou (Escrita Estoque):", error.code || error.message);
+        if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
+      }
     }
     return newStock;
   }
