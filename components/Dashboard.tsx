@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { OrderItem, StockItem, UserRole } from '../types';
+import { Order, StockItem, UserRole } from '../types';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { ShoppingCart, CheckCircle } from 'lucide-react';
 
 interface DashboardProps {
-  orders: OrderItem[];
+  orders: Order[];
   stock: StockItem[];
   userRole?: UserRole;
 }

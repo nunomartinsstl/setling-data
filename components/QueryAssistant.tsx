@@ -1,108 +1,170 @@
 import React, { useState } from 'react';
-import { OrderItem, StockItem } from '../types';
-import { Search, Package, ShoppingCart } from 'lucide-react';
+import { Order, StockItem, OrderLineItem } from '../types';
+import { Search, Package, ShoppingCart, User, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface QueryAssistantProps {
-  orders: OrderItem[];
+  orders: Order[];
   stock: StockItem[];
 }
 
 const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
   const [query, setQuery] = useState('');
-  
-  const filteredOrders = orders.filter(o => 
-    o.sku.toLowerCase().includes(query.toLowerCase()) || 
-    o.description.toLowerCase().includes(query.toLowerCase()) ||
-    o.id.toLowerCase().includes(query.toLowerCase())
-  );
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
-  // Updated filter to include BATCH search
-  const filteredStock = stock.filter(s => 
-    s.sku.toLowerCase().includes(query.toLowerCase()) || 
-    s.description.toLowerCase().includes(query.toLowerCase()) ||
-    s.batch.toLowerCase().includes(query.toLowerCase())
-  );
+  // Search logic: Checks Title, Creator, ID, or any nested Item SKU/Description
+  const filteredOrders = orders.filter(o => {
+    if (!query) return false;
+    const q = query.toLowerCase();
+    
+    // Check Header
+    const inHeader = (o.title || '').toLowerCase().includes(q) || 
+                     (o.creator || '').toLowerCase().includes(q) ||
+                     o.id.toLowerCase().includes(q);
+    
+    // Check Items
+    const items = o.items || [];
+    const inItems = items.some(item => 
+        item.sku.toLowerCase().includes(q) || 
+        item.description.toLowerCase().includes(q)
+    );
+
+    return inHeader || inItems;
+  });
+
+  const filteredStock = stock.filter(s => {
+    if (!query) return false;
+    const q = query.toLowerCase();
+    return s.sku.toLowerCase().includes(q) || s.description.toLowerCase().includes(q);
+  });
+
+  const hasResults = filteredOrders.length > 0 || filteredStock.length > 0;
 
   return (
-    <div className="flex flex-col h-full space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-        <h2 className="text-2xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <Search className="text-brand-600" />
-            Busca Geral
+        <h2 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+          <Search className="w-6 h-6 text-brand-600" />
+          Busca Geral
         </h2>
-        <input
+        <div className="relative">
+          <input
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Digite SKU, Lote, descrição ou ID do pedido..."
-            className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 overflow-y-auto">
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold flex items-center gap-2">
-                <ShoppingCart className="w-4 h-4 text-blue-500" /> Pedidos Encontrados ({filteredOrders.length})
-            </div>
-            <div className="max-h-96 overflow-y-auto">
-                <table className="w-full text-left text-sm text-slate-600">
-                    <tbody className="divide-y divide-slate-100">
-                        {filteredOrders.length === 0 ? (
-                            <tr><td className="p-4 text-center text-slate-400">Nada encontrado.</td></tr>
-                        ) : (
-                            filteredOrders.map(o => (
-                                <tr key={o.id} className="hover:bg-slate-50">
-                                    <td className="p-3">
-                                        <div className="font-medium text-slate-800">{o.sku}</div>
-                                        <div className="text-xs text-slate-400">{o.id}</div>
-                                    </td>
-                                    <td className="p-3">{o.description}</td>
-                                    <td className="p-3 text-right">
-                                        <span className="font-bold">{o.quantity}</span>
-                                        <span className={`block text-[10px] ${o.status === 'OPEN' ? 'text-blue-500' : 'text-green-500'}`}>
-                                            {o.status === 'OPEN' ? 'ABERTO' : 'FIM'}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b border-slate-200 font-semibold flex items-center gap-2">
-                <Package className="w-4 h-4 text-amber-500" /> Estoque Encontrado ({filteredStock.length})
-            </div>
-            <div className="max-h-96 overflow-y-auto">
-                <table className="w-full text-left text-sm text-slate-600">
-                    <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                        <tr>
-                            <th className="p-2">SKU</th>
-                            <th className="p-2">Descrição</th>
-                            <th className="p-2">Lote</th>
-                            <th className="p-2 text-right">Qtd</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                        {filteredStock.length === 0 ? (
-                            <tr><td colSpan={4} className="p-4 text-center text-slate-400">Nada encontrado.</td></tr>
-                        ) : (
-                            filteredStock.map((s, i) => (
-                                <tr key={i} className="hover:bg-slate-50">
-                                    <td className="p-3 font-medium text-slate-800">{s.sku}</td>
-                                    <td className="p-3">{s.description}</td>
-                                    <td className="p-3 font-mono text-xs text-amber-700">{s.batch}</td>
-                                    <td className="p-3 text-right font-bold">{s.quantity}</td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            placeholder="Digite SKU, descrição, título do pedido ou nome do usuário..."
+            className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-lg"
+          />
+          <Search className="absolute left-4 top-3.5 w-6 h-6 text-slate-400" />
         </div>
       </div>
+
+      {query && !hasResults && (
+        <div className="text-center p-8 text-slate-500 bg-white rounded-xl border border-slate-200">
+          Nenhum resultado encontrado para "{query}".
+        </div>
+      )}
+
+      {/* STOCK RESULTS */}
+      {filteredStock.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="bg-amber-50 p-4 border-b border-amber-100 flex items-center gap-2">
+            <Package className="w-5 h-5 text-amber-600" />
+            <h3 className="font-bold text-amber-800">Estoque ({filteredStock.length})</h3>
+          </div>
+          <table className="w-full text-left text-sm text-slate-600">
+             <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                    <th className="p-3">SKU</th>
+                    <th className="p-3">Descrição</th>
+                    <th className="p-3 text-right">Qtd</th>
+                    <th className="p-3">Lote</th>
+                </tr>
+             </thead>
+             <tbody className="divide-y divide-slate-100">
+                {filteredStock.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50">
+                        <td className="p-3 font-medium text-slate-800">{item.sku}</td>
+                        <td className="p-3">{item.description}</td>
+                        <td className="p-3 text-right font-bold">{item.quantity}</td>
+                        <td className="p-3 font-mono text-xs">{item.batch}</td>
+                    </tr>
+                ))}
+             </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ORDER RESULTS */}
+      {filteredOrders.length > 0 && (
+        <div className="space-y-4">
+           <div className="flex items-center gap-2 text-slate-500 font-semibold px-2">
+             <ShoppingCart className="w-5 h-5" />
+             <h3>Pedidos Encontrados ({filteredOrders.length})</h3>
+           </div>
+           
+           {filteredOrders.map(order => {
+             const isExpanded = expandedOrderId === order.id;
+             const items = order.items || [];
+
+             return (
+               <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                 <div 
+                    className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
+                    onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                 >
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 flex-1">
+                        <div>
+                            <h4 className="font-bold text-slate-800">{order.title || 'Sem Título'}</h4>
+                            <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                                <User className="w-3 h-3" /> {order.creator}
+                                <span className="text-slate-300">|</span>
+                                <span>Criado: {new Date(order.dateCreated).toLocaleDateString()}</span>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                             <div className="flex items-center gap-2 text-xs text-slate-600">
+                                <Calendar className="w-3 h-3 text-brand-600" />
+                                Para: {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}
+                             </div>
+                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                order.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                             }`}>
+                                {order.status === 'OPEN' ? 'Aberto' : 'Finalizado'}
+                             </span>
+                        </div>
+                    </div>
+                    <div className="ml-4">
+                        {isExpanded ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
+                    </div>
+                 </div>
+
+                 {isExpanded && (
+                    <div className="bg-slate-50 p-4 border-t border-slate-200">
+                        <table className="w-full text-sm text-left bg-white rounded-lg overflow-hidden shadow-sm">
+                            <thead className="bg-slate-100 font-semibold text-slate-700">
+                                <tr>
+                                    <th className="p-3">SKU</th>
+                                    <th className="p-3">Descrição</th>
+                                    <th className="p-3 text-right">Qtd</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {items.map((item, idx) => (
+                                    <tr key={idx} className={item.sku.toLowerCase().includes(query.toLowerCase()) ? 'bg-yellow-50' : ''}>
+                                        <td className="p-3 font-medium">{item.sku}</td>
+                                        <td className="p-3">{item.description}</td>
+                                        <td className="p-3 text-right font-bold">{item.quantity}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                 )}
+               </div>
+             );
+           })}
+        </div>
+      )}
     </div>
   );
 };

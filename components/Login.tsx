@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { User, UserRole } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Wrench } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
@@ -19,7 +19,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [lastName, setLastName] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
-  const [accessCode, setAccessCode] = useState(''); // New security field
+  const [accessCode, setAccessCode] = useState('');
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -51,14 +51,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
 
     // --- SECURITY CHECK ---
-    // Prevent unauthorized creation of high-level profiles
     if ((role === UserRole.ADMIN || role === UserRole.MANAGEMENT) && accessCode !== 'admin97') {
-        setError("Código de acesso inválido para perfil de Administrador/Coordenação.");
+        setError("Código de acesso inválido para Administrador/Coordenação.");
         return;
     }
 
     if (role === UserRole.WAREHOUSE && accessCode !== 'setling2025' && accessCode !== 'admin97') {
-        setError("Código de equipe inválido. Peça ao supervisor.");
+        setError("Código de equipe inválido.");
+        return;
+    }
+
+    if (role === UserRole.TECHNICIAN && accessCode !== 'tech2025' && accessCode !== 'admin97') {
+        setError("Código técnico inválido.");
         return;
     }
     // ----------------------
@@ -67,7 +71,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
     try {
         const user = await StorageService.registerUser(firstName, lastName, regPassword, role);
-        // Auto login after register
         onLogin(user);
     } catch (err: any) {
         setError(err.message || 'Erro ao criar conta.');
@@ -134,21 +137,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Função</label>
-                    <div className="grid grid-cols-3 gap-2">
-                        <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <div className="grid grid-cols-4 gap-2">
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 hover:bg-slate-50'}`}>
                             <input type="radio" name="role" className="hidden" checked={role === UserRole.ADMIN} onChange={() => setRole(UserRole.ADMIN)} />
-                            <ShieldCheck className="w-4 h-4" />
-                            <span className="font-semibold text-[10px]">Admin</span>
+                            <ShieldCheck className="w-3 h-3" />
+                            <span className="font-semibold text-[9px]">Admin</span>
                         </label>
-                        <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}>
                             <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
-                            <UserIcon className="w-4 h-4" />
-                            <span className="font-semibold text-[10px]">Coord.</span>
+                            <UserIcon className="w-3 h-3" />
+                            <span className="font-semibold text-[9px]">Coord.</span>
                         </label>
-                        <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 hover:bg-slate-50'}`}>
                             <input type="radio" name="role" className="hidden" checked={role === UserRole.WAREHOUSE} onChange={() => setRole(UserRole.WAREHOUSE)} />
-                            <Lock className="w-4 h-4" />
-                            <span className="font-semibold text-[10px]">Logística</span>
+                            <Lock className="w-3 h-3" />
+                            <span className="font-semibold text-[9px]">Log.</span>
+                        </label>
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.TECHNICIAN ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                            <input type="radio" name="role" className="hidden" checked={role === UserRole.TECHNICIAN} onChange={() => setRole(UserRole.TECHNICIAN)} />
+                            <Wrench className="w-3 h-3" />
+                            <span className="font-semibold text-[9px]">Téc.</span>
                         </label>
                     </div>
                 </div>

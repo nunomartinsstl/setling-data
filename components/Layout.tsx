@@ -11,7 +11,6 @@ interface LayoutProps {
   isConnected: boolean;
 }
 
-// Moved outside component to prevent re-creation on every render
 const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void }) => {
   return (
     <button
@@ -34,6 +33,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   // Helper booleans
   const isAdmin = user.role === UserRole.ADMIN;
   const isManagement = user.role === UserRole.MANAGEMENT;
+  const isTechnician = user.role === UserRole.TECHNICIAN;
   
   const handleNavClick = (view: ViewState) => {
     onNavigate(view);
@@ -43,12 +43,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   const getRoleLabel = () => {
     if (isAdmin) return 'Administrador';
     if (isManagement) return 'Gerência';
+    if (isTechnician) return 'Técnico';
     return 'Armazém';
   };
 
   const getRoleColor = () => {
      if (isAdmin) return 'bg-purple-100 text-purple-700';
      if (isManagement) return 'bg-blue-100 text-blue-700';
+     if (isTechnician) return 'bg-sky-100 text-sky-700';
      return 'bg-amber-100 text-amber-700';
   };
 
@@ -94,15 +96,19 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 isActive={currentView === 'OPEN_ORDERS'} 
                 onClick={() => handleNavClick('OPEN_ORDERS')} 
               />
-              <NavItem 
-                view="FINISHED_ORDERS" 
-                icon={CheckCircle} 
-                label="Pedidos Finalizados" 
-                isActive={currentView === 'FINISHED_ORDERS'} 
-                onClick={() => handleNavClick('FINISHED_ORDERS')} 
-              />
               
-              {/* Show Stock for Admin OR Warehouse */}
+              {/* Technicians cannot see Finished Orders */}
+              {!isTechnician && (
+                <NavItem 
+                    view="FINISHED_ORDERS" 
+                    icon={CheckCircle} 
+                    label="Pedidos Finalizados" 
+                    isActive={currentView === 'FINISHED_ORDERS'} 
+                    onClick={() => handleNavClick('FINISHED_ORDERS')} 
+                />
+              )}
+              
+              {/* Show Stock for Admin, Warehouse OR Technician */}
               {(isAdmin || !isManagement) && (
                 <NavItem 
                   view="STOCK" 
@@ -125,10 +131,9 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
           <div className="mt-auto p-4 border-t border-slate-100 space-y-2">
             
-            {/* Connection Status Indicator */}
             <div className={`px-4 py-2 rounded-lg text-xs flex items-center gap-2 ${isConnected ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                {isConnected ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
-               <span className="font-semibold">{isConnected ? 'Banco de Dados Online' : 'Modo Local (Offline)'}</span>
+               <span className="font-semibold">{isConnected ? 'Online' : 'Offline'}</span>
             </div>
 
             <button

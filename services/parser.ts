@@ -1,4 +1,4 @@
-import { OrderItem, StockItem } from "../types";
+import { OrderLineItem, StockItem } from "../types";
 
 export const ParserService = {
   /**
@@ -50,21 +50,22 @@ export const ParserService = {
   },
 
   /**
-   * Parse CSV-like text into Order Items
+   * Parse CSV-like text into Order Line Items
    * Format: SKU, Description, Quantity
+   * Returns OrderLineItem[] (does not create full Order object)
    */
-  parseOrderImport: (text: string): OrderItem[] => {
+  parseOrderImport: (text: string): OrderLineItem[] => {
     if (!text.trim()) return [];
 
     const lines = text.split(/\n/);
-    const items: OrderItem[] = [];
+    const items: OrderLineItem[] = [];
 
     lines.forEach(line => {
       const parts = line.split(/[,;]/);
       if (parts.length >= 2) {
         const sku = parts[0].trim();
         let quantity = 0;
-        let description = "Pedido Importado";
+        let description = "Item Importado";
 
         if (parts.length === 2) {
              const p1 = parseFloat(parts[1].trim());
@@ -77,12 +78,9 @@ export const ParserService = {
 
         if (sku && quantity > 0) {
             items.push({
-                id: Math.random().toString(36).substr(2, 9),
                 sku,
                 description,
-                quantity,
-                status: 'OPEN',
-                dateAdded: new Date().toISOString()
+                quantity
             });
         }
       }

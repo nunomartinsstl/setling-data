@@ -1,31 +1,51 @@
 import React, { useState, useRef } from 'react';
-import { OrderItem, StockItem, UserRole } from '../types';
+import { Order, OrderLineItem, StockItem, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, FileSpreadsheet, ArrowRightCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, FileSpreadsheet, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface OrderManagerProps {
-  orders: OrderItem[];
+  orders: Order[]; // Changed from OrderItem[] to Order[]
   stock: StockItem[];
   type: 'OPEN' | 'FINISHED';
   userRole: UserRole;
   refreshData: () => void;
+  currentUsername: string; // Passed to know who created it
 }
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRole, refreshData }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRole, refreshData, currentUsername }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
+  // Creation States
+  const [creationStep, setCreationStep] = useState<'INITIAL' | 'DETAILS_PENDING'>('INITIAL');
   const [importMode, setImportMode] = useState<'FILE' | 'MANUAL'>('MANUAL');
   
-  // Manual Entry State
+  // Manual Entry Buffer
   const [manualRows, setManualRows] = useState<{sku: string, qty: number}[]>([{sku: '', qty: 0}]);
+  
+  // Pending Order Details (used for both manual and excel finalization)
+  const [pendingItems, setPendingItems] = useState<OrderLineItem[]>([]);
+  const [orderTitle, setOrderTitle] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  
+  // Expanded card state
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Filter orders by status
   const filteredOrders = orders.filter(o => type === 'OPEN' ? o.status === 'OPEN' : o.status === 'FINISHED');
   
-  // PERMISSION CHECK: Management OR Admin
+  // Permissions
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
+
+  // Date constraints: "First optional day must be tomorrow"
+  const getMinDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1); // Tomorrow
+    return d.toISOString().split('T')[0];
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -43,7 +63,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
 
-        const newOrders: OrderItem[] = [];
+        const parsedItems: OrderLineItem[] = [];
 
         data.forEach((row: any) => {
             const material = row['MATERIAL'] || row['Material'] || row['SKU'] || row['sku'];
@@ -52,22 +72,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
             if (material && qtd) {
                 const stockMatch = stock.find(s => s.sku === material.toString());
                 
-                newOrders.push({
-                    id: Math.random().toString(36).substr(2, 9),
+                parsedItems.push({
                     sku: material.toString(),
                     description: stockMatch ? stockMatch.description : 'Importado via Excel',
                     quantity: Number(qtd),
-                    status: 'OPEN',
-                    dateAdded: new Date().toISOString()
                 });
             }
         });
 
-        if (newOrders.length === 0) throw new Error("Nenhum dado válido encontrado. Colunas esperadas: MATERIAL, QTD");
+        if (parsedItems.length === 0) throw new Error("Nenhum dado válido encontrado. Colunas esperadas: MATERIAL, QTD");
 
-        await StorageService.addOrders(newOrders);
-        refreshData();
-        setMessage({ type: 'success', text: `${newOrders.length} pedidos importados do Excel.` });
+        setPendingItems(parsedItems);
+        setCreationStep('DETAILS_PENDING');
         if(fileInputRef.current) fileInputRef.current.value = '';
 
       } catch (err: any) {
@@ -79,47 +95,60 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
     reader.readAsBinaryString(file);
   };
 
-  const addManualRow = () => {
-    setManualRows([...manualRows, { sku: '', qty: 0 }]);
+  const handleManualNext = () => {
+    const items: OrderLineItem[] = [];
+    manualRows.forEach(row => {
+        if (row.sku && row.qty > 0) {
+            const stockMatch = stock.find(s => s.sku === row.sku);
+            items.push({
+                sku: row.sku,
+                description: stockMatch ? stockMatch.description : 'Entrada Manual',
+                quantity: row.qty,
+            });
+        }
+    });
+
+    if (items.length === 0) {
+        setMessage({ type: 'error', text: "Adicione pelo menos um item." });
+        return;
+    }
+
+    setPendingItems(items);
+    setCreationStep('DETAILS_PENDING');
   };
 
-  const removeManualRow = (index: number) => {
-    const newRows = [...manualRows];
-    newRows.splice(index, 1);
-    setManualRows(newRows);
-  };
+  const submitOrder = async () => {
+    if (!orderTitle.trim()) {
+        setMessage({ type: 'error', text: "Digite o Título do Pedido." });
+        return;
+    }
+    if (!dueDate) {
+        setMessage({ type: 'error', text: "Escolha uma data de entrega." });
+        return;
+    }
 
-  const updateManualRow = (index: number, field: 'sku' | 'qty', value: string | number) => {
-    const newRows = [...manualRows];
-    if (field === 'sku') newRows[index].sku = value as string;
-    if (field === 'qty') newRows[index].qty = Number(value);
-    setManualRows(newRows);
-  };
-
-  const submitManual = async () => {
     setIsProcessing(true);
     try {
-        const newOrders: OrderItem[] = [];
-        manualRows.forEach(row => {
-            if (row.sku && row.qty > 0) {
-                 const stockMatch = stock.find(s => s.sku === row.sku);
-                 newOrders.push({
-                    id: Math.random().toString(36).substr(2, 9),
-                    sku: row.sku,
-                    description: stockMatch ? stockMatch.description : 'Entrada Manual',
-                    quantity: row.qty,
-                    status: 'OPEN',
-                    dateAdded: new Date().toISOString()
-                });
-            }
-        });
+        const newOrder: Order = {
+            id: Math.random().toString(36).substr(2, 9),
+            title: orderTitle,
+            creator: currentUsername,
+            status: 'OPEN',
+            dateCreated: new Date().toISOString(),
+            dueDate: dueDate,
+            items: pendingItems
+        };
 
-        if (newOrders.length === 0) throw new Error("Preencha ao menos um item válido.");
-
-        await StorageService.addOrders(newOrders);
+        await StorageService.addOrders([newOrder]); // Service handles appending
         refreshData();
+        
+        // Reset
+        setCreationStep('INITIAL');
+        setPendingItems([]);
         setManualRows([{sku: '', qty: 0}]);
-        setMessage({ type: 'success', text: `${newOrders.length} pedidos adicionados.` });
+        setOrderTitle('');
+        setDueDate('');
+        setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
     } catch (err: any) {
         setMessage({ type: 'error', text: err.message });
     } finally {
@@ -128,7 +157,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
   };
 
   const handleFinishOrder = async (orderId: string) => {
-    if (window.confirm('Marcar este pedido como finalizado?')) {
+    if (window.confirm('Marcar TODO o pedido como finalizado?')) {
         setIsProcessing(true);
         try {
             await StorageService.updateOrderStatus(orderId, 'FINISHED');
@@ -141,37 +170,162 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
     }
   };
 
+  const ManualEntryForm = () => (
+    <div className="space-y-3 animate-fade-in">
+        <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 mb-1">
+            <div className="col-span-8">Material / SKU (Busca Auto)</div>
+            <div className="col-span-3">Quantidade</div>
+            <div className="col-span-1"></div>
+        </div>
+        {manualRows.map((row, idx) => (
+            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                <div className="col-span-8">
+                    <input 
+                        list="stock-options"
+                        type="text" 
+                        value={row.sku}
+                        onChange={(e) => {
+                            const newRows = [...manualRows];
+                            newRows[idx].sku = e.target.value;
+                            setManualRows(newRows);
+                        }}
+                        placeholder="Digite o código ou nome..."
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                    />
+                </div>
+                <div className="col-span-3">
+                    <input 
+                        type="number" 
+                        value={row.qty}
+                        onChange={(e) => {
+                            const newRows = [...manualRows];
+                            newRows[idx].qty = Number(e.target.value);
+                            setManualRows(newRows);
+                        }}
+                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                        min="1"
+                    />
+                </div>
+                <div className="col-span-1 flex justify-center">
+                    {manualRows.length > 1 && (
+                        <button onClick={() => {
+                            const newRows = [...manualRows];
+                            newRows.splice(idx, 1);
+                            setManualRows(newRows);
+                        }} className="text-red-400 hover:text-red-600">
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    )}
+                </div>
+            </div>
+        ))}
+        
+        <button onClick={() => setManualRows([...manualRows, { sku: '', qty: 0 }])} className="text-xs flex items-center gap-1 text-brand-600 font-medium hover:text-brand-800 mt-2">
+            <Plus className="w-3 h-3" /> Adicionar Item
+        </button>
+
+        <div className="pt-4 flex justify-end">
+            <button
+                onClick={handleManualNext}
+                className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 flex items-center gap-2"
+            >
+                Próximo: Detalhes <ArrowRightCircle className="w-4 h-4" />
+            </button>
+        </div>
+    </div>
+  );
+
+  const FinalizeOrderForm = () => (
+    <div className="space-y-4 animate-fade-in bg-slate-50 p-6 rounded-lg border border-slate-200">
+        <h4 className="font-semibold text-slate-800 border-b border-slate-200 pb-2 mb-4">Finalizar Pedido</h4>
+        
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Título do Pedido</label>
+            <input 
+                type="text"
+                value={orderTitle}
+                onChange={e => setOrderTitle(e.target.value)}
+                placeholder="Ex: Instalação Obra A - Fase 1"
+                className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
+            />
+        </div>
+
+        <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Preparar para (Data)</label>
+            <input 
+                type="date"
+                value={dueDate}
+                min={getMinDate()}
+                onChange={e => setDueDate(e.target.value)}
+                className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
+            />
+            <p className="text-xs text-slate-500 mt-1">A data mínima é amanhã.</p>
+        </div>
+
+        <div className="text-sm text-slate-600 mt-4">
+            <p className="font-medium mb-2">Resumo dos Itens:</p>
+            <ul className="list-disc list-inside space-y-1 bg-white p-3 rounded border border-slate-200 max-h-40 overflow-y-auto">
+                {pendingItems.map((item, idx) => (
+                    <li key={idx} className="truncate">
+                        <span className="font-bold">{item.quantity}x</span> {item.sku} - {item.description}
+                    </li>
+                ))}
+            </ul>
+        </div>
+
+        <div className="pt-4 flex justify-end gap-3">
+             <button
+                onClick={() => {
+                    setCreationStep('INITIAL');
+                    setPendingItems([]);
+                }}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+            >
+                Cancelar
+            </button>
+            <button
+                onClick={submitOrder}
+                disabled={isProcessing}
+                className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 flex items-center gap-2"
+            >
+                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
+                Criar Pedido
+            </button>
+        </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
-      
       <datalist id="stock-options">
         {stock.map((item, idx) => (
             <option key={idx} value={item.sku}>{item.description}</option>
         ))}
       </datalist>
 
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
           {type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>}
           {type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos Finalizados'}
           <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-full">
-            {filteredOrders.length} registros
+            {filteredOrders.length}
           </span>
         </h2>
       </div>
 
-      {type === 'OPEN' && (
-        <div className={`bg-white p-6 rounded-xl shadow-sm border ${canEdit ? 'border-brand-200' : 'border-slate-200'}`}>
+      {/* CREATION AREA (Only for OPEN and Authorized Users) */}
+      {type === 'OPEN' && canEdit && (
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Upload className="w-5 h-5" /> Importar Pedidos
+            <Upload className="w-5 h-5" /> Novo Pedido
           </h3>
-          
-          {!canEdit ? (
-            <div className="p-4 bg-slate-50 rounded-lg text-slate-500 text-sm">
-              Apenas usuários da Gerência ou Admins podem importar novos pedidos.
-            </div>
+
+          {creationStep === 'DETAILS_PENDING' ? (
+              <FinalizeOrderForm />
           ) : (
             <div>
+                {/* Mode Switcher */}
                 <div className="flex space-x-4 mb-4 border-b border-slate-100 pb-2">
                     <button 
                         onClick={() => setImportMode('MANUAL')}
@@ -192,9 +346,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                         <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50">
                             <FileSpreadsheet className="w-10 h-10 text-slate-400 mx-auto mb-2" />
                             <p className="text-sm text-slate-600 mb-4">
-                                Arraste um arquivo <strong>.xlsx</strong> aqui ou clique para selecionar.
-                                <br/>
-                                <span className="text-xs text-slate-400">Colunas necessárias: MATERIAL, QTD</span>
+                                Arraste um arquivo <strong>.xlsx</strong>.
                             </p>
                             <input 
                                 type="file" 
@@ -207,61 +359,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                     </div>
                 )}
 
-                {importMode === 'MANUAL' && (
-                    <div className="space-y-3 animate-fade-in">
-                        <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 mb-1">
-                            <div className="col-span-8">Material / SKU (Busca Auto)</div>
-                            <div className="col-span-3">Quantidade</div>
-                            <div className="col-span-1"></div>
-                        </div>
-                        {manualRows.map((row, idx) => (
-                            <div key={idx} className="grid grid-cols-12 gap-2 items-center">
-                                <div className="col-span-8">
-                                    <input 
-                                        list="stock-options"
-                                        type="text" 
-                                        value={row.sku}
-                                        onChange={(e) => updateManualRow(idx, 'sku', e.target.value)}
-                                        placeholder="Digite o código ou nome..."
-                                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                                    />
-                                </div>
-                                <div className="col-span-3">
-                                    <input 
-                                        type="number" 
-                                        value={row.qty}
-                                        onChange={(e) => updateManualRow(idx, 'qty', e.target.value)}
-                                        className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                                        min="1"
-                                    />
-                                </div>
-                                <div className="col-span-1 flex justify-center">
-                                    {manualRows.length > 1 && (
-                                        <button onClick={() => removeManualRow(idx)} className="text-red-400 hover:text-red-600">
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
-                        
-                        <button onClick={addManualRow} className="text-xs flex items-center gap-1 text-brand-600 font-medium hover:text-brand-800 mt-2">
-                            <Plus className="w-3 h-3" /> Adicionar Linha
-                        </button>
-
-                        <div className="pt-4 flex justify-end">
-                            <button
-                                onClick={submitManual}
-                                disabled={isProcessing}
-                                className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 disabled:opacity-50 flex items-center gap-2"
-                            >
-                                {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                                Salvar Pedidos
-                            </button>
-                        </div>
-                    </div>
-                )}
-
+                {importMode === 'MANUAL' && <ManualEntryForm />}
+                
                 {message && (
                   <div className={`mt-4 p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                     {message.text}
@@ -272,59 +371,103 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
         </div>
       )}
 
-      {/* Table View */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-700">
-              <tr>
-                <th className="p-4">ID</th>
-                <th className="p-4">SKU</th>
-                <th className="p-4">Descrição</th>
-                <th className="p-4 text-right">Qtd</th>
-                <th className="p-4">Status</th>
-                {type === 'OPEN' && <th className="p-4 text-center">Ação</th>}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="p-8 text-center text-slate-400">
-                    Pasta vazia.
-                  </td>
-                </tr>
-              ) : (
-                filteredOrders.map((order, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                    <td className="p-4 font-mono text-xs">{order.id}</td>
-                    <td className="p-4 font-medium text-slate-800">{order.sku}</td>
-                    <td className="p-4">{order.description}</td>
-                    <td className="p-4 text-right font-bold">{order.quantity}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        order.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {order.status === 'OPEN' ? 'Aberto' : 'Finalizado'}
-                      </span>
-                    </td>
-                    {type === 'OPEN' && (
-                        <td className="p-4 text-center">
-                            <button 
-                                onClick={() => handleFinishOrder(order.id)}
-                                disabled={isProcessing}
-                                className="p-2 text-green-600 hover:bg-green-50 rounded-full transition-colors"
-                                title="Finalizar Pedido"
-                            >
-                                <ArrowRightCircle className="w-5 h-5" />
-                            </button>
-                        </td>
-                    )}
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+      {/* ORDERS LIST */}
+      <div className="space-y-4">
+        {filteredOrders.length === 0 ? (
+            <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+                Nenhum pedido encontrado.
+            </div>
+        ) : (
+            filteredOrders.map((order) => {
+                const isExpanded = expandedOrderId === order.id;
+                // Safety check: if old data format, handle gracefully
+                const items = order.items || []; 
+                
+                return (
+                    <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all">
+                        {/* Header / Summary Card */}
+                        <div 
+                            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
+                            onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+                        >
+                            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                    <h4 className="font-bold text-slate-800 text-lg">{order.title || "Sem Título"}</h4>
+                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                                        <User className="w-3 h-3"/> 
+                                        {order.creator || 'Desconhecido'}
+                                        <span className="text-slate-300">|</span>
+                                        <span>Criado: {new Date(order.dateCreated).toLocaleDateString()}</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-brand-600" />
+                                    <div>
+                                        <p className="text-xs text-slate-500 uppercase font-semibold">Para:</p>
+                                        <p className="font-medium text-slate-800">
+                                            {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                        order.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                                    }`}>
+                                        {order.status === 'OPEN' ? 'Aberto' : 'Finalizado'}
+                                    </span>
+                                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                        {items.length} itens
+                                    </span>
+                                </div>
+                            </div>
+                            <div className="ml-4">
+                                {isExpanded ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
+                            </div>
+                        </div>
+
+                        {/* Expanded Details */}
+                        {isExpanded && (
+                            <div className="bg-slate-50 border-t border-slate-200 p-4 animate-fade-in">
+                                <table className="w-full text-left text-sm text-slate-600 mb-4 bg-white rounded-lg overflow-hidden shadow-sm">
+                                    <thead className="bg-slate-100 font-semibold text-slate-700">
+                                        <tr>
+                                            <th className="p-3">SKU</th>
+                                            <th className="p-3">Descrição</th>
+                                            <th className="p-3 text-right">Quantidade</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {items.map((item, idx) => (
+                                            <tr key={idx}>
+                                                <td className="p-3 font-medium">{item.sku}</td>
+                                                <td className="p-3">{item.description}</td>
+                                                <td className="p-3 text-right font-bold">{item.quantity}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+
+                                {/* Actions */}
+                                {type === 'OPEN' && canEdit && (
+                                    <div className="flex justify-end">
+                                        <button 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleFinishOrder(order.id);
+                                            }}
+                                            disabled={isProcessing}
+                                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm"
+                                        >
+                                            <CheckCircle className="w-4 h-4" /> Finalizar Pedido
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            })
+        )}
       </div>
     </div>
   );

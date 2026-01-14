@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, OrderItem, StockItem } from './types';
+import { User, ViewState, Order, StockItem } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -12,7 +12,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewState>('LOGIN');
   
-  const [orders, setOrders] = useState<OrderItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(false);
   
@@ -78,6 +78,7 @@ const App: React.FC = () => {
             type="OPEN" 
             userRole={user.role} 
             refreshData={refreshData} 
+            currentUsername={user.username}
           />
         );
       case 'FINISHED_ORDERS':
@@ -87,7 +88,8 @@ const App: React.FC = () => {
             stock={stock}
             type="FINISHED" 
             userRole={user.role} 
-            refreshData={refreshData} 
+            refreshData={refreshData}
+            currentUsername={user.username}
           />
         );
       case 'STOCK':

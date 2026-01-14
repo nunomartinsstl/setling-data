@@ -1,4 +1,4 @@
-import { OrderItem, StockItem, User, UserRole } from '../types';
+import { Order, StockItem, User, UserRole } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
 
@@ -126,8 +126,8 @@ export const StorageService = {
 
   // --- DATA METHODS ---
 
-  getOrders: async (): Promise<OrderItem[]> => {
-    let data: OrderItem[] = [];
+  getOrders: async (): Promise<Order[]> => {
+    let data: Order[] = [];
     try {
         const localData = localStorage.getItem(KEYS.ORDERS);
         if (localData) {
@@ -139,7 +139,7 @@ export const StorageService = {
       try {
         const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.ORDERS)), 4000);
         if (snapshot.exists()) {
-          data = toArray<OrderItem>(snapshot.val());
+          data = toArray<Order>(snapshot.val());
           localStorage.setItem(KEYS.ORDERS, JSON.stringify(data));
         }
       } catch (error: any) {
@@ -149,7 +149,7 @@ export const StorageService = {
     return data;
   },
 
-  addOrders: async (newOrders: OrderItem[]) => {
+  addOrders: async (newOrders: Order[]) => {
     const current = await StorageService.getOrders();
     const updated = [...current, ...newOrders];
     localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
