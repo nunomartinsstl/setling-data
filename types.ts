@@ -2,7 +2,6 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGEMENT = 'MANAGEMENT',
   WAREHOUSE = 'WAREHOUSE',
-  TECHNICIAN = 'TECHNICIAN',
   VIEWER = 'VIEWER'
 }
 
@@ -36,6 +35,12 @@ export interface StockItem {
   quantity: number;
   batch: string;
   lastUpdated: string;
+}
+
+// Master list of materials (Catálogo Geral) - distinct from stock
+export interface MasterMaterial {
+  sku: string;
+  description: string;
 }
 
 export interface AppSettings {

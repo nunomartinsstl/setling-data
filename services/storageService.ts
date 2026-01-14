@@ -1,4 +1,4 @@
-import { Order, StockItem, User, UserRole, AppSettings } from '../types';
+import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
 
@@ -31,6 +31,7 @@ try {
 const KEYS = {
   ORDERS: 'nexus_orders',
   STOCK: 'nexus_stock',
+  MASTER: 'nexus_master',
   USERS: 'nexus_users',
   SETTINGS: 'nexus_settings'
 };
@@ -235,6 +236,44 @@ export const StorageService = {
       }
     }
     return newStock;
+  },
+
+  // --- MASTER MATERIALS ---
+  getMasterMaterials: async (): Promise<MasterMaterial[]> => {
+    let data: MasterMaterial[] = [];
+    try {
+        const localData = localStorage.getItem(KEYS.MASTER);
+        if (localData) {
+            data = JSON.parse(localData);
+        }
+    } catch(e) { console.error("Erro lendo cache local", e); }
+
+    if (isFirebaseActive) {
+      try {
+        const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.MASTER)), 4000);
+        if (snapshot.exists()) {
+          data = toArray<MasterMaterial>(snapshot.val());
+          localStorage.setItem(KEYS.MASTER, JSON.stringify(data));
+        }
+      } catch (error: any) {
+        console.warn("Firebase Falhou (Leitura Master):", error.message);
+      }
+    }
+    return data;
+  },
+
+  replaceMasterMaterials: async (newMaster: MasterMaterial[]) => {
+    localStorage.setItem(KEYS.MASTER, JSON.stringify(newMaster));
+
+    if (isFirebaseActive) {
+      try {
+        await set(ref(db, KEYS.MASTER), newMaster);
+      } catch (error: any) {
+        console.error("Firebase Falhou (Escrita Master):", error.code || error.message);
+        if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
+      }
+    }
+    return newMaster;
   },
 
   // --- SETTINGS ---

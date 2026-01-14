@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Order, OrderLineItem, StockItem, UserRole } from '../types';
+import React, { useState, useRef, useEffect } from 'react';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial } from '../types';
 import { StorageService } from '../services/storageService';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, FileSpreadsheet, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -7,6 +7,7 @@ import * as XLSX from 'xlsx';
 interface OrderManagerProps {
   orders: Order[];
   stock: StockItem[];
+  masterList: MasterMaterial[];
   type: 'OPEN' | 'FINISHED';
   userRole: UserRole;
   refreshData: () => void;
@@ -15,12 +16,12 @@ interface OrderManagerProps {
 
 interface ManualRow {
     sku: string;
-    qty: number;
+    qty: string | number; // Changed to allow empty string for display
     isCustom: boolean;
     customDesc: string;
 }
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRole, refreshData, currentUsername }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, userRole, refreshData, currentUsername }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -28,22 +29,52 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
   const [creationStep, setCreationStep] = useState<'INITIAL' | 'DETAILS_PENDING'>('INITIAL');
   const [importMode, setImportMode] = useState<'FILE' | 'MANUAL'>('MANUAL');
   
-  // Manual Entry Buffer
-  const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: 0, isCustom: false, customDesc: ''}]);
-  
-  // Pending Order Details
-  const [pendingItems, setPendingItems] = useState<OrderLineItem[]>([]);
+  // Manual Entry Buffer (Drafts)
+  const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', isCustom: false, customDesc: ''}]);
   const [orderTitle, setOrderTitle] = useState('');
+  
+  // Pending Order Details (Finalization)
+  const [pendingItems, setPendingItems] = useState<OrderLineItem[]>([]);
   const [dueDate, setDueDate] = useState('');
   
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filteredOrders = orders.filter(o => type === 'OPEN' ? o.status === 'OPEN' : o.status === 'FINISHED');
   
+  // Permissions
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const isAdmin = userRole === UserRole.ADMIN;
+
+  // --- DRAFT LOGIC ---
+  // Load draft on mount
+  useEffect(() => {
+    const savedRows = localStorage.getItem('draft_rows');
+    const savedTitle = localStorage.getItem('draft_title');
+    if (savedRows) {
+        try { setManualRows(JSON.parse(savedRows)); } catch(e){}
+    }
+    if (savedTitle) setOrderTitle(savedTitle);
+  }, []);
+
+  // Save draft on change
+  useEffect(() => {
+    localStorage.setItem('draft_rows', JSON.stringify(manualRows));
+  }, [manualRows]);
+
+  useEffect(() => {
+    localStorage.setItem('draft_title', orderTitle);
+  }, [orderTitle]);
+
+  const clearDraft = () => {
+      localStorage.removeItem('draft_rows');
+      localStorage.removeItem('draft_title');
+      setManualRows([{sku: '', qty: '', isCustom: false, customDesc: ''}]);
+      setOrderTitle('');
+      setDueDate('');
+      setPendingItems([]);
+      setCreationStep('INITIAL');
+  };
 
   const getMinDate = () => {
     const d = new Date();
@@ -54,6 +85,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
   const getStockCount = (sku: string) => {
     const item = stock.find(s => s.sku === sku);
     return item ? item.quantity : 0;
+  };
+
+  const getMaterialDescription = (sku: string): string => {
+      const stockItem = stock.find(s => s.sku === sku);
+      if (stockItem) return stockItem.description;
+      
+      const masterItem = masterList.find(m => m.sku === sku);
+      if (masterItem) return masterItem.description;
+
+      return "Material Desconhecido";
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,47 +113,45 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
         const ws = wb.Sheets[wsname];
         const data = XLSX.utils.sheet_to_json(ws);
 
-        const parsedItems: OrderLineItem[] = [];
+        const newRows: ManualRow[] = [];
 
         data.forEach((row: any) => {
             const material = row['MATERIAL'] || row['Material'] || row['SKU'] || row['sku'];
             const qtd = row['QTD'] || row['Qtd'] || row['Quantidade'] || row['Quantity'];
 
             if (material && qtd) {
-                const stockMatch = stock.find(s => s.sku === material.toString());
-                parsedItems.push({
-                    sku: material.toString(),
-                    description: stockMatch ? stockMatch.description : 'Importado via Excel',
-                    quantity: Number(qtd),
-                    isCustom: !stockMatch
+                // Check if it exists in stock OR master list
+                const skuStr = material.toString();
+                const exists = stock.some(s => s.sku === skuStr) || masterList.some(m => m.sku === skuStr);
+                
+                newRows.push({
+                    sku: exists ? skuStr : '',
+                    qty: Number(qtd),
+                    isCustom: !exists,
+                    customDesc: !exists ? `Importado: ${skuStr}` : ''
                 });
             }
         });
 
-        if (parsedItems.length === 0) throw new Error("Nenhum dado válido encontrado.");
+        if (newRows.length === 0) throw new Error("Nenhum dado válido encontrado.");
 
-        setPendingItems(parsedItems);
-        setCreationStep('DETAILS_PENDING');
-        if(fileInputRef.current) fileInputRef.current.value = '';
+        // Instead of finalizing, we load into the Editable List
+        setManualRows(newRows);
+        setImportMode('MANUAL'); // Switch view so user sees the list
+        setMessage({ type: 'success', text: `${newRows.length} itens importados para a lista. Verifique e finalize.` });
 
       } catch (err: any) {
         setMessage({ type: 'error', text: "Erro ao ler Excel: " + err.message });
       } finally {
         setIsProcessing(false);
+        if(fileInputRef.current) fileInputRef.current.value = '';
       }
     };
     reader.readAsBinaryString(file);
   };
 
   const addManualRow = () => {
-     // Check if last row is custom, prompt user
-     const lastRow = manualRows[manualRows.length - 1];
-     if (lastRow.isCustom) {
-         if (!window.confirm("Você confirmou que este material realmente não existe no sistema?")) {
-             return;
-         }
-     }
-     setManualRows([...manualRows, { sku: '', qty: 0, isCustom: false, customDesc: '' }]);
+     setManualRows([...manualRows, { sku: '', qty: '', isCustom: false, customDesc: '' }]);
   };
 
   const handleManualNext = () => {
@@ -120,21 +159,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
     
     // Validate rows
     for (const row of manualRows) {
+        const qtyNum = Number(row.qty);
         if (row.isCustom) {
-            if (!row.customDesc || row.qty <= 0) continue;
+            if (!row.customDesc || qtyNum <= 0) continue;
             items.push({
                 sku: 'N/A',
-                description: `(Personalizado) ${row.customDesc}`,
-                quantity: row.qty,
+                description: `(Novo) ${row.customDesc}`,
+                quantity: qtyNum,
                 isCustom: true
             });
         } else {
-            if (!row.sku || row.qty <= 0) continue;
-            const stockMatch = stock.find(s => s.sku === row.sku);
+            if (!row.sku || qtyNum <= 0) continue;
             items.push({
                 sku: row.sku,
-                description: stockMatch ? stockMatch.description : 'Entrada Manual',
-                quantity: row.qty,
+                description: getMaterialDescription(row.sku),
+                quantity: qtyNum,
                 isCustom: false
             });
         }
@@ -175,7 +214,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
         refreshData();
 
         // --- NOTIFICATION LOGIC ---
-        // Check for Custom Items OR Items with 0 Stock
         const needsNotification = pendingItems.some(item => {
              if (item.isCustom) return true;
              const inStock = getStockCount(item.sku);
@@ -185,30 +223,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
         if (needsNotification) {
             const settings = await StorageService.getSettings();
             if (settings.notificationEmail) {
-                // Construct Mailto
                 const subject = encodeURIComponent(`ALERTA: Pedido com falta de estoque - ${newOrder.title}`);
                 const body = encodeURIComponent(
                     `O usuário ${currentUsername} criou um pedido com itens críticos.\n\n` +
                     `Pedido: ${newOrder.title}\nData Para: ${dueDate}\n\nItens:\n` +
                     pendingItems.map(i => `- ${i.description} (${i.quantity})`).join('\n')
                 );
-                
-                // Open mail client (client-side trigger)
                 window.open(`mailto:${settings.notificationEmail}?subject=${subject}&body=${body}`);
-                setMessage({ type: 'success', text: `Pedido criado. E-mail de alerta aberto.` });
-            } else {
-                setMessage({ type: 'success', text: `Pedido criado. (Sem e-mail configurado para alerta).` });
             }
-        } else {
-            setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
         }
         
-        // Reset
-        setCreationStep('INITIAL');
-        setPendingItems([]);
-        setManualRows([{sku: '', qty: 0, isCustom: false, customDesc: ''}]);
-        setOrderTitle('');
-        setDueDate('');
+        clearDraft(); // Success!
+        setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
         
     } catch (err: any) {
         setMessage({ type: 'error', text: err.message });
@@ -245,117 +271,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
     }
   };
 
-  const ManualEntryForm = () => (
-    <div className="space-y-3 animate-fade-in">
-        <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <div className="col-span-5">Material / SKU</div>
-            <div className="col-span-2">Qtd</div>
-            <div className="col-span-3">Disponibilidade</div>
-            <div className="col-span-1">Manual?</div>
-            <div className="col-span-1"></div>
-        </div>
-        {manualRows.map((row, idx) => {
-            const stockQty = getStockCount(row.sku);
-            const isNoStock = !row.isCustom && row.sku && stockQty <= 0;
-
-            return (
-                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-md">
-                    <div className="col-span-5">
-                        {row.isCustom ? (
-                             <input 
-                                type="text"
-                                value={row.customDesc}
-                                onChange={(e) => {
-                                    const newRows = [...manualRows];
-                                    newRows[idx].customDesc = e.target.value;
-                                    setManualRows(newRows);
-                                }}
-                                placeholder="Descrição do material..."
-                                className="w-full p-2 border border-blue-300 bg-blue-50 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                            />
-                        ) : (
-                            <input 
-                                list="stock-options"
-                                type="text" 
-                                value={row.sku}
-                                onChange={(e) => {
-                                    const newRows = [...manualRows];
-                                    newRows[idx].sku = e.target.value;
-                                    setManualRows(newRows);
-                                }}
-                                placeholder="Código ou nome..."
-                                className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                            />
-                        )}
-                    </div>
-                    <div className="col-span-2">
-                        <input 
-                            type="number" 
-                            value={row.qty}
-                            onChange={(e) => {
-                                const newRows = [...manualRows];
-                                newRows[idx].qty = Number(e.target.value);
-                                setManualRows(newRows);
-                            }}
-                            className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
-                            min="1"
-                        />
-                    </div>
-                    <div className="col-span-3 text-xs flex items-center">
-                        {row.isCustom ? (
-                            <span className="text-blue-600 font-medium">Item Personalizado</span>
-                        ) : (
-                            row.sku ? (
-                                <span className={`font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600 flex items-center gap-1'}`}>
-                                    {stockQty > 0 ? `${stockQty} un` : <><AlertTriangle className="w-3 h-3"/> Sem Estoque</>}
-                                </span>
-                            ) : <span className="text-slate-400">-</span>
-                        )}
-                    </div>
-                    <div className="col-span-1 flex justify-center">
-                        <input 
-                            type="checkbox"
-                            checked={row.isCustom}
-                            onChange={(e) => {
-                                const newRows = [...manualRows];
-                                newRows[idx].isCustom = e.target.checked;
-                                newRows[idx].sku = ''; // Clear SKU if custom
-                                setManualRows(newRows);
-                            }}
-                            className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
-                            title="Material não cadastrado?"
-                        />
-                    </div>
-                    <div className="col-span-1 flex justify-center">
-                        {manualRows.length > 1 && (
-                            <button onClick={() => {
-                                const newRows = [...manualRows];
-                                newRows.splice(idx, 1);
-                                setManualRows(newRows);
-                            }} className="text-red-400 hover:text-red-600">
-                                <Trash2 className="w-4 h-4" />
-                            </button>
-                        )}
-                    </div>
-                </div>
-            );
-        })}
-        
-        <button onClick={addManualRow} className="text-xs flex items-center gap-1 text-brand-600 font-medium hover:text-brand-800 mt-2">
-            <Plus className="w-3 h-3" /> Adicionar Item
-        </button>
-
-        <div className="pt-4 flex justify-end">
-            <button
-                onClick={handleManualNext}
-                className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 flex items-center gap-2"
-            >
-                Próximo: Detalhes <ArrowRightCircle className="w-4 h-4" />
-            </button>
-        </div>
-    </div>
-  );
-
+  // --- RENDER HELPERS ---
   const FinalizeOrderForm = () => (
     <div className="space-y-4 animate-fade-in bg-slate-50 p-6 rounded-lg border border-slate-200">
         <h4 className="font-semibold text-slate-800 border-b border-slate-200 pb-2 mb-4">Finalizar Pedido</h4>
@@ -380,7 +296,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                 onChange={e => setDueDate(e.target.value)}
                 className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
             />
-            <p className="text-xs text-slate-500 mt-1">A data mínima é amanhã.</p>
         </div>
 
         <div className="text-sm text-slate-600 mt-4">
@@ -390,7 +305,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                     <li key={idx} className="truncate flex items-center gap-2">
                         <span className="font-bold">{item.quantity}x</span> 
                         <span>{item.description}</span>
-                        {item.isCustom && <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Custom</span>}
+                        {item.isCustom && <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
                         {!item.isCustom && getStockCount(item.sku) <= 0 && <span className="text-[10px] bg-red-100 text-red-700 px-1 rounded">Sem Estoque</span>}
                     </li>
                 ))}
@@ -399,13 +314,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
 
         <div className="pt-4 flex justify-end gap-3">
              <button
-                onClick={() => {
-                    setCreationStep('INITIAL');
-                    setPendingItems([]);
-                }}
+                onClick={() => setCreationStep('INITIAL')}
                 className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
             >
-                Cancelar
+                Voltar
             </button>
             <button
                 onClick={submitOrder}
@@ -423,7 +335,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
     <div className="space-y-6">
       <datalist id="stock-options">
         {stock.map((item, idx) => (
-            <option key={idx} value={item.sku}>{item.description}</option>
+            <option key={`s-${idx}`} value={item.sku}>{item.description}</option>
+        ))}
+        {masterList.map((item, idx) => (
+            <option key={`m-${idx}`} value={item.sku}>{item.description} (Catálogo)</option>
         ))}
       </datalist>
 
@@ -454,18 +369,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                         onClick={() => setImportMode('MANUAL')}
                         className={`text-sm font-medium pb-2 border-b-2 transition-colors ${importMode === 'MANUAL' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                     >
-                        Entrada Manual
+                        Editor
                     </button>
                     <button 
                         onClick={() => setImportMode('FILE')}
                         className={`text-sm font-medium pb-2 border-b-2 transition-colors ${importMode === 'FILE' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
                     >
-                        Upload Excel
+                        Importar Excel
                     </button>
                 </div>
 
                 {importMode === 'FILE' && (
                     <div className="space-y-4 animate-fade-in">
+                         <div className="p-3 bg-blue-50 text-blue-700 text-sm rounded border border-blue-100 mb-2">
+                            Ao importar, os itens serão carregados no editor abaixo para conferência.
+                        </div>
                         <div className="border-2 border-dashed border-slate-300 rounded-lg p-8 text-center bg-slate-50">
                             <FileSpreadsheet className="w-10 h-10 text-slate-400 mx-auto mb-2" />
                             <p className="text-sm text-slate-600 mb-4">
@@ -482,7 +400,130 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                     </div>
                 )}
 
-                {importMode === 'MANUAL' && <ManualEntryForm />}
+                {/* MANUAL FORM INLINED TO FIX FOCUS BUG */}
+                {importMode === 'MANUAL' && (
+                    <div className="space-y-3 animate-fade-in">
+                        <div className="mb-4">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Título do Pedido (Rascunho)</label>
+                            <input 
+                                type="text"
+                                value={orderTitle}
+                                onChange={e => setOrderTitle(e.target.value)}
+                                placeholder="Digite o nome da obra/pedido..."
+                                className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 mb-1">
+                            <div className="col-span-5">Material / SKU</div>
+                            <div className="col-span-2">Qtd</div>
+                            <div className="col-span-3">Disponibilidade</div>
+                            <div className="col-span-1">Criar?</div>
+                            <div className="col-span-1"></div>
+                        </div>
+                        {manualRows.map((row, idx) => {
+                            const stockQty = getStockCount(row.sku);
+                            const inMaster = masterList.some(m => m.sku === row.sku);
+                            const known = stockQty > 0 || inMaster;
+
+                            return (
+                                <div key={idx} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-md">
+                                    <div className="col-span-5">
+                                        {row.isCustom ? (
+                                            <input 
+                                                type="text"
+                                                value={row.customDesc}
+                                                onChange={(e) => {
+                                                    const newRows = [...manualRows];
+                                                    newRows[idx].customDesc = e.target.value;
+                                                    setManualRows(newRows);
+                                                }}
+                                                placeholder="Descrição do novo material..."
+                                                className="w-full p-2 border border-blue-300 bg-blue-50 rounded-md focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                            />
+                                        ) : (
+                                            <input 
+                                                list="stock-options"
+                                                type="text" 
+                                                value={row.sku}
+                                                onChange={(e) => {
+                                                    const newRows = [...manualRows];
+                                                    newRows[idx].sku = e.target.value;
+                                                    setManualRows(newRows);
+                                                }}
+                                                placeholder="Código ou nome..."
+                                                className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                                            />
+                                        )}
+                                    </div>
+                                    <div className="col-span-2">
+                                        <input 
+                                            type="number" 
+                                            value={row.qty}
+                                            onChange={(e) => {
+                                                const newRows = [...manualRows];
+                                                newRows[idx].qty = e.target.value;
+                                                setManualRows(newRows);
+                                            }}
+                                            placeholder="0"
+                                            className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm placeholder-slate-300"
+                                            min="0"
+                                        />
+                                    </div>
+                                    <div className="col-span-3 text-xs flex items-center">
+                                        {row.isCustom ? (
+                                            <span className="text-blue-600 font-medium">Novo Material</span>
+                                        ) : (
+                                            row.sku ? (
+                                                <span className={`font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600 flex items-center gap-1'}`}>
+                                                    {stockQty > 0 ? `${stockQty} un` : <><AlertTriangle className="w-3 h-3"/> Sem Estoque</>}
+                                                </span>
+                                            ) : <span className="text-slate-400">-</span>
+                                        )}
+                                    </div>
+                                    <div className="col-span-1 flex justify-center">
+                                        <input 
+                                            type="checkbox"
+                                            checked={row.isCustom}
+                                            onChange={(e) => {
+                                                const newRows = [...manualRows];
+                                                newRows[idx].isCustom = e.target.checked;
+                                                newRows[idx].sku = ''; 
+                                                setManualRows(newRows);
+                                            }}
+                                            className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                                            title="Criar Material?"
+                                        />
+                                    </div>
+                                    <div className="col-span-1 flex justify-center">
+                                        {manualRows.length > 1 && (
+                                            <button onClick={() => {
+                                                const newRows = [...manualRows];
+                                                newRows.splice(idx, 1);
+                                                setManualRows(newRows);
+                                            }} className="text-red-400 hover:text-red-600">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        
+                        <button onClick={addManualRow} className="text-xs flex items-center gap-1 text-brand-600 font-medium hover:text-brand-800 mt-2">
+                            <Plus className="w-3 h-3" /> Adicionar Item
+                        </button>
+
+                        <div className="pt-4 flex justify-end">
+                            <button
+                                onClick={handleManualNext}
+                                className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 flex items-center gap-2"
+                            >
+                                Próximo: Conferir <ArrowRightCircle className="w-4 h-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
                 
                 {message && (
                   <div className={`mt-4 p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
@@ -518,7 +559,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                             </button>
                         )}
 
-                        {/* Header */}
                         <div 
                             className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
                             onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
@@ -558,7 +598,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                             </div>
                         </div>
 
-                        {/* Expanded Details */}
                         {isExpanded && (
                             <div className="bg-slate-50 border-t border-slate-200 p-4 animate-fade-in">
                                 <table className="w-full text-left text-sm text-slate-600 mb-4 bg-white rounded-lg overflow-hidden shadow-sm">
@@ -575,7 +614,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                                                 <td className="p-3 font-medium text-xs font-mono">{item.sku}</td>
                                                 <td className="p-3">
                                                     {item.description}
-                                                    {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Manual</span>}
+                                                    {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
                                                 </td>
                                                 <td className="p-3 text-right font-bold">{item.quantity}</td>
                                             </tr>
@@ -583,7 +622,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, type, userRo
                                     </tbody>
                                 </table>
 
-                                {/* Actions */}
                                 {type === 'OPEN' && canEdit && (
                                     <div className="flex justify-end">
                                         <button 

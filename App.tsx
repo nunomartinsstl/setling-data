@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, Order, StockItem } from './types';
+import { User, ViewState, Order, StockItem, MasterMaterial } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -15,6 +15,7 @@ const App: React.FC = () => {
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [stock, setStock] = useState<StockItem[]>([]);
+  const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
   const [loading, setLoading] = useState(false);
   
   const isConnected = StorageService.isConnected();
@@ -28,12 +29,14 @@ const App: React.FC = () => {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [fetchedOrders, fetchedStock] = await Promise.all([
+      const [fetchedOrders, fetchedStock, fetchedMaster] = await Promise.all([
         StorageService.getOrders(),
-        StorageService.getStock()
+        StorageService.getStock(),
+        StorageService.getMasterMaterials()
       ]);
       setOrders(fetchedOrders);
       setStock(fetchedStock);
+      setMasterList(fetchedMaster);
     } catch (error) {
       console.error("Failed to fetch data", error);
     } finally {
@@ -51,6 +54,7 @@ const App: React.FC = () => {
     setView('LOGIN');
     setOrders([]);
     setStock([]);
+    setMasterList([]);
   };
 
   if (!user || view === 'LOGIN') {
@@ -74,6 +78,7 @@ const App: React.FC = () => {
           <OrderManager 
             orders={orders} 
             stock={stock}
+            masterList={masterList}
             type="OPEN" 
             userRole={user.role} 
             refreshData={refreshData} 
@@ -85,6 +90,7 @@ const App: React.FC = () => {
           <OrderManager 
             orders={orders} 
             stock={stock}
+            masterList={masterList}
             type="FINISHED" 
             userRole={user.role} 
             refreshData={refreshData}
