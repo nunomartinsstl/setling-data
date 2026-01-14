@@ -1,4 +1,4 @@
-import { Order, StockItem, User, UserRole } from '../types';
+import { Order, StockItem, User, UserRole, AppSettings } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
 
@@ -31,7 +31,8 @@ try {
 const KEYS = {
   ORDERS: 'nexus_orders',
   STOCK: 'nexus_stock',
-  USERS: 'nexus_users'
+  USERS: 'nexus_users',
+  SETTINGS: 'nexus_settings'
 };
 
 // Helper: SHA-256 Hash for simple password security
@@ -182,6 +183,23 @@ export const StorageService = {
     return updated;
   },
 
+  deleteOrder: async (orderId: string) => {
+    const current = await StorageService.getOrders();
+    const updated = current.filter(order => order.id !== orderId);
+    
+    localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
+
+    if (isFirebaseActive) {
+      try {
+        await set(ref(db, KEYS.ORDERS), updated);
+      } catch (error: any) {
+        console.error("Firebase Falhou (Delete Order):", error.message);
+        throw error;
+      }
+    }
+    return updated;
+  },
+
   getStock: async (): Promise<StockItem[]> => {
     let data: StockItem[] = [];
     try {
@@ -217,5 +235,32 @@ export const StorageService = {
       }
     }
     return newStock;
+  },
+
+  // --- SETTINGS ---
+  getSettings: async (): Promise<AppSettings> => {
+    let settings: AppSettings = { notificationEmail: '' };
+    try {
+        const localData = localStorage.getItem(KEYS.SETTINGS);
+        if (localData) settings = JSON.parse(localData);
+    } catch(e) {}
+
+    if (isFirebaseActive) {
+        try {
+            const snapshot = await get(child(ref(db), KEYS.SETTINGS));
+            if (snapshot.exists()) {
+                settings = snapshot.val();
+                localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
+            }
+        } catch(e) {}
+    }
+    return settings;
+  },
+
+  saveSettings: async (settings: AppSettings) => {
+    localStorage.setItem(KEYS.SETTINGS, JSON.stringify(settings));
+    if (isFirebaseActive) {
+        await set(ref(db, KEYS.SETTINGS), settings);
+    }
   }
 };

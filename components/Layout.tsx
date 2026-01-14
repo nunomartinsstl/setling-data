@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -97,7 +97,6 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 onClick={() => handleNavClick('OPEN_ORDERS')} 
               />
               
-              {/* Technicians cannot see Finished Orders */}
               {!isTechnician && (
                 <NavItem 
                     view="FINISHED_ORDERS" 
@@ -108,7 +107,6 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 />
               )}
               
-              {/* Show Stock for Admin, Warehouse OR Technician */}
               {(isAdmin || !isManagement) && (
                 <NavItem 
                   view="STOCK" 
@@ -126,6 +124,16 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 isActive={currentView === 'QUERY'} 
                 onClick={() => handleNavClick('QUERY')} 
               />
+              
+              {isAdmin && (
+                <NavItem 
+                  view="SETTINGS" 
+                  icon={Settings} 
+                  label="Configurações" 
+                  isActive={currentView === 'SETTINGS'} 
+                  onClick={() => handleNavClick('SETTINGS')} 
+                />
+              )}
             </nav>
           </div>
 

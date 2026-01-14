@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import OrderManager from './components/OrderManager';
 import StockManager from './components/StockManager';
 import QueryAssistant from './components/QueryAssistant';
+import Settings from './components/Settings';
 import { StorageService } from './services/storageService';
 
 const App: React.FC = () => {
@@ -16,10 +17,8 @@ const App: React.FC = () => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(false);
   
-  // Use a state for connection to ensure re-render if it changes (though usually it's static after load)
   const isConnected = StorageService.isConnected();
 
-  // Load data on mount or when view changes
   useEffect(() => {
     if (user) {
       refreshData();
@@ -102,6 +101,8 @@ const App: React.FC = () => {
         );
       case 'QUERY':
         return <QueryAssistant orders={orders} stock={stock} />;
+      case 'SETTINGS':
+        return <Settings />;
       default:
         return <Dashboard orders={orders} stock={stock} userRole={user.role} />;
     }

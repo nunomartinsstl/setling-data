@@ -16,6 +16,7 @@ export interface OrderLineItem {
   sku: string;
   description: string;
   quantity: number;
+  isCustom?: boolean; // Flag for manually typed items
 }
 
 // The Parent Order Object
@@ -37,7 +38,11 @@ export interface StockItem {
   lastUpdated: string;
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY';
+export interface AppSettings {
+  notificationEmail: string;
+}
+
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS';
 
 // Backwards compatibility helper type if needed, though we are migrating fully
-export type OrderItem = Order; 
+export type OrderItem = Order;
