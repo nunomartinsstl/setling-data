@@ -19,6 +19,12 @@ export interface OrderLineItem {
   isCustom?: boolean; // Flag for manually typed items
 }
 
+export interface ChangeLogEntry {
+  date: string;
+  actor: string;
+  details: string;
+}
+
 // The Parent Order Object
 export interface Order {
   id: string;
@@ -26,8 +32,9 @@ export interface Order {
   creator: string;
   status: 'OPEN' | 'FINISHED';
   dateCreated: string;
-  dueDate: string; // "Data Para"
+  dueDate: string; // "Data Levantamento"
   items: OrderLineItem[];
+  changeLog?: ChangeLogEntry[];
 }
 
 export interface StockItem {

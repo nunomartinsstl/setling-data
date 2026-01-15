@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial } from '../types';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry } from '../types';
 import { StorageService } from '../services/storageService';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, FileSpreadsheet, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, FileSpreadsheet, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface OrderManagerProps {
@@ -25,9 +25,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
-  // Creation States
+  // Creation/Edit States
   const [creationStep, setCreationStep] = useState<'INITIAL' | 'DETAILS_PENDING'>('INITIAL');
   const [importMode, setImportMode] = useState<'FILE' | 'MANUAL'>('MANUAL');
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null); // Track if we are editing an existing order
   
   // Manual Entry Buffer (Drafts)
   const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', isCustom: false, customDesc: ''}]);
@@ -66,32 +67,40 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     return Array.from(optionsMap.entries()).map(([sku, desc]) => ({ sku, desc }));
   }, [masterList, stock]);
 
-  // --- DRAFT LOGIC ---
+  // --- DRAFT LOGIC (Only runs if not editing an existing order) ---
   useEffect(() => {
+    if (editingOrderId) return; // Don't load draft if editing existing
     const savedRows = localStorage.getItem('draft_rows');
     const savedTitle = localStorage.getItem('draft_title');
     if (savedRows) {
         try { setManualRows(JSON.parse(savedRows)); } catch(e){}
     }
     if (savedTitle) setOrderTitle(savedTitle);
-  }, []);
+  }, [editingOrderId]);
 
   useEffect(() => {
+    if (editingOrderId) return; // Don't save draft if editing existing
     localStorage.setItem('draft_rows', JSON.stringify(manualRows));
-  }, [manualRows]);
+  }, [manualRows, editingOrderId]);
 
   useEffect(() => {
+    if (editingOrderId) return;
     localStorage.setItem('draft_title', orderTitle);
-  }, [orderTitle]);
+  }, [orderTitle, editingOrderId]);
 
   const clearDraft = () => {
       localStorage.removeItem('draft_rows');
       localStorage.removeItem('draft_title');
+      resetForm();
+  };
+
+  const resetForm = () => {
       setManualRows([{sku: '', qty: '', isCustom: false, customDesc: ''}]);
       setOrderTitle('');
       setDueDate('');
       setPendingItems([]);
       setCreationStep('INITIAL');
+      setEditingOrderId(null);
   };
 
   const getMinDate = () => {
@@ -209,6 +218,63 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     setCreationStep('DETAILS_PENDING');
   };
 
+  const handleEditStart = (order: Order) => {
+      // 1. Convert Order items back to ManualRows
+      const rows: ManualRow[] = order.items.map(item => ({
+          sku: item.isCustom ? '' : item.sku,
+          qty: item.quantity,
+          isCustom: !!item.isCustom,
+          customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : ''
+      }));
+
+      // 2. Set State
+      setManualRows(rows);
+      setOrderTitle(order.title);
+      setDueDate(order.dueDate);
+      setEditingOrderId(order.id);
+      setImportMode('MANUAL');
+      setCreationStep('INITIAL');
+      
+      // 3. Scroll to top/open form
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const generateChangeLog = (oldOrder: Order, newItems: OrderLineItem[], newDate: string, newTitle: string): ChangeLogEntry => {
+      const changes: string[] = [];
+
+      if (oldOrder.title !== newTitle) changes.push(`Título alterado.`);
+      if (oldOrder.dueDate !== newDate) changes.push(`Data alterada para ${newDate}.`);
+
+      // Compare Items
+      const oldMap = new Map(oldOrder.items.map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
+      const newMap = new Map(newItems.map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
+
+      // Check for removed or changed quantity
+      oldMap.forEach((qty, key) => {
+          if (!newMap.has(key)) {
+              changes.push(`Removido: ${key.startsWith('CUST:') ? key.replace('CUST:', '') : key}`);
+          } else {
+              const newQty = newMap.get(key);
+              if (newQty !== qty) {
+                  changes.push(`Qtd Alterada: ${key.startsWith('CUST:') ? key.replace('CUST:', '') : key} (${qty} -> ${newQty})`);
+              }
+          }
+      });
+
+      // Check for added
+      newMap.forEach((qty, key) => {
+          if (!oldMap.has(key)) {
+              changes.push(`Adicionado: ${key.startsWith('CUST:') ? key.replace('CUST:', '') : key} (${qty} un)`);
+          }
+      });
+
+      return {
+          date: new Date().toISOString(),
+          actor: currentUsername,
+          details: changes.length > 0 ? changes.join('; ') : 'Edição sem alterações visíveis.'
+      };
+  };
+
   const submitOrder = async () => {
     if (!orderTitle.trim()) {
         setMessage({ type: 'error', text: "Digite o Título do Pedido." });
@@ -221,92 +287,108 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
     setIsProcessing(true);
     try {
-        const newOrder: Order = {
-            id: Math.random().toString(36).substr(2, 9),
-            title: orderTitle,
-            creator: currentUsername,
-            status: 'OPEN',
-            dateCreated: new Date().toISOString(),
-            dueDate: dueDate,
-            items: pendingItems
-        };
+        if (editingOrderId) {
+            // --- UPDATE EXISTING ORDER ---
+            const existingOrder = orders.find(o => o.id === editingOrderId);
+            if (!existingOrder) throw new Error("Pedido original não encontrado.");
 
-        await StorageService.addOrders([newOrder]);
-        refreshData();
-        clearDraft(); // Success!
-
-        // --- NOTIFICATION LOGIC ---
-        // 1. Identify items to Create (Custom)
-        const itemsToCreate = pendingItems.filter(i => i.isCustom);
-        
-        // 2. Identify items to Restock (Standard items where stock < requested quantity)
-        // Note: Using stock < quantity to determine if we can fulfill the order
-        const itemsToRestock = pendingItems.filter(i => {
-            if(i.isCustom) return false;
-            const currentStock = getStockCount(i.sku);
-            return currentStock < i.quantity; 
-        });
-
-        if (itemsToCreate.length > 0 || itemsToRestock.length > 0) {
-            const settings = await StorageService.getSettings();
-            const recipients = settings.emailRecipients || [];
+            const logEntry = generateChangeLog(existingOrder, pendingItems, dueDate, orderTitle);
             
-            // Backwards compatibility if only notificationEmail exists
-            if(recipients.length === 0 && settings.notificationEmail) {
-                recipients.push({ email: settings.notificationEmail, type: 'TO' });
-            }
+            const updatedOrder: Order = {
+                ...existingOrder,
+                title: orderTitle,
+                dueDate: dueDate,
+                items: pendingItems,
+                changeLog: [...(existingOrder.changeLog || []), logEntry]
+            };
 
-            if (recipients.length > 0) {
-                // Time based greeting
-                const hour = new Date().getHours();
-                let greeting = 'Bom dia';
-                if (hour >= 13 && hour < 20) greeting = 'Boa tarde';
-                else if (hour >= 20 || hour < 6) greeting = 'Boa noite';
+            await StorageService.updateOrder(updatedOrder);
+            refreshData();
+            resetForm();
+            setMessage({ type: 'success', text: "Pedido atualizado com sucesso." });
+            // NOTE: We do NOT trigger emails on edit, per standard requirement to avoid spam.
 
-                const subject = encodeURIComponent(`ALERTA: Pedido com falta de stock - ${newOrder.title}`);
-                
-                let bodyText = `${greeting},\n\n` +
-                    `O utilizador ${currentUsername} criou um pedido com itens pendentes.\n\n` +
-                    `Pedido: ${newOrder.title}\nData Levantamento: ${dueDate}\n\n`;
-
-                if (itemsToCreate.length > 0) {
-                    bodyText += `ITENS NOVOS (CRIAR NO SISTEMA):\n`;
-                    bodyText += itemsToCreate.map(i => `- ${i.description} (${i.quantity} un)`).join('\n');
-                    bodyText += `\n\n`;
-                }
-
-                if (itemsToRestock.length > 0) {
-                    bodyText += `ITENS PARA REPOR STOCK (RUPTURA):\n`;
-                    bodyText += itemsToRestock.map(i => {
-                        const current = getStockCount(i.sku);
-                        return `- ${i.description} (Ped: ${i.quantity} | Stock: ${current})`;
-                    }).join('\n');
-                    bodyText += `\n\n`;
-                }
-
-                bodyText += `Cumprimentos`;
-
-                const body = encodeURIComponent(bodyText);
-                
-                // Construct mailto
-                const toEmails = recipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
-                const ccEmails = recipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
-                
-                let mailtoLink = `mailto:${toEmails}?subject=${subject}&body=${body}`;
-                if (ccEmails) {
-                    mailtoLink += `&cc=${ccEmails}`;
-                }
-
-                // Uses window.location.href to bypass pop-up blockers (standard mailto behavior)
-                window.location.href = mailtoLink;
-                setMessage({ type: 'success', text: `Pedido criado. Se o e-mail não abriu, verifique seu app de e-mail.` });
-            } else {
-                 setMessage({ type: 'success', text: `Pedido criado. (Sem e-mail configurado para alerta).` });
-            }
         } else {
-             setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
+            // --- CREATE NEW ORDER ---
+            const newOrder: Order = {
+                id: Math.random().toString(36).substr(2, 9),
+                title: orderTitle,
+                creator: currentUsername,
+                status: 'OPEN',
+                dateCreated: new Date().toISOString(),
+                dueDate: dueDate,
+                items: pendingItems
+            };
+
+            await StorageService.addOrders([newOrder]);
+            refreshData();
+            clearDraft(); // Success!
+
+            // --- NOTIFICATION LOGIC (Only for New Orders) ---
+            const itemsToCreate = pendingItems.filter(i => i.isCustom);
+            const itemsToRestock = pendingItems.filter(i => {
+                if(i.isCustom) return false;
+                const currentStock = getStockCount(i.sku);
+                return currentStock < i.quantity; 
+            });
+
+            if (itemsToCreate.length > 0 || itemsToRestock.length > 0) {
+                const settings = await StorageService.getSettings();
+                const recipients = settings.emailRecipients || [];
+                
+                if(recipients.length === 0 && settings.notificationEmail) {
+                    recipients.push({ email: settings.notificationEmail, type: 'TO' });
+                }
+
+                if (recipients.length > 0) {
+                    // Time based greeting
+                    const hour = new Date().getHours();
+                    let greeting = 'Bom dia';
+                    if (hour >= 13 && hour < 20) greeting = 'Boa tarde';
+                    else if (hour >= 20 || hour < 6) greeting = 'Boa noite';
+
+                    const subject = encodeURIComponent(`ALERTA: Pedido com falta de stock - ${newOrder.title}`);
+                    
+                    let bodyText = `${greeting},\n\n` +
+                        `O utilizador ${currentUsername} criou um pedido com itens pendentes.\n\n` +
+                        `Pedido: ${newOrder.title}\nData Levantamento: ${dueDate}\n\n`;
+
+                    if (itemsToCreate.length > 0) {
+                        bodyText += `ITENS NOVOS (CRIAR NO SISTEMA):\n`;
+                        bodyText += itemsToCreate.map(i => `- ${i.description} (${i.quantity} un)`).join('\n');
+                        bodyText += `\n\n`;
+                    }
+
+                    if (itemsToRestock.length > 0) {
+                        bodyText += `ITENS PARA REPOR STOCK (RUPTURA):\n`;
+                        bodyText += itemsToRestock.map(i => {
+                            const current = getStockCount(i.sku);
+                            return `- ${i.description} (Ped: ${i.quantity} | Stock: ${current})`;
+                        }).join('\n');
+                        bodyText += `\n\n`;
+                    }
+
+                    bodyText += `Cumprimentos`;
+
+                    const body = encodeURIComponent(bodyText);
+                    
+                    const toEmails = recipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
+                    const ccEmails = recipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
+                    
+                    let mailtoLink = `mailto:${toEmails}?subject=${subject}&body=${body}`;
+                    if (ccEmails) {
+                        mailtoLink += `&cc=${ccEmails}`;
+                    }
+
+                    window.location.href = mailtoLink;
+                    setMessage({ type: 'success', text: `Pedido criado. Se o e-mail não abriu, verifique seu app de e-mail.` });
+                } else {
+                    setMessage({ type: 'success', text: `Pedido criado. (Sem e-mail configurado para alerta).` });
+                }
+            } else {
+                setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
+            }
         }
-        
     } catch (err: any) {
         setMessage({ type: 'error', text: err.message });
     } finally {
@@ -345,7 +427,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   // --- RENDER HELPERS ---
   const FinalizeOrderForm = () => (
     <div className="space-y-4 animate-fade-in bg-slate-50 p-6 rounded-lg border border-slate-200">
-        <h4 className="font-semibold text-slate-800 border-b border-slate-200 pb-2 mb-4">Finalizar Pedido</h4>
+        <h4 className="font-semibold text-slate-800 border-b border-slate-200 pb-2 mb-4">
+            {editingOrderId ? 'Salvar Alterações' : 'Finalizar Pedido'}
+        </h4>
         
         <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Título do Pedido</label>
@@ -396,7 +480,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 flex items-center gap-2"
             >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-                Criar Pedido
+                {editingOrderId ? 'Salvar Edição' : 'Criar Pedido'}
             </button>
         </div>
     </div>
@@ -421,31 +505,41 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         </h2>
       </div>
 
-      {/* CREATION AREA */}
-      {type === 'OPEN' && canEdit && (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-brand-200">
+      {/* CREATION/EDIT AREA */}
+      {(type === 'OPEN' && canEdit) || editingOrderId ? (
+        <div className={`bg-white p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100' : 'border-brand-200'}`}>
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Upload className="w-5 h-5" /> Novo Pedido
+            {editingOrderId ? (
+                <>
+                    <Edit className="w-5 h-5 text-amber-600" /> 
+                    <span className="text-amber-700">Editando Pedido</span>
+                    <button onClick={resetForm} className="text-xs text-slate-500 underline ml-2 hover:text-red-500">(Cancelar)</button>
+                </>
+            ) : (
+                <><Upload className="w-5 h-5" /> Novo Pedido</>
+            )}
           </h3>
 
           {creationStep === 'DETAILS_PENDING' ? (
               <FinalizeOrderForm />
           ) : (
             <div>
-                <div className="flex space-x-4 mb-4 border-b border-slate-100 pb-2">
-                    <button 
-                        onClick={() => setImportMode('MANUAL')}
-                        className={`text-sm font-medium pb-2 border-b-2 transition-colors ${importMode === 'MANUAL' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                    >
-                        Editor
-                    </button>
-                    <button 
-                        onClick={() => setImportMode('FILE')}
-                        className={`text-sm font-medium pb-2 border-b-2 transition-colors ${importMode === 'FILE' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
-                    >
-                        Importar Excel
-                    </button>
-                </div>
+                {!editingOrderId && (
+                    <div className="flex space-x-4 mb-4 border-b border-slate-100 pb-2">
+                        <button 
+                            onClick={() => setImportMode('MANUAL')}
+                            className={`text-sm font-medium pb-2 border-b-2 transition-colors ${importMode === 'MANUAL' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Editor
+                        </button>
+                        <button 
+                            onClick={() => setImportMode('FILE')}
+                            className={`text-sm font-medium pb-2 border-b-2 transition-colors ${importMode === 'FILE' ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                        >
+                            Importar Excel
+                        </button>
+                    </div>
+                )}
 
                 {importMode === 'FILE' && (
                     <div className="space-y-4 animate-fade-in">
@@ -472,7 +566,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 {importMode === 'MANUAL' && (
                     <div className="space-y-3 animate-fade-in">
                         <div className="mb-4">
-                            <label className="block text-xs font-semibold text-slate-500 mb-1">Título do Pedido (Rascunho)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Título do Pedido {editingOrderId ? '' : '(Rascunho)'}</label>
                             <input 
                                 type="text"
                                 value={orderTitle}
@@ -601,7 +695,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             </div>
           )}
         </div>
-      )}
+      ) : null}
 
       {/* ORDERS LIST */}
       <div className="space-y-4">
@@ -613,6 +707,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             filteredOrders.map((order) => {
                 const isExpanded = expandedOrderId === order.id;
                 const items = order.items || []; 
+                const canModify = (currentUsername === order.creator || isAdmin);
                 
                 return (
                     <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all relative">
@@ -690,18 +785,51 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                     </tbody>
                                 </table>
 
+                                {/* Action Buttons */}
                                 {type === 'OPEN' && canEdit && (
-                                    <div className="flex justify-end">
+                                    <div className="flex justify-end gap-3 mb-4">
+                                         {canModify && (
+                                            <button 
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleEditStart(order);
+                                                }}
+                                                className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
+                                            >
+                                                <Edit className="w-4 h-4" /> Editar Pedido
+                                            </button>
+                                        )}
+
                                         <button 
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 handleFinishOrder(order.id);
                                             }}
                                             disabled={isProcessing}
-                                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm"
+                                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
                                         >
                                             <CheckCircle className="w-4 h-4" /> Finalizar Pedido
                                         </button>
+                                    </div>
+                                )}
+
+                                {/* Change Log */}
+                                {order.changeLog && order.changeLog.length > 0 && (
+                                    <div className="mt-4 border-t border-slate-200 pt-4">
+                                        <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
+                                            <History className="w-3 h-3"/> Histórico de Alterações
+                                        </h5>
+                                        <div className="space-y-2">
+                                            {order.changeLog.map((log, i) => (
+                                                <div key={i} className="text-xs bg-white p-2 rounded border border-slate-200 text-slate-600">
+                                                    <div className="flex justify-between mb-1">
+                                                        <span className="font-semibold text-slate-800">{log.actor}</span>
+                                                        <span className="text-slate-400">{new Date(log.date).toLocaleString('pt-BR')}</span>
+                                                    </div>
+                                                    <p>{log.details}</p>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>

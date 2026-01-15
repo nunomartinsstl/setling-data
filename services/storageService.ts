@@ -167,6 +167,22 @@ export const StorageService = {
     return updated;
   },
 
+  updateOrder: async (updatedOrder: Order) => {
+    const current = await StorageService.getOrders();
+    const updatedList = current.map(o => o.id === updatedOrder.id ? updatedOrder : o);
+    localStorage.setItem(KEYS.ORDERS, JSON.stringify(updatedList));
+
+    if (isFirebaseActive) {
+      try {
+        await set(ref(db, KEYS.ORDERS), updatedList);
+      } catch (error: any) {
+        console.error("Firebase Falhou (Update Order):", error.message);
+        throw error;
+      }
+    }
+    return updatedList;
+  },
+
   updateOrderStatus: async (orderId: string, newStatus: 'FINISHED' | 'OPEN') => {
     const current = await StorageService.getOrders();
     const updated = current.map(order => 
