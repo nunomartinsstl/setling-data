@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -51,6 +51,8 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
      return 'bg-amber-100 text-amber-700';
   };
 
+  const canCreate = isAdmin || isManagement;
+
   return (
     <div className="flex h-screen bg-slate-50">
       {/* Mobile Menu Overlay */}
@@ -86,6 +88,17 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 isActive={currentView === 'DASHBOARD'} 
                 onClick={() => handleNavClick('DASHBOARD')} 
               />
+              
+              {canCreate && (
+                <NavItem 
+                    view="CREATE_ORDER" 
+                    icon={PlusCircle} 
+                    label="Criar Pedido" 
+                    isActive={currentView === 'CREATE_ORDER'} 
+                    onClick={() => handleNavClick('CREATE_ORDER')} 
+                />
+              )}
+
               <NavItem 
                 view="OPEN_ORDERS" 
                 icon={ShoppingCart} 

@@ -9,6 +9,7 @@ interface OrderManagerProps {
   stock: StockItem[];
   masterList: MasterMaterial[];
   type: 'OPEN' | 'FINISHED';
+  mode: 'CREATE' | 'LIST'; // New prop to separate views
   userRole: UserRole;
   refreshData: () => void;
   currentUsername: string;
@@ -21,7 +22,7 @@ interface ManualRow {
     customDesc: string;
 }
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, userRole, refreshData, currentUsername }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -355,16 +356,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                     if (itemsToCreate.length > 0) {
                         bodyText += `ITENS NOVOS (CRIAR NO SISTEMA):\n`;
-                        bodyText += itemsToCreate.map(i => `- ${i.description} (${i.quantity} un)`).join('\n');
+                        bodyText += itemsToCreate.map(i => {
+                            // Clean description from internal '(Novo) ' flag if present for email
+                            const cleanDesc = i.description.replace('(Novo) ', '');
+                            return `${cleanDesc}\n${i.quantity} UN`;
+                        }).join('\n\n');
                         bodyText += `\n\n`;
                     }
 
                     if (itemsToRestock.length > 0) {
-                        bodyText += `ITENS PARA REPOR STOCK (RUPTURA):\n`;
+                        bodyText += `ITENS PARA REPOR STOCK (RUTURA):\n`;
                         bodyText += itemsToRestock.map(i => {
-                            const current = getStockCount(i.sku);
-                            return `- ${i.description} (Ped: ${i.quantity} | Stock: ${current})`;
-                        }).join('\n');
+                            // Only Material Name and Requested Quantity (2 lines)
+                            return `${i.description}\n${i.quantity} UN`;
+                        }).join('\n\n');
                         bodyText += `\n\n`;
                     }
 
@@ -486,6 +491,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     </div>
   );
 
+  // Logic to show form: if mode is CREATE OR if we are currently editing an order
+  const showForm = mode === 'CREATE' || editingOrderId !== null;
+  // Logic to show list: if mode is LIST AND we are NOT editing
+  const showList = mode === 'LIST' && editingOrderId === null;
+
   return (
     <div className="space-y-6">
       <datalist id="stock-options">
@@ -497,16 +507,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       {/* Header */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          {type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>}
-          {type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos Finalizados'}
-          <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-full">
-            {filteredOrders.length}
-          </span>
+          {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
+          {mode === 'CREATE' ? 'Novo Pedido' : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos Finalizados')}
+          {mode === 'LIST' && (
+             <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-full">
+                {filteredOrders.length}
+             </span>
+          )}
         </h2>
       </div>
 
       {/* CREATION/EDIT AREA */}
-      {(type === 'OPEN' && canEdit) || editingOrderId ? (
+      {showForm && (
         <div className={`bg-white p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100' : 'border-brand-200'}`}>
           <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
             {editingOrderId ? (
@@ -516,7 +528,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     <button onClick={resetForm} className="text-xs text-slate-500 underline ml-2 hover:text-red-500">(Cancelar)</button>
                 </>
             ) : (
-                <><Upload className="w-5 h-5" /> Novo Pedido</>
+                <><Upload className="w-5 h-5" /> Inserir Dados</>
             )}
           </h3>
 
@@ -577,7 +589,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         </div>
 
                         <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-500 mb-1">
-                            <div className="col-span-5">Material / SKU</div>
+                            <div className="col-span-5">Material</div>
                             <div className="col-span-2">Qtd</div>
                             <div className="col-span-3">Disponibilidade</div>
                             <div className="col-span-1">Criar?</div>
@@ -695,150 +707,152 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             </div>
           )}
         </div>
-      ) : null}
+      )}
 
       {/* ORDERS LIST */}
-      <div className="space-y-4">
-        {filteredOrders.length === 0 ? (
-            <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
-                Nenhum pedido encontrado.
-            </div>
-        ) : (
-            filteredOrders.map((order) => {
-                const isExpanded = expandedOrderId === order.id;
-                const items = order.items || []; 
-                const canModify = (currentUsername === order.creator || isAdmin);
-                
-                return (
-                    <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all relative">
-                        {/* ADMIN DELETE BUTTON */}
-                        {isAdmin && (
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
-                                className="absolute top-4 right-4 text-slate-300 hover:text-red-500 z-10 transition-colors"
-                                title="Excluir Pedido (Admin)"
+      {showList && (
+        <div className="space-y-4">
+            {filteredOrders.length === 0 ? (
+                <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
+                    Nenhum pedido encontrado.
+                </div>
+            ) : (
+                filteredOrders.map((order) => {
+                    const isExpanded = expandedOrderId === order.id;
+                    const items = order.items || []; 
+                    const canModify = (currentUsername === order.creator || isAdmin);
+                    
+                    return (
+                        <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all relative">
+                            {/* ADMIN DELETE BUTTON */}
+                            {isAdmin && (
+                                <button 
+                                    onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
+                                    className="absolute top-4 right-4 text-slate-300 hover:text-red-500 z-10 transition-colors"
+                                    title="Excluir Pedido (Admin)"
+                                >
+                                    <Trash2 className="w-5 h-5" />
+                                </button>
+                            )}
+
+                            <div 
+                                className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
+                                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
                             >
-                                <Trash2 className="w-5 h-5" />
-                            </button>
-                        )}
-
-                        <div 
-                            className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
-                            onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-                        >
-                            <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 pr-10">
-                                <div>
-                                    <h4 className="font-bold text-slate-800 text-lg">{order.title || "Sem Título"}</h4>
-                                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                                        <User className="w-3 h-3"/> 
-                                        {order.creator || 'Desconhecido'}
-                                        <span className="text-slate-300">|</span>
-                                        <span>Criado: {new Date(order.dateCreated).toLocaleDateString()}</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Calendar className="w-4 h-4 text-brand-600" />
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4 pr-10">
                                     <div>
-                                        <p className="text-xs text-slate-500 uppercase font-semibold">Para:</p>
-                                        <p className="font-medium text-slate-800">
-                                            {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}
-                                        </p>
+                                        <h4 className="font-bold text-slate-800 text-lg">{order.title || "Sem Título"}</h4>
+                                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                                            <User className="w-3 h-3"/> 
+                                            {order.creator || 'Desconhecido'}
+                                            <span className="text-slate-300">|</span>
+                                            <span>Criado: {new Date(order.dateCreated).toLocaleDateString()}</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Calendar className="w-4 h-4 text-brand-600" />
+                                        <div>
+                                            <p className="text-xs text-slate-500 uppercase font-semibold">Para:</p>
+                                            <p className="font-medium text-slate-800">
+                                                {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                            order.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                                        }`}>
+                                            {order.status === 'OPEN' ? 'Aberto' : 'Finalizado'}
+                                        </span>
+                                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
+                                            {items.length} itens
+                                        </span>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-4">
-                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                        order.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                                    }`}>
-                                        {order.status === 'OPEN' ? 'Aberto' : 'Finalizado'}
-                                    </span>
-                                    <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">
-                                        {items.length} itens
-                                    </span>
+                                <div className="ml-4">
+                                    {isExpanded ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
                                 </div>
                             </div>
-                            <div className="ml-4">
-                                {isExpanded ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
-                            </div>
-                        </div>
 
-                        {isExpanded && (
-                            <div className="bg-slate-50 border-t border-slate-200 p-4 animate-fade-in">
-                                <table className="w-full text-left text-sm text-slate-600 mb-4 bg-white rounded-lg overflow-hidden shadow-sm">
-                                    <thead className="bg-slate-100 font-semibold text-slate-700">
-                                        <tr>
-                                            <th className="p-3">SKU</th>
-                                            <th className="p-3">Descrição</th>
-                                            <th className="p-3 text-right">Qtd</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {items.map((item, idx) => (
-                                            <tr key={idx}>
-                                                <td className="p-3 font-medium text-xs font-mono">{item.sku}</td>
-                                                <td className="p-3">
-                                                    {item.description}
-                                                    {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
-                                                </td>
-                                                <td className="p-3 text-right font-bold">{item.quantity}</td>
+                            {isExpanded && (
+                                <div className="bg-slate-50 border-t border-slate-200 p-4 animate-fade-in">
+                                    <table className="w-full text-left text-sm text-slate-600 mb-4 bg-white rounded-lg overflow-hidden shadow-sm">
+                                        <thead className="bg-slate-100 font-semibold text-slate-700">
+                                            <tr>
+                                                <th className="p-3">Material</th>
+                                                <th className="p-3">Descrição</th>
+                                                <th className="p-3 text-right">Qtd</th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {items.map((item, idx) => (
+                                                <tr key={idx}>
+                                                    <td className="p-3 font-medium text-xs font-mono">{item.sku}</td>
+                                                    <td className="p-3">
+                                                        {item.description}
+                                                        {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
+                                                    </td>
+                                                    <td className="p-3 text-right font-bold">{item.quantity}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
 
-                                {/* Action Buttons */}
-                                {type === 'OPEN' && canEdit && (
-                                    <div className="flex justify-end gap-3 mb-4">
-                                         {canModify && (
+                                    {/* Action Buttons */}
+                                    {type === 'OPEN' && canEdit && (
+                                        <div className="flex justify-end gap-3 mb-4">
+                                            {canModify && (
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEditStart(order);
+                                                    }}
+                                                    className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
+                                                >
+                                                    <Edit className="w-4 h-4" /> Editar Pedido
+                                                </button>
+                                            )}
+
                                             <button 
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    handleEditStart(order);
+                                                    handleFinishOrder(order.id);
                                                 }}
-                                                className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
+                                                disabled={isProcessing}
+                                                className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
                                             >
-                                                <Edit className="w-4 h-4" /> Editar Pedido
+                                                <CheckCircle className="w-4 h-4" /> Finalizar Pedido
                                             </button>
-                                        )}
-
-                                        <button 
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleFinishOrder(order.id);
-                                            }}
-                                            disabled={isProcessing}
-                                            className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
-                                        >
-                                            <CheckCircle className="w-4 h-4" /> Finalizar Pedido
-                                        </button>
-                                    </div>
-                                )}
-
-                                {/* Change Log */}
-                                {order.changeLog && order.changeLog.length > 0 && (
-                                    <div className="mt-4 border-t border-slate-200 pt-4">
-                                        <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
-                                            <History className="w-3 h-3"/> Histórico de Alterações
-                                        </h5>
-                                        <div className="space-y-2">
-                                            {order.changeLog.map((log, i) => (
-                                                <div key={i} className="text-xs bg-white p-2 rounded border border-slate-200 text-slate-600">
-                                                    <div className="flex justify-between mb-1">
-                                                        <span className="font-semibold text-slate-800">{log.actor}</span>
-                                                        <span className="text-slate-400">{new Date(log.date).toLocaleString('pt-BR')}</span>
-                                                    </div>
-                                                    <p>{log.details}</p>
-                                                </div>
-                                            ))}
                                         </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                );
-            })
-        )}
-      </div>
+                                    )}
+
+                                    {/* Change Log */}
+                                    {order.changeLog && order.changeLog.length > 0 && (
+                                        <div className="mt-4 border-t border-slate-200 pt-4">
+                                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
+                                                <History className="w-3 h-3"/> Histórico de Alterações
+                                            </h5>
+                                            <div className="space-y-2">
+                                                {order.changeLog.map((log, i) => (
+                                                    <div key={i} className="text-xs bg-white p-2 rounded border border-slate-200 text-slate-600">
+                                                        <div className="flex justify-between mb-1">
+                                                            <span className="font-semibold text-slate-800">{log.actor}</span>
+                                                            <span className="text-slate-400">{new Date(log.date).toLocaleString('pt-BR')}</span>
+                                                        </div>
+                                                        <p>{log.details}</p>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    );
+                })
+            )}
+        </div>
+      )}
     </div>
   );
 };

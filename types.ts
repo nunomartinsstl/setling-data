@@ -13,7 +13,7 @@ export interface User {
 
 // Inner item within an order
 export interface OrderLineItem {
-  sku: string;
+  sku: string; // Internal ID, but displayed as "Material"
   description: string;
   quantity: number;
   isCustom?: boolean; // Flag for manually typed items
@@ -62,7 +62,7 @@ export interface AppSettings {
   emailRecipients: EmailRecipient[];
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS';
 
 // Backwards compatibility helper type if needed, though we are migrating fully
 export type OrderItem = Order;

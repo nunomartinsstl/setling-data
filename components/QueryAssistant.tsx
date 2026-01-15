@@ -51,7 +51,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Digite SKU, descrição, título do pedido ou nome do usuário..."
+            placeholder="Digite Material, descrição, título do pedido ou nome do usuário..."
             className="w-full pl-12 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-lg"
           />
           <Search className="absolute left-4 top-3.5 w-6 h-6 text-slate-400" />
@@ -74,7 +74,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
           <table className="w-full text-left text-sm text-slate-600">
              <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
-                    <th className="p-3">SKU</th>
+                    <th className="p-3">Material</th>
                     <th className="p-3">Descrição</th>
                     <th className="p-3 text-right">Qtd</th>
                     <th className="p-3">Lote</th>
@@ -143,7 +143,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
                         <table className="w-full text-sm text-left bg-white rounded-lg overflow-hidden shadow-sm">
                             <thead className="bg-slate-100 font-semibold text-slate-700">
                                 <tr>
-                                    <th className="p-3">SKU</th>
+                                    <th className="p-3">Material</th>
                                     <th className="p-3">Descrição</th>
                                     <th className="p-3 text-right">Qtd</th>
                                 </tr>

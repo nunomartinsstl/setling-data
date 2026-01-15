@@ -209,7 +209,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
                 <table className="w-full text-left text-sm text-slate-600">
                     <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-700">
                     <tr>
-                        <th className="p-4">SKU</th>
+                        <th className="p-4">Material</th>
                         <th className="p-4">Descrição</th>
                         <th className="p-4">Lote</th>
                         <th className="p-4 text-right">Qtd</th>

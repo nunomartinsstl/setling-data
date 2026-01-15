@@ -73,6 +73,19 @@ const App: React.FC = () => {
     switch (view) {
       case 'DASHBOARD':
         return <Dashboard orders={orders} stock={stock} userRole={user.role} onNavigate={setView} />;
+      case 'CREATE_ORDER':
+        return (
+            <OrderManager 
+              orders={orders} 
+              stock={stock}
+              masterList={masterList}
+              type="OPEN"
+              mode="CREATE" // New Prop
+              userRole={user.role} 
+              refreshData={refreshData} 
+              currentUsername={user.username}
+            />
+          );
       case 'OPEN_ORDERS':
         return (
           <OrderManager 
@@ -80,6 +93,7 @@ const App: React.FC = () => {
             stock={stock}
             masterList={masterList}
             type="OPEN" 
+            mode="LIST" // New Prop
             userRole={user.role} 
             refreshData={refreshData} 
             currentUsername={user.username}
@@ -92,6 +106,7 @@ const App: React.FC = () => {
             stock={stock}
             masterList={masterList}
             type="FINISHED" 
+            mode="LIST"
             userRole={user.role} 
             refreshData={refreshData}
             currentUsername={user.username}
