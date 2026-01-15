@@ -112,8 +112,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   // Availability check always looks at STOCK
   const getStockCount = (sku: string) => {
-    const item = stock.find(s => s.sku === sku);
-    return item ? item.quantity : 0;
+    // Sum all quantities for the same SKU (across different batches/entries)
+    return stock
+      .filter(s => s.sku === sku)
+      .reduce((total, item) => total + item.quantity, 0);
   };
 
   // Description lookup prefers Catalogue
