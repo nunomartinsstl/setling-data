@@ -38,10 +38,10 @@ const Settings: React.FC = () => {
 
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Mail className="w-5 h-5 text-slate-500"/> Notificações de Estoque
+            <Mail className="w-5 h-5 text-slate-500"/> Notificações de Stock
         </h3>
         <p className="text-sm text-slate-500 mb-4">
-            Defina o e-mail que receberá alertas imediatos quando um usuário solicitar um material sem estoque ou inexistente.
+            Defina o e-mail que receberá alertas imediatos quando um usuário solicitar um material sem stock ou inexistente.
         </p>
         
         <form onSubmit={handleSave} className="space-y-4">

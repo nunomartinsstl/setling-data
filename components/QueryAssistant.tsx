@@ -69,7 +69,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-amber-50 p-4 border-b border-amber-100 flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-600" />
-            <h3 className="font-bold text-amber-800">Estoque ({filteredStock.length})</h3>
+            <h3 className="font-bold text-amber-800">Stock ({filteredStock.length})</h3>
           </div>
           <table className="w-full text-left text-sm text-slate-600">
              <thead className="bg-slate-50 border-b border-slate-100">

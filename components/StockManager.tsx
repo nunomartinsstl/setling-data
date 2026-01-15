@@ -24,7 +24,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!window.confirm("AVISO: O upload irá SUBSTITUIR todo o estoque atual. Continuar?")) {
+    if (!window.confirm("AVISO: O upload irá SUBSTITUIR todo o stock atual. Continuar?")) {
       if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
@@ -66,7 +66,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
 
         await StorageService.replaceStock(newStock);
         refreshData();
-        setMessage({ type: 'success', text: `Estoque substituído com sucesso. ${newStock.length} linhas.` });
+        setMessage({ type: 'success', text: `Stock substituído com sucesso. ${newStock.length} linhas.` });
 
       } catch (err: any) {
         setMessage({ type: 'error', text: err.message || "Falha ao processar arquivo." });
@@ -135,7 +135,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Package className="text-amber-500" /> Gestão de Estoque
+          <Package className="text-amber-500" /> Gestão de Stock
         </h2>
         {isAdmin && (
             <div className="flex bg-slate-200 rounded-lg p-1">
@@ -159,19 +159,19 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
           <>
             <div className={`bg-white p-6 rounded-xl shadow-sm border ${canEditStock ? 'border-amber-200' : 'border-slate-200'}`}>
                 <h3 className="text-lg font-semibold mb-2 flex items-center gap-2">
-                <Upload className="w-5 h-5" /> Atualizar Estoque Físico
+                <Upload className="w-5 h-5" /> Atualizar Stock Físico
                 </h3>
                 
                 {!canEditStock ? (
                 <div className="p-4 bg-slate-50 rounded-lg text-slate-500 text-sm">
-                    Apenas Logística ou Admins podem atualizar o estoque.
+                    Apenas Logística ou Admins podem atualizar o stock.
                 </div>
                 ) : (
                 <div className="space-y-4 animate-fade-in">
                     <div className="bg-amber-50 p-4 rounded-md border border-amber-100">
                     <div className="flex items-start gap-2 text-amber-800 text-sm mb-2">
                         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                        <p><strong>Atenção:</strong> O upload irá <u>SUBSTITUIR</u> todo o estoque atual.</p>
+                        <p><strong>Atenção:</strong> O upload irá <u>SUBSTITUIR</u> todo o stock atual.</p>
                     </div>
                     <p className="text-xs text-amber-700 ml-6">
                         Colunas: <code className="bg-amber-100 px-1 rounded">Material</code>, <code className="bg-amber-100 px-1 rounded">Texto breve material</code>, <code className="bg-amber-100 px-1 rounded">Utilização livre</code>, <code className="bg-amber-100 px-1 rounded">Lote</code>
@@ -241,7 +241,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, userRole, refreshDat
                     <Database className="w-5 h-5 text-purple-600" /> Importar Catálogo Geral (Admin)
                 </h3>
                 <p className="text-sm text-slate-600 mb-4">
-                    Este arquivo define os materiais que "existem" no sistema, mesmo que o estoque seja zero. 
+                    Este arquivo define os materiais que "existem" no sistema, mesmo que o stock seja zero. 
                     Usado para autocompletar nomes ao criar pedidos manuais.
                 </p>
                  <div className="bg-purple-50 p-4 rounded-md border border-purple-100 mb-4">

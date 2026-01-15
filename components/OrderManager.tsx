@@ -236,20 +236,30 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         clearDraft(); // Success!
 
         // --- NOTIFICATION LOGIC ---
-        const needsNotification = pendingItems.some(item => {
+        // 1. Identify critical items (Custom OR No Stock)
+        const criticalItems = pendingItems.filter(item => {
              if (item.isCustom) return true;
              const inStock = getStockCount(item.sku);
              return inStock <= 0;
         });
 
-        if (needsNotification) {
+        if (criticalItems.length > 0) {
             const settings = await StorageService.getSettings();
             if (settings.notificationEmail) {
-                const subject = encodeURIComponent(`ALERTA: Pedido com falta de estoque - ${newOrder.title}`);
+                // Time based greeting
+                const hour = new Date().getHours();
+                let greeting = 'Bom dia';
+                if (hour >= 12 && hour < 20) greeting = 'Boa tarde';
+                else if (hour >= 20 || hour < 6) greeting = 'Boa noite';
+
+                const subject = encodeURIComponent(`ALERTA: Pedido com falta de stock - ${newOrder.title}`);
                 const body = encodeURIComponent(
-                    `O usuário ${currentUsername} criou um pedido com itens críticos.\n\n` +
-                    `Pedido: ${newOrder.title}\nData Para: ${dueDate}\n\nItens:\n` +
-                    pendingItems.map(i => `- ${i.description} (${i.quantity})`).join('\n')
+                    `${greeting},\n\n` +
+                    `O utilizador ${currentUsername} criou um pedido com itens em falta ou novos.\n\n` +
+                    `Pedido: ${newOrder.title}\nData Para: ${dueDate}\n\n` +
+                    `Itens a verificar/encomendar:\n` +
+                    criticalItems.map(i => `- ${i.description} (${i.quantity} un)`).join('\n') +
+                    `\n\nCumprimentos,\nSetling`
                 );
                 
                 // Uses window.location.href to bypass pop-up blockers (standard mailto behavior)
@@ -332,7 +342,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         <span className="font-bold">{item.quantity}x</span> 
                         <span>{item.description}</span>
                         {item.isCustom && <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
-                        {!item.isCustom && getStockCount(item.sku) <= 0 && <span className="text-[10px] bg-red-100 text-red-700 px-1 rounded">Sem Estoque</span>}
+                        {!item.isCustom && getStockCount(item.sku) <= 0 && <span className="text-[10px] bg-red-100 text-red-700 px-1 rounded">Sem Stock</span>}
                     </li>
                 ))}
             </ul>
@@ -499,7 +509,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         ) : (
                                             row.sku ? (
                                                 <span className={`font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600 flex items-center gap-1'}`}>
-                                                    {stockQty > 0 ? `${stockQty} un` : <><AlertTriangle className="w-3 h-3"/> Sem Estoque</>}
+                                                    {stockQty > 0 ? `${stockQty} un` : <><AlertTriangle className="w-3 h-3"/> Sem Stock</>}
                                                 </span>
                                             ) : <span className="text-slate-400">-</span>
                                         )}
