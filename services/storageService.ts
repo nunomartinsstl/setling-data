@@ -278,7 +278,7 @@ export const StorageService = {
 
   // --- SETTINGS ---
   getSettings: async (): Promise<AppSettings> => {
-    let settings: AppSettings = { notificationEmail: '' };
+    let settings: AppSettings = { emailRecipients: [] };
     try {
         const localData = localStorage.getItem(KEYS.SETTINGS);
         if (localData) settings = JSON.parse(localData);
@@ -293,6 +293,8 @@ export const StorageService = {
             }
         } catch(e) {}
     }
+    // Ensure array exists
+    if(!settings.emailRecipients) settings.emailRecipients = [];
     return settings;
   },
 

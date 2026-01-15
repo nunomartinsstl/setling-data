@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from '../services/storageService';
-import { Save, Mail, Loader2, AlertCircle } from 'lucide-react';
+import { EmailRecipient } from '../types';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2 } from 'lucide-react';
 
 const Settings: React.FC = () => {
-  const [email, setEmail] = useState('');
+  const [recipients, setRecipients] = useState<EmailRecipient[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -13,14 +14,22 @@ const Settings: React.FC = () => {
 
   const loadSettings = async () => {
     const settings = await StorageService.getSettings();
-    setEmail(settings.notificationEmail || '');
+    // Migration helper: if old email exists but new list is empty
+    if ((!settings.emailRecipients || settings.emailRecipients.length === 0) && settings.notificationEmail) {
+        setRecipients([{ email: settings.notificationEmail, type: 'TO' }]);
+    } else {
+        setRecipients(settings.emailRecipients || []);
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await StorageService.saveSettings({ notificationEmail: email });
+      await StorageService.saveSettings({ 
+          emailRecipients: recipients,
+          notificationEmail: recipients.length > 0 ? recipients[0].email : '' // Legacy fallback
+      });
       setMessage('Configurações salvas com sucesso.');
       setTimeout(() => setMessage(''), 3000);
     } catch (err) {
@@ -28,6 +37,22 @@ const Settings: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const addRecipient = () => {
+      setRecipients([...recipients, { email: '', type: 'TO' }]);
+  };
+
+  const removeRecipient = (index: number) => {
+      const updated = [...recipients];
+      updated.splice(index, 1);
+      setRecipients(updated);
+  };
+
+  const updateRecipient = (index: number, field: keyof EmailRecipient, value: string) => {
+      const updated = [...recipients];
+      updated[index] = { ...updated[index], [field]: value };
+      setRecipients(updated);
   };
 
   return (
@@ -41,22 +66,49 @@ const Settings: React.FC = () => {
             <Mail className="w-5 h-5 text-slate-500"/> Notificações de Stock
         </h3>
         <p className="text-sm text-slate-500 mb-4">
-            Defina o e-mail que receberá alertas imediatos quando um usuário solicitar um material sem stock ou inexistente.
+            Defina os e-mails que receberão alertas quando houver itens novos ou sem stock.
         </p>
         
         <form onSubmit={handleSave} className="space-y-4">
-            <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">E-mail para Alertas</label>
-                <input 
-                    type="email" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="admin.logistica@empresa.com"
-                    className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
-                />
+            <div className="space-y-3">
+                {recipients.map((recipient, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                         <select
+                            value={recipient.type}
+                            onChange={(e) => updateRecipient(idx, 'type', e.target.value)}
+                            className="p-2 border border-slate-300 rounded-md bg-slate-50 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500"
+                         >
+                             <option value="TO">Para</option>
+                             <option value="CC">CC</option>
+                         </select>
+                         <input 
+                            type="email"
+                            value={recipient.email}
+                            onChange={(e) => updateRecipient(idx, 'email', e.target.value)}
+                            placeholder="exemplo@empresa.com"
+                            className="flex-1 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                            required
+                         />
+                         <button 
+                            type="button" 
+                            onClick={() => removeRecipient(idx)}
+                            className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                         >
+                             <Trash2 className="w-4 h-4" />
+                         </button>
+                    </div>
+                ))}
             </div>
 
-            <div className="flex items-center justify-between">
+            <button 
+                type="button" 
+                onClick={addRecipient}
+                className="text-sm text-brand-600 font-medium flex items-center gap-1 hover:text-brand-800"
+            >
+                <Plus className="w-3 h-3" /> Adicionar Destinatário
+            </button>
+
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100 mt-4">
                 <div>
                    {message && (
                     <span className="text-sm text-green-600 font-medium flex items-center gap-1">

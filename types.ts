@@ -1,3 +1,4 @@
+
 export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGEMENT = 'MANAGEMENT',
@@ -43,8 +44,15 @@ export interface MasterMaterial {
   description: string;
 }
 
+export interface EmailRecipient {
+  email: string;
+  type: 'TO' | 'CC';
+}
+
 export interface AppSettings {
-  notificationEmail: string;
+  // Legacy support optional
+  notificationEmail?: string; 
+  emailRecipients: EmailRecipient[];
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS';

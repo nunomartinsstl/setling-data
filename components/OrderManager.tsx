@@ -236,34 +236,69 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         clearDraft(); // Success!
 
         // --- NOTIFICATION LOGIC ---
-        // 1. Identify critical items (Custom OR No Stock)
-        const criticalItems = pendingItems.filter(item => {
-             if (item.isCustom) return true;
-             const inStock = getStockCount(item.sku);
-             return inStock <= 0;
+        // 1. Identify items to Create (Custom)
+        const itemsToCreate = pendingItems.filter(i => i.isCustom);
+        
+        // 2. Identify items to Restock (Standard items where stock < requested quantity)
+        // Note: Using stock < quantity to determine if we can fulfill the order
+        const itemsToRestock = pendingItems.filter(i => {
+            if(i.isCustom) return false;
+            const currentStock = getStockCount(i.sku);
+            return currentStock < i.quantity; 
         });
 
-        if (criticalItems.length > 0) {
+        if (itemsToCreate.length > 0 || itemsToRestock.length > 0) {
             const settings = await StorageService.getSettings();
-            if (settings.notificationEmail) {
+            const recipients = settings.emailRecipients || [];
+            
+            // Backwards compatibility if only notificationEmail exists
+            if(recipients.length === 0 && settings.notificationEmail) {
+                recipients.push({ email: settings.notificationEmail, type: 'TO' });
+            }
+
+            if (recipients.length > 0) {
                 // Time based greeting
                 const hour = new Date().getHours();
                 let greeting = 'Bom dia';
-                if (hour >= 12 && hour < 20) greeting = 'Boa tarde';
+                if (hour >= 13 && hour < 20) greeting = 'Boa tarde';
                 else if (hour >= 20 || hour < 6) greeting = 'Boa noite';
 
                 const subject = encodeURIComponent(`ALERTA: Pedido com falta de stock - ${newOrder.title}`);
-                const body = encodeURIComponent(
-                    `${greeting},\n\n` +
-                    `O utilizador ${currentUsername} criou um pedido com itens em falta ou novos.\n\n` +
-                    `Pedido: ${newOrder.title}\nData Para: ${dueDate}\n\n` +
-                    `Itens a verificar/encomendar:\n` +
-                    criticalItems.map(i => `- ${i.description} (${i.quantity} un)`).join('\n') +
-                    `\n\nCumprimentos,\nSetling`
-                );
                 
+                let bodyText = `${greeting},\n\n` +
+                    `O utilizador ${currentUsername} criou um pedido com itens pendentes.\n\n` +
+                    `Pedido: ${newOrder.title}\nData Levantamento: ${dueDate}\n\n`;
+
+                if (itemsToCreate.length > 0) {
+                    bodyText += `ITENS NOVOS (CRIAR NO SISTEMA):\n`;
+                    bodyText += itemsToCreate.map(i => `- ${i.description} (${i.quantity} un)`).join('\n');
+                    bodyText += `\n\n`;
+                }
+
+                if (itemsToRestock.length > 0) {
+                    bodyText += `ITENS PARA REPOR STOCK (RUPTURA):\n`;
+                    bodyText += itemsToRestock.map(i => {
+                        const current = getStockCount(i.sku);
+                        return `- ${i.description} (Ped: ${i.quantity} | Stock: ${current})`;
+                    }).join('\n');
+                    bodyText += `\n\n`;
+                }
+
+                bodyText += `Cumprimentos`;
+
+                const body = encodeURIComponent(bodyText);
+                
+                // Construct mailto
+                const toEmails = recipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
+                const ccEmails = recipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
+                
+                let mailtoLink = `mailto:${toEmails}?subject=${subject}&body=${body}`;
+                if (ccEmails) {
+                    mailtoLink += `&cc=${ccEmails}`;
+                }
+
                 // Uses window.location.href to bypass pop-up blockers (standard mailto behavior)
-                window.location.href = `mailto:${settings.notificationEmail}?subject=${subject}&body=${body}`;
+                window.location.href = mailtoLink;
                 setMessage({ type: 'success', text: `Pedido criado. Se o e-mail não abriu, verifique seu app de e-mail.` });
             } else {
                  setMessage({ type: 'success', text: `Pedido criado. (Sem e-mail configurado para alerta).` });
@@ -324,7 +359,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         </div>
 
         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Preparar para (Data)</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Data Levantamento</label>
             <input 
                 type="date"
                 value={dueDate}
