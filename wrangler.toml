@@ -1,0 +1,9 @@
+name = "setling-app"
+compatibility_date = "2024-01-01"
+
+# detailed in the error log: tells wrangler where the static files are
+assets = { directory = "./dist" }
+
+# Ensure SPA routing (redirects 404s to index.html for client-side routing)
+[observability]
+enabled = true
