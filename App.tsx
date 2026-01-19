@@ -29,11 +29,19 @@ const App: React.FC = () => {
   const refreshData = async () => {
     setLoading(true);
     try {
-      const [fetchedOrders, fetchedStock, fetchedMaster] = await Promise.all([
-        StorageService.getOrders(),
+      // 1. Fetch current data
+      const [fetchedStock, fetchedMaster] = await Promise.all([
         StorageService.getStock(),
         StorageService.getMasterMaterials()
       ]);
+      
+      // 2. Sync Custom Items (Requires master list)
+      // This will update orders in DB if matches are found
+      await StorageService.syncCustomMaterials(fetchedMaster);
+
+      // 3. Fetch Orders (now updated)
+      const fetchedOrders = await StorageService.getOrders();
+
       setOrders(fetchedOrders);
       setStock(fetchedStock);
       setMasterList(fetchedMaster);

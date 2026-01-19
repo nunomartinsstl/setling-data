@@ -143,7 +143,6 @@ export const StorageService = {
         if (snapshot.exists()) {
           data = toArray<Order>(snapshot.val());
         } else {
-            // Explicitly handle empty remote DB: clear local data
             data = [];
         }
         localStorage.setItem(KEYS.ORDERS, JSON.stringify(data));
@@ -183,7 +182,6 @@ export const StorageService = {
         await set(ref(db, KEYS.ORDERS), updated);
       } catch(error: any) {
         console.error("Firebase Falhou (Escrita Pedidos):", error.code || error.message);
-        if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
       }
     }
     return updated;
@@ -198,7 +196,6 @@ export const StorageService = {
       try {
         await set(ref(db, KEYS.ORDERS), updatedList);
       } catch (error: any) {
-        console.error("Firebase Falhou (Update Order):", error.message);
         throw error;
       }
     }
@@ -232,7 +229,6 @@ export const StorageService = {
       try {
         await set(ref(db, KEYS.ORDERS), updated);
       } catch (error: any) {
-        console.error("Firebase Falhou (Delete Order):", error.message);
         throw error;
       }
     }
@@ -254,7 +250,6 @@ export const StorageService = {
         if (snapshot.exists()) {
           data = toArray<StockItem>(snapshot.val());
         } else {
-            // Explicitly handle empty remote DB: clear local data
             data = [];
         }
         localStorage.setItem(KEYS.STOCK, JSON.stringify(data));
@@ -273,7 +268,6 @@ export const StorageService = {
         await set(ref(db, KEYS.STOCK), newStock);
       } catch (error: any) {
         console.error("Firebase Falhou (Escrita Estoque):", error.code || error.message);
-        if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
       }
     }
     
@@ -283,13 +277,65 @@ export const StorageService = {
     return newStock;
   },
 
+  // --- SYNC CUSTOM ITEMS WITH MASTER LIST ---
+  syncCustomMaterials: async (masterList: MasterMaterial[]) => {
+    if (!masterList || masterList.length === 0) return;
+
+    const allOrders = await StorageService.getOrders();
+    let hasChanges = false;
+    
+    const masterMap = new Map<string, string>(); // Description -> SKU
+    masterList.forEach(m => masterMap.set(m.description.toLowerCase().trim(), m.sku));
+
+    const updatedOrders = allOrders.map(order => {
+        let orderChanged = false;
+        const newItems = order.items.map(item => {
+            if (item.isCustom) {
+                const normDesc = item.description.replace('(Novo) ', '').toLowerCase().trim();
+                if (masterMap.has(normDesc)) {
+                    // Match found! Convert to standard item
+                    orderChanged = true;
+                    return {
+                        ...item,
+                        sku: masterMap.get(normDesc)!,
+                        isCustom: false,
+                        description: item.description.replace('(Novo) ', '') // Clean desc
+                    };
+                }
+            }
+            return item;
+        });
+
+        if (orderChanged) {
+            hasChanges = true;
+            return { ...order, items: newItems };
+        }
+        return order;
+    });
+
+    if (hasChanges) {
+        console.log("Sync: Converted custom items to valid stock items.");
+        localStorage.setItem(KEYS.ORDERS, JSON.stringify(updatedOrders));
+        if (isFirebaseActive) {
+            await set(ref(db, KEYS.ORDERS), updatedOrders);
+        }
+        // After converting, we must check if these "new" standard items can be fulfilled
+        const currentStock = await StorageService.getStock();
+        await StorageService.processBackorders(currentStock);
+    }
+  },
+
   // --- BACKORDER LOGIC ---
   processBackorders: async (currentStock: StockItem[]) => {
     const allOrders = await StorageService.getOrders();
-    // Find COMPLETED orders that have items not fully picked AND haven't been re-opened yet for those specific items
+    // Find COMPLETED orders that have items not fully picked AND haven't been re-opened yet
     const candidates = allOrders.filter(o => 
         o.status === 'COMPLETED' && 
-        o.items.some(i => (i.quantityPicked === undefined || i.quantityPicked < i.quantity) && !i.backorderCreated && !i.isCustom)
+        o.items.some(i => {
+             // Calculate truly missing
+             const picked = i.quantityPicked || 0;
+             return picked < i.quantity && !i.backorderCreated && !i.isCustom;
+        })
     );
 
     if (candidates.length === 0) return;
@@ -297,7 +343,6 @@ export const StorageService = {
     const ordersToCreate: Order[] = [];
     const ordersToUpdate: Order[] = [];
 
-    // Map stock for fast lookup
     const stockMap = new Map<string, number>();
     currentStock.forEach(s => {
         const existing = stockMap.get(s.sku) || 0;
@@ -309,41 +354,35 @@ export const StorageService = {
         let hasUpdates = false;
 
         const updatedItems = order.items.map(item => {
-            // If custom or already handled, skip
-            if (item.isCustom || item.backorderCreated) return item;
-
+            // STRICT CHECK: If fully picked, IGNORE completely.
             const picked = item.quantityPicked || 0;
             const missing = item.quantity - picked;
 
-            if (missing > 0) {
-                // Check if stock is now available
-                const stockAvailable = stockMap.get(item.sku) || 0;
-                
-                if (stockAvailable > 0) {
-                    // We can fulfill some or all of the missing amount
-                    const toFulfill = Math.min(missing, stockAvailable);
-                    
-                    itemsToReopen.push({
-                        ...item,
-                        quantity: toFulfill,
-                        quantityPicked: 0, // New order starts with 0 picked
-                        backorderCreated: false // Reset flag for new order
-                    });
+            if (missing <= 0 || item.isCustom || item.backorderCreated) {
+                return item;
+            }
 
-                    // Deduct from map so we don't double allocate in this loop
-                    stockMap.set(item.sku, stockAvailable - toFulfill);
-                    
-                    // Mark original item as having a backorder created (only if fully handled? 
-                    // Logic: If we create a backorder for the missing amount, we mark it handled in parent).
-                    // If we only partially fulfill, we still create a backorder for the partial amount.
-                    // Ideally we should track exactly how much was backordered, but for simplicity, 
-                    // if we create *any* backorder, we mark the parent item as processed to avoid loops.
-                    // A more robust system would track `quantityBackordered`.
-                    
-                    // For this requirements: "reopened only with the missing items".
-                    // We assume if stock is available, we create the order.
-                    return { ...item, backorderCreated: true };
-                }
+            // If we are here, there is a shortage. Check stock.
+            const stockAvailable = stockMap.get(item.sku) || 0;
+            
+            if (stockAvailable > 0) {
+                hasUpdates = true;
+                const toFulfill = Math.min(missing, stockAvailable);
+                
+                // Create the partial item for the NEW order
+                itemsToReopen.push({
+                    ...item,
+                    quantity: toFulfill, // Only the amount we can fulfill now
+                    quantityPicked: 0, 
+                    backorderCreated: false
+                });
+
+                stockMap.set(item.sku, stockAvailable - toFulfill);
+                
+                // Mark original item as having a backorder created. 
+                // We consider it "processed" even if only partially fulfilled to avoid infinite loop of tiny orders.
+                // In a more complex system, we would track `qtyBackordered`.
+                return { ...item, backorderCreated: true };
             }
             return item;
         });
@@ -354,7 +393,7 @@ export const StorageService = {
             
             const newOrder: Order = {
                 id: Math.random().toString(36).substr(2, 9),
-                displayId: order.displayId, // Retains same display ID
+                displayId: order.displayId, 
                 title: newTitle,
                 creator: 'Sistema (Auto)',
                 status: 'OPEN',
@@ -376,11 +415,9 @@ export const StorageService = {
     }
 
     if (ordersToCreate.length > 0) {
-        // Save updates to old orders (marking items as backordered)
         for (const upd of ordersToUpdate) {
             await StorageService.updateOrder(upd);
         }
-        // Save new orders
         await StorageService.addOrders(ordersToCreate);
         console.log(`Auto-reopened ${ordersToCreate.length} orders.`);
     }
@@ -402,7 +439,6 @@ export const StorageService = {
         if (snapshot.exists()) {
           data = toArray<MasterMaterial>(snapshot.val());
         } else {
-            // Explicitly handle empty remote DB: clear local data
             data = [];
         }
         localStorage.setItem(KEYS.MASTER, JSON.stringify(data));
@@ -421,9 +457,12 @@ export const StorageService = {
         await set(ref(db, KEYS.MASTER), newMaster);
       } catch (error: any) {
         console.error("Firebase Falhou (Escrita Master):", error.code || error.message);
-        if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
       }
     }
+    
+    // Trigger Sync when master list is updated
+    await StorageService.syncCustomMaterials(newMaster);
+    
     return newMaster;
   },
 
@@ -444,7 +483,6 @@ export const StorageService = {
             }
         } catch(e) {}
     }
-    // Ensure array exists
     if(!settings.emailRecipients) settings.emailRecipients = [];
     return settings;
   },

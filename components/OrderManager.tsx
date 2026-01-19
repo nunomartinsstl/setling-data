@@ -35,7 +35,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
-  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[]}>({ rows: [] });
+  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[]}>({ rows: [], duplicateCustom: [] });
 
   // Pending Order Details (Finalization)
   const [pendingItems, setPendingItems] = useState<OrderLineItem[]>([]);
@@ -96,7 +96,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setCreationStep('INITIAL');
       setEditingOrderId(null);
       setExpandedRowIndex(0);
-      setFormErrors({ rows: [] });
+      setFormErrors({ rows: [], duplicateCustom: [] });
   };
 
   const getMinDate = () => {
@@ -152,26 +152,46 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   const validateForm = (): boolean => {
       const errors: number[] = [];
+      const duplicateErrors: number[] = [];
       let isTitleValid = orderTitle.trim().length > 0;
       
       manualRows.forEach((row, idx) => {
           const qty = Number(row.qty);
           if (qty <= 0) errors.push(idx);
-          else if (row.isCustom && !row.customDesc) errors.push(idx);
+          else if (row.isCustom) {
+              if (!row.customDesc) {
+                  errors.push(idx);
+              } else {
+                  // Check if description already exists in master list
+                  const exists = masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
+                  if (exists) {
+                      duplicateErrors.push(idx);
+                  }
+              }
+          }
           else if (!row.isCustom && !row.sku) errors.push(idx);
       });
 
       setFormErrors({
           title: !isTitleValid,
-          rows: errors
+          rows: errors,
+          duplicateCustom: duplicateErrors
       });
 
-      return isTitleValid && errors.length === 0;
+      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0;
   };
 
   const handleManualNext = () => {
     if (!validateForm()) {
-        setMessage({ type: 'error', text: "Corrija os campos destacados em vermelho." });
+        const hasDuplicates = manualRows.some((row, idx) => {
+             return row.isCustom && row.customDesc && masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
+        });
+        
+        if (hasDuplicates) {
+             setMessage({ type: 'error', text: "Alguns materiais manuais já existem na lista oficial. Por favor, desmarque a opção 'Novo' e selecione-os da lista." });
+        } else {
+             setMessage({ type: 'error', text: "Corrija os campos destacados em vermelho." });
+        }
         return;
     }
 
@@ -454,13 +474,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         {manualRows.map((row, idx) => {
                             const isExpanded = idx === expandedRowIndex;
                             const isError = formErrors.rows.includes(idx);
+                            const isDuplicate = formErrors.duplicateCustom && formErrors.duplicateCustom.includes(idx);
                             const stockQty = getStockCount(row.sku);
 
                             return (
                                 <div 
                                     key={idx} 
                                     className={`rounded-lg border transition-all duration-200 overflow-hidden ${
-                                        isError ? 'border-red-300 bg-red-50' : 
+                                        isError || isDuplicate ? 'border-red-300 bg-red-50' : 
                                         isExpanded ? 'border-brand-200 bg-slate-50 shadow-md ring-1 ring-brand-100' : 'border-slate-200 bg-white hover:bg-slate-50'
                                     }`}
                                 >
@@ -470,7 +491,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className={`text-xs font-bold uppercase ${isError ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
+                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
                                             {!isExpanded && (
                                                 <span className="text-sm font-medium text-slate-700 truncate max-w-[150px] md:max-w-[300px]">
                                                     {row.isCustom ? row.customDesc || '(Sem descrição)' : row.sku || '(Selecione material)'} 
@@ -499,17 +520,34 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         <div className="p-4 border-t border-slate-200 animate-fade-in">
                                             <div className="mb-3">
                                                 {row.isCustom ? (
-                                                    <input 
-                                                        type="text"
-                                                        value={row.customDesc}
-                                                        onChange={(e) => {
-                                                            const newRows = [...manualRows];
-                                                            newRows[idx].customDesc = e.target.value;
-                                                            setManualRows(newRows);
-                                                        }}
-                                                        placeholder="Descrição do novo material..."
-                                                        className={`w-full p-3 border rounded-md text-sm outline-none ${isError && !row.customDesc ? 'border-red-500 bg-white' : 'border-blue-300 bg-blue-50 focus:ring-2 focus:ring-blue-500'}`}
-                                                    />
+                                                    <div>
+                                                        <div className="relative">
+                                                            <input 
+                                                                type="text"
+                                                                value={row.customDesc}
+                                                                maxLength={40}
+                                                                onChange={(e) => {
+                                                                    const newRows = [...manualRows];
+                                                                    newRows[idx].customDesc = e.target.value;
+                                                                    setManualRows(newRows);
+                                                                }}
+                                                                placeholder="Descrição do novo material..."
+                                                                className={`w-full p-3 border rounded-md text-sm outline-none ${
+                                                                    (isError && !row.customDesc) || isDuplicate 
+                                                                    ? 'border-red-500 bg-white ring-1 ring-red-200' 
+                                                                    : 'border-blue-300 bg-blue-50 focus:ring-2 focus:ring-blue-500'
+                                                                }`}
+                                                            />
+                                                            <div className="absolute right-2 bottom-2 text-[10px] text-slate-400">
+                                                                {row.customDesc.length}/40
+                                                            </div>
+                                                        </div>
+                                                        {isDuplicate && (
+                                                            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                                                                <AlertCircle className="w-3 h-3"/> Este material já existe na lista. Por favor, desmarque "Novo" e busque pelo nome.
+                                                            </p>
+                                                        )}
+                                                    </div>
                                                 ) : (
                                                     <input 
                                                         list="stock-options"
@@ -562,6 +600,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                         const newRows = [...manualRows];
                                                         newRows[idx].isCustom = e.target.checked;
                                                         newRows[idx].sku = ''; 
+                                                        // Reset duplicate error visual when toggling
+                                                        if(isDuplicate) {
+                                                            const newErrors = {...formErrors};
+                                                            newErrors.duplicateCustom = newErrors.duplicateCustom?.filter(i => i !== idx);
+                                                            setFormErrors(newErrors);
+                                                        }
                                                         setManualRows(newRows);
                                                     }}
                                                     className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"

@@ -1,4 +1,4 @@
-name = "setling-app"
+name = "setling-pedidos"
 compatibility_date = "2024-01-01"
 
 # detailed in the error log: tells wrangler where the static files are

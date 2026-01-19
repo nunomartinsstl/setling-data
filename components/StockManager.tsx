@@ -193,7 +193,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                     onClick={() => { setActiveTab('STOCK'); setMessage(null); }}
                     className={`px-4 py-1 text-sm font-medium rounded-md transition-all ${activeTab === 'STOCK' ? 'bg-white shadow text-slate-800' : 'text-slate-500'}`}
                 >
-                    Físico
+                    Stock Atual
                 </button>
                 <button 
                     onClick={() => { setActiveTab('MASTER'); setMessage(null); }}
