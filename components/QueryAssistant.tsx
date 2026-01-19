@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Order, StockItem, OrderLineItem } from '../types';
-import { Search, Package, ShoppingCart, User, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Package, ShoppingCart, User, Calendar, ChevronDown, ChevronUp, Activity } from 'lucide-react';
 
 interface QueryAssistantProps {
   orders: Order[];
@@ -105,6 +105,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
            {filteredOrders.map(order => {
              const isExpanded = expandedOrderId === order.id;
              const items = order.items || [];
+             const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
 
              return (
                <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -126,11 +127,19 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
                                 <Calendar className="w-3 h-3 text-brand-600" />
                                 Para: {order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}
                              </div>
-                             <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                order.status === 'OPEN' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                             }`}>
-                                {order.status === 'OPEN' ? 'Aberto' : 'Finalizado'}
-                             </span>
+                             {isInProcess ? (
+                                <span className="px-2 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200 flex items-center gap-1">
+                                    <Activity className="w-3 h-3" /> Pedido em curso
+                                </span>
+                             ) : (
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                    order.status === 'COMPLETED' 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                    {order.status === 'COMPLETED' ? 'Finalizado' : 'Aberto'}
+                                </span>
+                             )}
                         </div>
                     </div>
                     <div className="ml-4">

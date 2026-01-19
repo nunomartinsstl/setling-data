@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -9,6 +9,7 @@ interface LayoutProps {
   onLogout: () => void;
   children: React.ReactNode;
   isConnected: boolean;
+  onRefresh?: () => void;
 }
 
 const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void }) => {
@@ -27,8 +28,9 @@ const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewSta
   );
 };
 
-const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected }) => {
+const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [isRefreshing, setIsRefreshing] = React.useState(false);
 
   // Helper booleans
   const isAdmin = user.role === UserRole.ADMIN;
@@ -37,6 +39,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   const handleNavClick = (view: ViewState) => {
     onNavigate(view);
     setMobileMenuOpen(false);
+  };
+
+  const handleRefresh = async () => {
+    if (onRefresh) {
+        setIsRefreshing(true);
+        await onRefresh();
+        setTimeout(() => setIsRefreshing(false), 500);
+    }
   };
 
   const getRoleLabel = () => {
@@ -67,7 +77,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
       `}>
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-slate-100">
-            <h1 className="text-2xl font-bold text-brand-600 tracking-tight">SETLING</h1>
+            <h1 className="text-2xl font-bold text-[#2c52ad] tracking-tight">SETLING</h1>
             <p className="text-xs text-slate-400 font-medium">Gestão Inteligente</p>
           </div>
 
@@ -118,7 +128,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               <NavItem 
                 view="STOCK" 
                 icon={Package} 
-                label="Stock" 
+                label="Stock e Materiais" 
                 isActive={currentView === 'STOCK'} 
                 onClick={() => handleNavClick('STOCK')} 
               />
@@ -164,11 +174,31 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
         <header className="lg:hidden h-16 bg-white border-b border-slate-200 flex items-center px-4 justify-between">
-          <span className="font-bold text-brand-600 text-xl">SETLING</span>
-          <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-slate-600">
-            <Menu className="w-6 h-6" />
-          </button>
+          <span className="font-bold text-[#2c52ad] text-xl">SETLING</span>
+          <div className="flex items-center gap-2">
+            <button 
+                onClick={handleRefresh}
+                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"
+                title="Atualizar"
+            >
+                <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-brand-600' : ''}`} />
+            </button>
+            <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-slate-600">
+                <Menu className="w-6 h-6" />
+            </button>
+          </div>
         </header>
+
+        {/* Desktop Refresh Button (Floating) */}
+        <div className="hidden lg:block absolute top-6 right-8 z-10">
+             <button 
+                onClick={handleRefresh}
+                className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all hover:text-brand-600"
+            >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                Atualizar
+            </button>
+        </div>
 
         <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-6xl mx-auto h-full">

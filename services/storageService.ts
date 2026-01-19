@@ -1,4 +1,4 @@
-import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial } from '../types';
+import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
 
@@ -142,8 +142,11 @@ export const StorageService = {
         const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.ORDERS)), 4000);
         if (snapshot.exists()) {
           data = toArray<Order>(snapshot.val());
-          localStorage.setItem(KEYS.ORDERS, JSON.stringify(data));
+        } else {
+            // Explicitly handle empty remote DB: clear local data
+            data = [];
         }
+        localStorage.setItem(KEYS.ORDERS, JSON.stringify(data));
       } catch (error: any) {
         console.warn("Firebase Falhou (Leitura Pedidos):", error.code || error.message);
       }
@@ -151,9 +154,28 @@ export const StorageService = {
     return data;
   },
 
+  getNextDisplayId: async (): Promise<number> => {
+    const orders = await StorageService.getOrders();
+    if (orders.length === 0) return 1;
+    const maxId = Math.max(...orders.map(o => o.displayId || 0));
+    return maxId + 1;
+  },
+
   addOrders: async (newOrders: Order[]) => {
     const current = await StorageService.getOrders();
-    const updated = [...current, ...newOrders];
+    
+    // Assign Incremental IDs if missing
+    let nextId = 1;
+    if (current.length > 0) {
+        nextId = Math.max(...current.map(o => o.displayId || 0)) + 1;
+    }
+
+    const processedNewOrders = newOrders.map((o, idx) => ({
+        ...o,
+        displayId: o.displayId || (nextId + idx)
+    }));
+
+    const updated = [...current, ...processedNewOrders];
     localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
 
     if (isFirebaseActive) {
@@ -183,7 +205,7 @@ export const StorageService = {
     return updatedList;
   },
 
-  updateOrderStatus: async (orderId: string, newStatus: 'FINISHED' | 'OPEN') => {
+  updateOrderStatus: async (orderId: string, newStatus: 'COMPLETED' | 'OPEN' | 'IN_PROCESS' | 'IN PROCESS') => {
     const current = await StorageService.getOrders();
     const updated = current.map(order => 
       order.id === orderId ? { ...order, status: newStatus } : order
@@ -231,8 +253,11 @@ export const StorageService = {
         const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.STOCK)), 4000);
         if (snapshot.exists()) {
           data = toArray<StockItem>(snapshot.val());
-          localStorage.setItem(KEYS.STOCK, JSON.stringify(data));
+        } else {
+            // Explicitly handle empty remote DB: clear local data
+            data = [];
         }
+        localStorage.setItem(KEYS.STOCK, JSON.stringify(data));
       } catch (error: any) {
         console.warn("Firebase Falhou (Leitura Estoque):", error.message);
       }
@@ -242,7 +267,7 @@ export const StorageService = {
 
   replaceStock: async (newStock: StockItem[]) => {
     localStorage.setItem(KEYS.STOCK, JSON.stringify(newStock));
-
+    
     if (isFirebaseActive) {
       try {
         await set(ref(db, KEYS.STOCK), newStock);
@@ -251,7 +276,114 @@ export const StorageService = {
         if (error.code === 'PERMISSION_DENIED') alert("Erro de Permissão.");
       }
     }
+    
+    // Auto-trigger backorder processing
+    await StorageService.processBackorders(newStock);
+
     return newStock;
+  },
+
+  // --- BACKORDER LOGIC ---
+  processBackorders: async (currentStock: StockItem[]) => {
+    const allOrders = await StorageService.getOrders();
+    // Find COMPLETED orders that have items not fully picked AND haven't been re-opened yet for those specific items
+    const candidates = allOrders.filter(o => 
+        o.status === 'COMPLETED' && 
+        o.items.some(i => (i.quantityPicked === undefined || i.quantityPicked < i.quantity) && !i.backorderCreated && !i.isCustom)
+    );
+
+    if (candidates.length === 0) return;
+
+    const ordersToCreate: Order[] = [];
+    const ordersToUpdate: Order[] = [];
+
+    // Map stock for fast lookup
+    const stockMap = new Map<string, number>();
+    currentStock.forEach(s => {
+        const existing = stockMap.get(s.sku) || 0;
+        stockMap.set(s.sku, existing + s.quantity);
+    });
+
+    for (const order of candidates) {
+        const itemsToReopen: OrderLineItem[] = [];
+        let hasUpdates = false;
+
+        const updatedItems = order.items.map(item => {
+            // If custom or already handled, skip
+            if (item.isCustom || item.backorderCreated) return item;
+
+            const picked = item.quantityPicked || 0;
+            const missing = item.quantity - picked;
+
+            if (missing > 0) {
+                // Check if stock is now available
+                const stockAvailable = stockMap.get(item.sku) || 0;
+                
+                if (stockAvailable > 0) {
+                    // We can fulfill some or all of the missing amount
+                    const toFulfill = Math.min(missing, stockAvailable);
+                    
+                    itemsToReopen.push({
+                        ...item,
+                        quantity: toFulfill,
+                        quantityPicked: 0, // New order starts with 0 picked
+                        backorderCreated: false // Reset flag for new order
+                    });
+
+                    // Deduct from map so we don't double allocate in this loop
+                    stockMap.set(item.sku, stockAvailable - toFulfill);
+                    
+                    // Mark original item as having a backorder created (only if fully handled? 
+                    // Logic: If we create a backorder for the missing amount, we mark it handled in parent).
+                    // If we only partially fulfill, we still create a backorder for the partial amount.
+                    // Ideally we should track exactly how much was backordered, but for simplicity, 
+                    // if we create *any* backorder, we mark the parent item as processed to avoid loops.
+                    // A more robust system would track `quantityBackordered`.
+                    
+                    // For this requirements: "reopened only with the missing items".
+                    // We assume if stock is available, we create the order.
+                    return { ...item, backorderCreated: true };
+                }
+            }
+            return item;
+        });
+
+        if (itemsToReopen.length > 0) {
+            const reopenCount = (order.reopenCount || 0) + 1;
+            const newTitle = `${order.title.substring(0, 15)}_re_${reopenCount}`;
+            
+            const newOrder: Order = {
+                id: Math.random().toString(36).substr(2, 9),
+                displayId: order.displayId, // Retains same display ID
+                title: newTitle,
+                creator: 'Sistema (Auto)',
+                status: 'OPEN',
+                dateCreated: new Date().toISOString(),
+                dueDate: order.dueDate,
+                items: itemsToReopen,
+                reopenCount: reopenCount,
+                originalOrderId: order.id,
+                changeLog: [{
+                    date: new Date().toISOString(),
+                    actor: 'Sistema',
+                    details: 'Pedido reaberto automaticamente após reposição de stock.'
+                }]
+            };
+
+            ordersToCreate.push(newOrder);
+            ordersToUpdate.push({ ...order, items: updatedItems });
+        }
+    }
+
+    if (ordersToCreate.length > 0) {
+        // Save updates to old orders (marking items as backordered)
+        for (const upd of ordersToUpdate) {
+            await StorageService.updateOrder(upd);
+        }
+        // Save new orders
+        await StorageService.addOrders(ordersToCreate);
+        console.log(`Auto-reopened ${ordersToCreate.length} orders.`);
+    }
   },
 
   // --- MASTER MATERIALS ---
@@ -269,8 +401,11 @@ export const StorageService = {
         const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), KEYS.MASTER)), 4000);
         if (snapshot.exists()) {
           data = toArray<MasterMaterial>(snapshot.val());
-          localStorage.setItem(KEYS.MASTER, JSON.stringify(data));
+        } else {
+            // Explicitly handle empty remote DB: clear local data
+            data = [];
         }
+        localStorage.setItem(KEYS.MASTER, JSON.stringify(data));
       } catch (error: any) {
         console.warn("Firebase Falhou (Leitura Master):", error.message);
       }

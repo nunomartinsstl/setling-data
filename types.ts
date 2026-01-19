@@ -16,6 +16,8 @@ export interface OrderLineItem {
   sku: string; // Internal ID, but displayed as "Material"
   description: string;
   quantity: number;
+  quantityPicked?: number; // How much was actually fulfilled
+  backorderCreated?: boolean; // Flag to prevent duplicate re-opens
   isCustom?: boolean; // Flag for manually typed items
 }
 
@@ -25,16 +27,27 @@ export interface ChangeLogEntry {
   details: string;
 }
 
+export interface PickedItem {
+  material: string;
+  pickedQty: number;
+  bin?: string;
+  // Add other fields from DB if necessary
+}
+
 // The Parent Order Object
 export interface Order {
-  id: string;
+  id: string; // UUID for system
+  displayId: number; // Incremental ID (1, 2, 3...)
   title: string;
   creator: string;
-  status: 'OPEN' | 'FINISHED';
+  status: 'OPEN' | 'COMPLETED' | 'IN_PROCESS' | 'IN PROCESS';
   dateCreated: string;
   dueDate: string; // "Data Levantamento"
   items: OrderLineItem[];
   changeLog?: ChangeLogEntry[];
+  reopenCount?: number; // Tracks iterations (_re_1, _re_2)
+  originalOrderId?: string; // Links back to parent if reopened
+  pickedItems?: PickedItem[]; // Items actually picked in the warehouse
 }
 
 export interface StockItem {
@@ -49,6 +62,7 @@ export interface StockItem {
 export interface MasterMaterial {
   sku: string;
   description: string;
+  quantity?: number; // Optional for compatibility if mistakenly used
 }
 
 export interface EmailRecipient {

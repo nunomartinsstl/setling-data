@@ -116,6 +116,7 @@ const App: React.FC = () => {
         return (
           <StockManager 
             stock={stock} 
+            masterList={masterList}
             userRole={user.role} 
             refreshData={refreshData} 
           />
@@ -136,6 +137,7 @@ const App: React.FC = () => {
       onNavigate={setView}
       onLogout={handleLogout}
       isConnected={isConnected}
+      onRefresh={refreshData}
     >
       {renderContent()}
     </Layout>

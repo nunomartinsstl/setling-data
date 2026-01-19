@@ -119,7 +119,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         />
                     </div>
                     <div>
-                        <label className="block text-xs font-semibold text-slate-600 mb-1">Sobrenome</label>
+                        <label className="block text-xs font-semibold text-slate-600 mb-1">Apelido</label>
                         <input
                             type="text"
                             value={lastName}
@@ -201,7 +201,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             value={loginUsername}
                             onChange={(e) => setLoginUsername(e.target.value)}
                             className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-brand-500 outline-none"
-                            placeholder="nome-sobrenome"
+                            placeholder="nome-apelido"
                         />
                     </div>
                 </div>
