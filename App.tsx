@@ -7,6 +7,7 @@ import OrderManager from './components/OrderManager';
 import StockManager from './components/StockManager';
 import QueryAssistant from './components/QueryAssistant';
 import Settings from './components/Settings';
+import UsersManager from './components/UsersManager';
 import { StorageService } from './services/storageService';
 
 const App: React.FC = () => {
@@ -133,6 +134,8 @@ const App: React.FC = () => {
         return <QueryAssistant orders={orders} stock={stock} />;
       case 'SETTINGS':
         return <Settings />;
+      case 'USERS':
+        return <UsersManager />;
       default:
         return <Dashboard orders={orders} stock={stock} userRole={user.role} onNavigate={setView} />;
     }

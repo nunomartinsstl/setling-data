@@ -9,6 +9,8 @@ export enum UserRole {
 export interface User {
   username: string;
   role: UserRole;
+  firstName?: string;
+  lastName?: string;
 }
 
 // Inner item within an order
@@ -19,6 +21,7 @@ export interface OrderLineItem {
   quantityPicked?: number; // How much was actually fulfilled
   backorderCreated?: boolean; // Flag to prevent duplicate re-opens
   isCustom?: boolean; // Flag for manually typed items
+  fulfilledInOrderId?: number; // If this item was fulfilled in a child order (backorder)
 }
 
 export interface ChangeLogEntry {
@@ -76,7 +79,7 @@ export interface AppSettings {
   emailRecipients: EmailRecipient[];
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS';
 
 // Backwards compatibility helper type if needed, though we are migrating fully
 export type OrderItem = Order;

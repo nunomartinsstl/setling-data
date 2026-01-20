@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -142,13 +142,22 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               />
               
               {isAdmin && (
-                <NavItem 
-                  view="SETTINGS" 
-                  icon={Settings} 
-                  label="Configurações" 
-                  isActive={currentView === 'SETTINGS'} 
-                  onClick={() => handleNavClick('SETTINGS')} 
-                />
+                <>
+                    <NavItem 
+                    view="USERS" 
+                    icon={Users} 
+                    label="Utilizadores" 
+                    isActive={currentView === 'USERS'} 
+                    onClick={() => handleNavClick('USERS')} 
+                    />
+                    <NavItem 
+                    view="SETTINGS" 
+                    icon={Settings} 
+                    label="Configurações" 
+                    isActive={currentView === 'SETTINGS'} 
+                    onClick={() => handleNavClick('SETTINGS')} 
+                    />
+                </>
               )}
             </nav>
           </div>

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry } from '../types';
 import { StorageService } from '../services/storageService';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 interface OrderManagerProps {
   orders: Order[];
@@ -42,13 +43,34 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [dueDate, setDueDate] = useState('');
   
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Updated filter: 
-  const filteredOrders = orders.filter(o => {
-    const isInProcess = o.status === 'IN_PROCESS' || o.status === 'IN PROCESS';
-    if (type === 'OPEN') return o.status === 'OPEN' || isInProcess;
-    return o.status === 'COMPLETED';
-  });
+  const filteredOrders = useMemo(() => {
+      let result = orders.filter(o => {
+        const isInProcess = o.status === 'IN_PROCESS' || o.status === 'IN PROCESS';
+        if (type === 'OPEN') return o.status === 'OPEN' || isInProcess;
+        return o.status === 'COMPLETED';
+      });
+
+      if (type === 'FINISHED' && searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          result = result.filter(o => 
+              (o.title || '').toLowerCase().includes(q) ||
+              (o.id || '').toLowerCase().includes(q) ||
+              (o.displayId?.toString() || '').includes(q) ||
+              (o.creator || '').toLowerCase().includes(q) ||
+              o.items.some(i => i.sku.toLowerCase().includes(q) || i.description.toLowerCase().includes(q))
+          );
+      }
+      
+      // Sort finished orders by most recent
+      if (type === 'FINISHED') {
+          result.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime());
+      }
+
+      return result;
+  }, [orders, type, searchQuery]);
   
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const isAdmin = userRole === UserRole.ADMIN;
@@ -411,6 +433,38 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       return 0;
   };
 
+  const downloadExcel = (order: Order) => {
+      if (!order.pickedItems || order.pickedItems.length === 0) {
+          alert("Este pedido não tem itens processados para exportar.");
+          return;
+      }
+
+      // Format required: Itm, C, I, Cen., Depósito de saída, Depósito, Material, Texto breve, Lote, Qtd.pedido, Dt.remessa
+      const headers = ["Itm", "C", "I", "Cen.", "Depósito de saída", "Depósito", "Material", "Texto breve", "Lote", "Qtd.pedido", "Dt.remessa"];
+      const data = order.pickedItems.map((item, idx) => {
+          return [
+              (idx + 1) * 10, // Itm: 10, 20, 30...
+              "P", // C: Fixed
+              "", // I: Empty
+              "1700", // Cen.: Fixed
+              "0001", // Depósito de saída: Fixed
+              "0004", // Depósito: Fixed
+              item.material, // Material
+              "", // Texto breve: Empty
+              item.bin || "", // Lote (from bin/batch info if available)
+              item.pickedQty, // Qtd.pedido (using picked qty)
+              new Date().toLocaleDateString('pt-PT') // Dt.remessa: Today's date
+          ];
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Pedido");
+      
+      const fileName = `Pedido_${order.displayId}_${order.title.replace(/\s+/g, '_')}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+  };
+
   const FinalizeOrderForm = () => (
     <div className="space-y-4 animate-fade-in bg-slate-50 p-6 rounded-lg border border-slate-200">
         <h4 className="font-semibold text-slate-800 border-b border-slate-200 pb-2 mb-4">
@@ -486,7 +540,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       </datalist>
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
           {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
           {mode === 'CREATE' ? 'Novo Pedido' : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos Finalizados')}
@@ -496,6 +550,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
              </span>
           )}
         </h2>
+        
+        {/* Search for Finished Orders */}
+        {type === 'FINISHED' && mode === 'LIST' && (
+             <div className="relative w-full md:w-64">
+                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                <input 
+                    type="text" 
+                    placeholder="Buscar pedido..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                />
+             </div>
+        )}
       </div>
 
       {/* CREATION/EDIT AREA */}
@@ -772,11 +840,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                             Para: <span className="font-semibold">{order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}</span>
                                          </div>
                                          {order.status === 'COMPLETED' && (
-                                             <div className="flex items-center gap-2 w-full max-w-[150px]">
-                                                 <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                                     <div className={`h-full ${hasMissingItems ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${progressPercent}%` }}></div>
-                                                 </div>
-                                                 <span className="text-[10px] font-bold text-slate-500">{progressPercent}%</span>
+                                             <div className="flex items-center gap-3">
+                                                <div className="flex items-center gap-2 w-full max-w-[150px]">
+                                                    <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
+                                                        <div className={`h-full ${hasMissingItems ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${progressPercent}%` }}></div>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-slate-500">{progressPercent}%</span>
+                                                </div>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); downloadExcel(order); }}
+                                                    className="bg-green-50 text-green-700 hover:bg-green-100 p-1.5 rounded transition-colors"
+                                                    title="Exportar Excel"
+                                                >
+                                                    <Download className="w-4 h-4" />
+                                                </button>
                                              </div>
                                          )}
                                     </div>
@@ -855,6 +932,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                             {item.description}
                                                             {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
                                                             {isShort && <span className="ml-2 text-[10px] bg-red-100 text-red-700 px-1 rounded flex-inline items-center gap-1"><AlertCircle className="w-3 h-3 inline"/> Falta</span>}
+                                                            {item.fulfilledInOrderId && (
+                                                                <span className="ml-2 text-[10px] bg-green-100 text-green-700 px-1 rounded border border-green-200">
+                                                                    (Abastecido no pedido #{item.fulfilledInOrderId})
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td className="p-3 text-right font-bold">{item.quantity}</td>
                                                         {order.status === 'COMPLETED' && (

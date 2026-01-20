@@ -62,11 +62,11 @@ const withTimeout = <T>(promise: Promise<T>, ms: number = 3000): Promise<T> => {
     });
 };
 
-// Helper: Sort function
-const sortAlphabetically = (a: any, b: any) => {
-    const descA = (a.description || '').toLowerCase();
-    const descB = (b.description || '').toLowerCase();
-    return descA.localeCompare(descB, undefined, { numeric: true, sensitivity: 'base' });
+// Helper: Sort function by SKU (Material)
+const sortBySku = (a: any, b: any) => {
+    const skuA = (a.sku || '').toLowerCase();
+    const skuB = (b.sku || '').toLowerCase();
+    return skuA.localeCompare(skuB, undefined, { numeric: true, sensitivity: 'base' });
 };
 
 export const StorageService = {
@@ -131,6 +131,33 @@ export const StorageService = {
     }
 
     throw new Error("Usuário ou senha incorretos.");
+  },
+
+  getUsers: async (): Promise<User[]> => {
+      let users: User[] = [];
+      if (isFirebaseActive) {
+          try {
+              const snapshot = await get(ref(db, KEYS.USERS));
+              if(snapshot.exists()) {
+                  const data = snapshot.val();
+                  users = Object.values(data).map((u: any) => ({
+                      username: u.username,
+                      firstName: u.firstName,
+                      lastName: u.lastName,
+                      role: u.role
+                  }));
+              }
+          } catch(e) {}
+      } else {
+          const localUsers = JSON.parse(localStorage.getItem(KEYS.USERS) || '{}');
+          users = Object.values(localUsers).map((u: any) => ({
+              username: u.username,
+              firstName: u.firstName,
+              lastName: u.lastName,
+              role: u.role
+          }));
+      }
+      return users;
   },
 
   // --- DATA METHODS ---
@@ -211,19 +238,59 @@ export const StorageService = {
 
   updateOrderStatus: async (orderId: string, newStatus: 'COMPLETED' | 'OPEN' | 'IN_PROCESS' | 'IN PROCESS') => {
     const current = await StorageService.getOrders();
-    const updated = current.map(order => 
-      order.id === orderId ? { ...order, status: newStatus } : order
-    );
-    localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
+    let updatedOrders = [...current];
+    
+    const targetIndex = updatedOrders.findIndex(o => o.id === orderId);
+    if (targetIndex === -1) return current;
+
+    const targetOrder = { ...updatedOrders[targetIndex], status: newStatus };
+    updatedOrders[targetIndex] = targetOrder;
+
+    // --- LOGIC: If a child order (backorder) is completed, update the parent ---
+    if (newStatus === 'COMPLETED' && targetOrder.originalOrderId) {
+        const parentIndex = updatedOrders.findIndex(o => o.id === targetOrder.originalOrderId);
+        if (parentIndex !== -1) {
+            const parentOrder = { ...updatedOrders[parentIndex] };
+            
+            // Map items from child to parent to verify what was fulfilled
+            const childItems = targetOrder.items;
+            
+            const parentItems = parentOrder.items.map(pItem => {
+                // If this item exists in the completed child order
+                const matchedChildItem = childItems.find(cItem => cItem.sku === pItem.sku);
+                
+                if (matchedChildItem) {
+                    // Mark as fulfilled in this specific child order ID
+                    return {
+                        ...pItem,
+                        fulfilledInOrderId: targetOrder.displayId
+                    };
+                }
+                return pItem;
+            });
+
+            parentOrder.items = parentItems;
+            
+            // Ensure parent is marked COMPLETED if it wasn't (usually it is when backorder is created, but safe to enforce)
+            if (parentOrder.status !== 'COMPLETED') {
+                parentOrder.status = 'COMPLETED';
+            }
+
+            updatedOrders[parentIndex] = parentOrder;
+        }
+    }
+    // --------------------------------------------------------------------------
+
+    localStorage.setItem(KEYS.ORDERS, JSON.stringify(updatedOrders));
 
     if (isFirebaseActive) {
       try {
-        await set(ref(db, KEYS.ORDERS), updated);
+        await set(ref(db, KEYS.ORDERS), updatedOrders);
       } catch (error: any) {
          console.warn("Firebase Falhou (Update Status):", error.message);
       }
     }
-    return updated;
+    return updatedOrders;
   },
 
   deleteOrder: async (orderId: string) => {
@@ -264,8 +331,8 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Estoque):", error.message);
       }
     }
-    // Sort before returning
-    return data.sort(sortAlphabetically);
+    // Sort before returning by SKU
+    return data.sort(sortBySku);
   },
 
   replaceStock: async (newStock: StockItem[]) => {
@@ -480,8 +547,8 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Master):", error.message);
       }
     }
-    // Sort before returning
-    return data.sort(sortAlphabetically);
+    // Sort before returning by SKU
+    return data.sort(sortBySku);
   },
 
   replaceMasterMaterials: async (newMaster: MasterMaterial[]) => {
