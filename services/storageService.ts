@@ -284,14 +284,24 @@ export const StorageService = {
     const allOrders = await StorageService.getOrders();
     let hasChanges = false;
     
-    const masterMap = new Map<string, string>(); // Description -> SKU
-    masterList.forEach(m => masterMap.set(m.description.toLowerCase().trim(), m.sku));
+    const masterMap = new Map<string, string>(); // NormDesc -> SKU
+    // Also keep a map for valid descriptions case-sensitive
+    const descMap = new Map<string, string>(); // NormDesc -> Original Description
+
+    masterList.forEach(m => {
+        const norm = m.description.toLowerCase().trim();
+        masterMap.set(norm, m.sku);
+        descMap.set(norm, m.description);
+    });
 
     const updatedOrders = allOrders.map(order => {
         let orderChanged = false;
         const newItems = order.items.map(item => {
             if (item.isCustom) {
-                const normDesc = item.description.replace('(Novo) ', '').toLowerCase().trim();
+                // Remove prefix if exists (legacy support) then normalize
+                const cleanDesc = item.description.replace('(Novo) ', '');
+                const normDesc = cleanDesc.toLowerCase().trim();
+                
                 if (masterMap.has(normDesc)) {
                     // Match found! Convert to standard item
                     orderChanged = true;
@@ -299,7 +309,8 @@ export const StorageService = {
                         ...item,
                         sku: masterMap.get(normDesc)!,
                         isCustom: false,
-                        description: item.description.replace('(Novo) ', '') // Clean desc
+                        // Use the official description from master list
+                        description: descMap.get(normDesc) || cleanDesc 
                     };
                 }
             }
@@ -334,6 +345,7 @@ export const StorageService = {
         o.items.some(i => {
              // Calculate truly missing
              const picked = i.quantityPicked || 0;
+             // Only consider shortage if missing > 0 and not yet handled
              return picked < i.quantity && !i.backorderCreated && !i.isCustom;
         })
     );
@@ -380,13 +392,12 @@ export const StorageService = {
                 stockMap.set(item.sku, stockAvailable - toFulfill);
                 
                 // Mark original item as having a backorder created. 
-                // We consider it "processed" even if only partially fulfilled to avoid infinite loop of tiny orders.
-                // In a more complex system, we would track `qtyBackordered`.
                 return { ...item, backorderCreated: true };
             }
             return item;
         });
 
+        // Only create order if we actually have items to fulfill now
         if (itemsToReopen.length > 0) {
             const reopenCount = (order.reopenCount || 0) + 1;
             const newTitle = `${order.title.substring(0, 15)}_re_${reopenCount}`;

@@ -201,7 +201,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         if (row.isCustom) {
             items.push({
                 sku: 'N/A',
-                description: `(Novo) ${row.customDesc}`,
+                // Removed "(Novo)" prefix as requested
+                description: row.customDesc,
                 quantity: qtyNum,
                 isCustom: true
             });
@@ -223,6 +224,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           sku: item.isCustom ? '' : item.sku,
           qty: item.quantity,
           isCustom: !!item.isCustom,
+          // Handle cases where legacy items might still have the prefix
           customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : ''
       }));
 
@@ -259,7 +261,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const submitOrder = async () => {
-    // Final check for Date (since it's in the second step)
     if (!dueDate) {
         setFormErrors(prev => ({ ...prev, date: true }));
         setMessage({ type: 'error', text: "A data de levantamento é obrigatória." });
@@ -278,7 +279,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 ...existingOrder,
                 title: orderTitle,
                 dueDate: dueDate,
-                items: pendingItems, // Note: Edit resets picked qty logic in a real app, keeping simple here
+                items: pendingItems, 
                 changeLog: [...(existingOrder.changeLog || []), logEntry]
             };
 
@@ -291,7 +292,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             // New Order
             const newOrder: Order = {
                 id: Math.random().toString(36).substr(2, 9),
-                displayId: 0, // Will be assigned by service
+                displayId: 0, 
                 title: orderTitle,
                 creator: currentUsername,
                 status: 'OPEN',
@@ -310,35 +311,68 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 const cc = settings.emailRecipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
                 
                 if (to) {
-                    const subject = `Novo Pedido: ${orderTitle} (${currentUsername})`;
-                    let body = `Olá,\n\nFoi criado um novo pedido na plataforma Setling.\n\n`;
-                    body += `Solicitante: ${currentUsername}\n`;
-                    body += `Obra: ${orderTitle}\n`;
-                    body += `Data Levantamento: ${new Date(dueDate).toLocaleDateString()}\n\n`;
-                    body += `MATERIAIS:\n`;
-                    
-                    newOrder.items.forEach(item => {
-                        let warning = '';
-                        if (item.isCustom) {
-                            warning = ' [NOVO MATERIAL]';
-                        } else {
-                            const currentStock = stock.find(s => s.sku === item.sku)?.quantity || 0;
-                            if (currentStock < item.quantity) {
-                                warning = ` [SEM STOCK: ${currentStock} disp.]`;
-                            }
-                        }
-                        const skuDisplay = item.sku !== 'N/A' ? `[${item.sku}] ` : '';
-                        body += `- ${item.quantity} un x ${skuDisplay}${item.description}${warning}\n`;
+                    // Filter for specific conditions
+                    const missingStockItems = newOrder.items.filter(item => {
+                        if (item.isCustom) return false;
+                        const currentStock = stock.find(s => s.sku === item.sku)?.quantity || 0;
+                        return currentStock < item.quantity;
                     });
 
-                    // Construct mailto link
-                    const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    const newMaterialItems = newOrder.items.filter(item => item.isCustom);
+
+                    // Determine time of day
+                    const hour = new Date().getHours();
+                    let greeting = "Boa noite";
+                    if (hour >= 5 && hour < 13) greeting = "Bom dia";
+                    else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
+
+                    let body = `${greeting},\n\n`;
+                    body += `O utilizador ${currentUsername} colocou o pedido ${orderTitle} em que estão em falta as seguintes referências:\n\n`;
                     
-                    // Trigger email client
-                    window.location.href = mailtoLink;
-                    setMessage({ type: 'success', text: `Pedido criado. Cliente de e-mail aberto para notificação.` });
+                    let hasAlerts = false;
+
+                    if (missingStockItems.length > 0) {
+                        hasAlerts = true;
+                        body += `Falta de stock:\n`;
+                        missingStockItems.forEach(item => {
+                            const currentStock = stock.find(s => s.sku === item.sku)?.quantity || 0;
+                            // The prompt asks for [MATERIAL] [QTY], I assume requested qty, maybe with note on what is missing
+                            body += `[${item.sku}] ${item.description}\n`;
+                            body += `${item.quantity} un (Disp: ${currentStock})\n\n`;
+                        });
+                    }
+
+                    if (newMaterialItems.length > 0) {
+                        hasAlerts = true;
+                        body += `Necessário criar código:\n`;
+                        newMaterialItems.forEach(item => {
+                            body += `${item.description}\n`;
+                            body += `${item.quantity} un\n\n`;
+                        });
+                    }
+
+                    body += `Cumprimentos`;
+
+                    // Only send this specific format if there are alerts. 
+                    // Otherwise, we can fallback to a generic one or skip. 
+                    // Assuming we proceed only if alerts exist based on the prompt "if there's no stock... the email should..."
+                    
+                    if (hasAlerts) {
+                        const subject = `Aviso Pedido: ${orderTitle}`;
+                        const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                        window.location.href = mailtoLink;
+                        setMessage({ type: 'success', text: `Pedido criado. E-mail de alerta aberto.` });
+                    } else {
+                         // Fallback for standard order (no issues)
+                         const subject = `Novo Pedido: ${orderTitle} (${currentUsername})`;
+                         let simpleBody = `${greeting},\n\nNovo pedido criado por ${currentUsername}.\nObra: ${orderTitle}\nData: ${new Date(dueDate).toLocaleDateString()}\n\nTodos os itens possuem stock.\n\nCumprimentos`;
+                         const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(simpleBody)}`;
+                         window.location.href = mailtoLink;
+                         setMessage({ type: 'success', text: `Pedido criado com sucesso.` });
+                    }
+
                 } else {
-                    setMessage({ type: 'success', text: `Pedido criado. (Nenhum destinatário "Para" configurado).` });
+                    setMessage({ type: 'success', text: `Pedido criado. (Sem e-mails configurados).` });
                 }
             } else {
                 setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
@@ -371,7 +405,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   // Helper to get picked quantity from the pickedItems array
   const getPickedQuantity = (order: Order, sku: string): number => {
       if (order.pickedItems && Array.isArray(order.pickedItems)) {
-          // Use trim() to avoid mismatch due to whitespaces
           const cleanSku = sku.trim();
           return order.pickedItems
             .filter((p: any) => (p.material || '').trim() === cleanSku)
@@ -694,11 +727,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
                     
                     // Progress Calculation for FINISHED orders
+                    // Changed: Based on ITEMS (lines) completed, not total quantity
                     let progressPercent = 0;
                     if (order.status === 'COMPLETED') {
-                        const totalReq = items.reduce((acc, i) => acc + i.quantity, 0);
-                        const totalPick = items.reduce((acc, i) => acc + getPickedQuantity(order, i.sku), 0);
-                        progressPercent = totalReq > 0 ? Math.round((totalPick / totalReq) * 100) : 0;
+                        const totalItems = items.length;
+                        const completedItems = items.filter(i => {
+                            const picked = getPickedQuantity(order, i.sku);
+                            return picked >= i.quantity;
+                        }).length;
+                        progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
                     }
 
                     return (
