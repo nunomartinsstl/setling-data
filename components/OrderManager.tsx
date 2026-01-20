@@ -335,10 +335,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         hasAlerts = true;
                         body += `Falta de stock:\n`;
                         missingStockItems.forEach(item => {
-                            const currentStock = stock.find(s => s.sku === item.sku)?.quantity || 0;
-                            // The prompt asks for [MATERIAL] [QTY], I assume requested qty, maybe with note on what is missing
-                            body += `[${item.sku}] ${item.description}\n`;
-                            body += `${item.quantity} un (Disp: ${currentStock})\n\n`;
+                            // Format: Referência: [MATERIAL] \n Descrição: [TEXTO] \n Quantidade pedida: [QTY]
+                            body += `Referência: ${item.sku}\n`;
+                            body += `Descrição: ${item.description}\n`;
+                            body += `Quantidade pedida: ${item.quantity}\n\n`;
                         });
                     }
 
@@ -346,17 +346,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         hasAlerts = true;
                         body += `Necessário criar código:\n`;
                         newMaterialItems.forEach(item => {
-                            body += `${item.description}\n`;
-                            body += `${item.quantity} un\n\n`;
+                            // For new items, we don't have a SKU yet.
+                            body += `Referência: A Definir\n`;
+                            body += `Descrição: ${item.description}\n`;
+                            body += `Quantidade pedida: ${item.quantity}\n\n`;
                         });
                     }
 
                     body += `Cumprimentos`;
 
-                    // Only send this specific format if there are alerts. 
-                    // Otherwise, we can fallback to a generic one or skip. 
-                    // Assuming we proceed only if alerts exist based on the prompt "if there's no stock... the email should..."
-                    
                     if (hasAlerts) {
                         const subject = `Aviso Pedido: ${orderTitle}`;
                         const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -727,15 +725,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
                     
                     // Progress Calculation for FINISHED orders
-                    // Changed: Based on ITEMS (lines) completed, not total quantity
                     let progressPercent = 0;
+                    let hasMissingItems = false;
+                    
                     if (order.status === 'COMPLETED') {
                         const totalItems = items.length;
-                        const completedItems = items.filter(i => {
+                        let completedItemsCount = 0;
+                        
+                        items.forEach(i => {
                             const picked = getPickedQuantity(order, i.sku);
-                            return picked >= i.quantity;
-                        }).length;
-                        progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+                            if (picked >= i.quantity) {
+                                completedItemsCount++;
+                            } else {
+                                hasMissingItems = true;
+                            }
+                        });
+                        
+                        progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0;
                     }
 
                     return (
@@ -768,7 +774,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                          {order.status === 'COMPLETED' && (
                                              <div className="flex items-center gap-2 w-full max-w-[150px]">
                                                  <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                                     <div className={`h-full ${progressPercent === 100 ? 'bg-green-500' : 'bg-amber-500'}`} style={{ width: `${progressPercent}%` }}></div>
+                                                     <div className={`h-full ${hasMissingItems ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${progressPercent}%` }}></div>
                                                  </div>
                                                  <span className="text-[10px] font-bold text-slate-500">{progressPercent}%</span>
                                              </div>
@@ -782,13 +788,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                 <Activity className="w-3 h-3" /> Em curso
                                             </span>
                                         ) : (
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                order.status === 'COMPLETED' 
-                                                    ? 'bg-green-100 text-green-700' 
-                                                    : 'bg-blue-100 text-blue-700'
-                                            }`}>
-                                                {order.status === 'COMPLETED' ? 'Finalizado' : 'Aberto'}
-                                            </span>
+                                            <>
+                                                {order.status === 'COMPLETED' ? (
+                                                    hasMissingItems ? (
+                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                                            Finalizado com itens em falta
+                                                        </span>
+                                                    ) : (
+                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
+                                                            Finalizado
+                                                        </span>
+                                                    )
+                                                ) : (
+                                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                                                        Aberto
+                                                    </span>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 </div>

@@ -62,6 +62,13 @@ const withTimeout = <T>(promise: Promise<T>, ms: number = 3000): Promise<T> => {
     });
 };
 
+// Helper: Sort function
+const sortAlphabetically = (a: any, b: any) => {
+    const descA = (a.description || '').toLowerCase();
+    const descB = (b.description || '').toLowerCase();
+    return descA.localeCompare(descB, undefined, { numeric: true, sensitivity: 'base' });
+};
+
 export const StorageService = {
   isConnected: () => isFirebaseActive,
 
@@ -257,7 +264,8 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Estoque):", error.message);
       }
     }
-    return data;
+    // Sort before returning
+    return data.sort(sortAlphabetically);
   },
 
   replaceStock: async (newStock: StockItem[]) => {
@@ -339,12 +347,25 @@ export const StorageService = {
   // --- BACKORDER LOGIC ---
   processBackorders: async (currentStock: StockItem[]) => {
     const allOrders = await StorageService.getOrders();
+    
+    // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
+    // This is safer than relying on item.quantityPicked which might be stale
+    const getPickedQtyForSku = (order: Order, sku: string): number => {
+        if (order.pickedItems && Array.isArray(order.pickedItems)) {
+            const cleanSku = sku.trim();
+            return order.pickedItems
+                .filter((p: any) => (p.material || '').trim() === cleanSku)
+                .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
+        }
+        return 0;
+    };
+
     // Find COMPLETED orders that have items not fully picked AND haven't been re-opened yet
     const candidates = allOrders.filter(o => 
         o.status === 'COMPLETED' && 
         o.items.some(i => {
              // Calculate truly missing
-             const picked = i.quantityPicked || 0;
+             const picked = getPickedQtyForSku(o, i.sku);
              // Only consider shortage if missing > 0 and not yet handled
              return picked < i.quantity && !i.backorderCreated && !i.isCustom;
         })
@@ -367,9 +388,11 @@ export const StorageService = {
 
         const updatedItems = order.items.map(item => {
             // STRICT CHECK: If fully picked, IGNORE completely.
-            const picked = item.quantityPicked || 0;
+            const picked = getPickedQtyForSku(order, item.sku);
             const missing = item.quantity - picked;
 
+            // If missing is zero or negative, the item is satisfied. 
+            // Do NOT include it in itemsToReopen.
             if (missing <= 0 || item.isCustom || item.backorderCreated) {
                 return item;
             }
@@ -457,7 +480,8 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Master):", error.message);
       }
     }
-    return data;
+    // Sort before returning
+    return data.sort(sortAlphabetically);
   },
 
   replaceMasterMaterials: async (newMaster: MasterMaterial[]) => {
