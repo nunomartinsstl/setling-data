@@ -301,17 +301,51 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             };
 
             await StorageService.addOrders([newOrder]);
-            refreshData();
-            clearDraft(); 
-
-            // Notification Logic (Simplified for brevity)
+            
+            // --- EMAIL NOTIFICATION LOGIC ---
             const settings = await StorageService.getSettings();
-            if (settings.emailRecipients?.length > 0 || settings.notificationEmail) {
-                // ... (Existing email logic would go here, preserved in spirit)
-                setMessage({ type: 'success', text: `Pedido criado. Notificação gerada.` });
+            
+            if (settings.emailRecipients && settings.emailRecipients.length > 0) {
+                const to = settings.emailRecipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
+                const cc = settings.emailRecipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
+                
+                if (to) {
+                    const subject = `Novo Pedido: ${orderTitle} (${currentUsername})`;
+                    let body = `Olá,\n\nFoi criado um novo pedido na plataforma Setling.\n\n`;
+                    body += `Solicitante: ${currentUsername}\n`;
+                    body += `Obra: ${orderTitle}\n`;
+                    body += `Data Levantamento: ${new Date(dueDate).toLocaleDateString()}\n\n`;
+                    body += `MATERIAIS:\n`;
+                    
+                    newOrder.items.forEach(item => {
+                        let warning = '';
+                        if (item.isCustom) {
+                            warning = ' [NOVO MATERIAL]';
+                        } else {
+                            const currentStock = stock.find(s => s.sku === item.sku)?.quantity || 0;
+                            if (currentStock < item.quantity) {
+                                warning = ` [SEM STOCK: ${currentStock} disp.]`;
+                            }
+                        }
+                        const skuDisplay = item.sku !== 'N/A' ? `[${item.sku}] ` : '';
+                        body += `- ${item.quantity} un x ${skuDisplay}${item.description}${warning}\n`;
+                    });
+
+                    // Construct mailto link
+                    const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    
+                    // Trigger email client
+                    window.location.href = mailtoLink;
+                    setMessage({ type: 'success', text: `Pedido criado. Cliente de e-mail aberto para notificação.` });
+                } else {
+                    setMessage({ type: 'success', text: `Pedido criado. (Nenhum destinatário "Para" configurado).` });
+                }
             } else {
                 setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
             }
+
+            refreshData();
+            clearDraft(); 
         }
     } catch (err: any) {
         setMessage({ type: 'error', text: err.message });
