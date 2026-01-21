@@ -62,10 +62,10 @@ const withTimeout = <T>(promise: Promise<T>, ms: number = 3000): Promise<T> => {
     });
 };
 
-// Helper: Sort function by SKU (Material)
+// Helper: Sort function by SKU (Material) - Numeric aware
 const sortBySku = (a: any, b: any) => {
-    const skuA = (a.sku || '').toLowerCase();
-    const skuB = (b.sku || '').toLowerCase();
+    const skuA = (a.sku || '').toString();
+    const skuB = (b.sku || '').toString();
     return skuA.localeCompare(skuB, undefined, { numeric: true, sensitivity: 'base' });
 };
 
@@ -243,7 +243,11 @@ export const StorageService = {
     const targetIndex = updatedOrders.findIndex(o => o.id === orderId);
     if (targetIndex === -1) return current;
 
-    const targetOrder = { ...updatedOrders[targetIndex], status: newStatus };
+    const targetOrder = { 
+        ...updatedOrders[targetIndex], 
+        status: newStatus,
+        completedAt: newStatus === 'COMPLETED' ? new Date().toISOString() : undefined 
+    };
     updatedOrders[targetIndex] = targetOrder;
 
     // --- LOGIC: If a child order (backorder) is completed, update the parent ---
@@ -253,6 +257,7 @@ export const StorageService = {
             const parentOrder = { ...updatedOrders[parentIndex] };
             
             // Map items from child to parent to verify what was fulfilled
+            // We use the Items definition, not PickedItems, because we want to mark the 'Requirement' as fulfilled
             const childItems = targetOrder.items;
             
             const parentItems = parentOrder.items.map(pItem => {
@@ -271,10 +276,10 @@ export const StorageService = {
 
             parentOrder.items = parentItems;
             
-            // Ensure parent is marked COMPLETED if it wasn't (usually it is when backorder is created, but safe to enforce)
-            if (parentOrder.status !== 'COMPLETED') {
-                parentOrder.status = 'COMPLETED';
-            }
+            // Note: We do not force the parent to COMPLETED here. 
+            // The parent typically stays COMPLETED or OPEN depending on previous state. 
+            // The user request was just to "flag" the item.
+            // But if the parent was "Finished with missing items", this flag now clarifies where they went.
 
             updatedOrders[parentIndex] = parentOrder;
         }
@@ -331,7 +336,7 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Estoque):", error.message);
       }
     }
-    // Sort before returning by SKU
+    // Sort before returning by SKU (Material)
     return data.sort(sortBySku);
   },
 
@@ -416,7 +421,6 @@ export const StorageService = {
     const allOrders = await StorageService.getOrders();
     
     // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
-    // This is safer than relying on item.quantityPicked which might be stale
     const getPickedQtyForSku = (order: Order, sku: string): number => {
         if (order.pickedItems && Array.isArray(order.pickedItems)) {
             const cleanSku = sku.trim();
@@ -434,7 +438,8 @@ export const StorageService = {
              // Calculate truly missing
              const picked = getPickedQtyForSku(o, i.sku);
              // Only consider shortage if missing > 0 and not yet handled
-             return picked < i.quantity && !i.backorderCreated && !i.isCustom;
+             // Also ignore items that have been fulfilled in a later order (fulfilledInOrderId)
+             return picked < i.quantity && !i.backorderCreated && !i.isCustom && !i.fulfilledInOrderId;
         })
     );
 
@@ -460,7 +465,7 @@ export const StorageService = {
 
             // If missing is zero or negative, the item is satisfied. 
             // Do NOT include it in itemsToReopen.
-            if (missing <= 0 || item.isCustom || item.backorderCreated) {
+            if (missing <= 0 || item.isCustom || item.backorderCreated || item.fulfilledInOrderId) {
                 return item;
             }
 
@@ -494,7 +499,7 @@ export const StorageService = {
             
             const newOrder: Order = {
                 id: Math.random().toString(36).substr(2, 9),
-                displayId: order.displayId, 
+                displayId: order.displayId, // Using same display ID for grouping purposes
                 title: newTitle,
                 creator: 'Sistema (Auto)',
                 status: 'OPEN',

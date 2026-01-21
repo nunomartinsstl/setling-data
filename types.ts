@@ -51,6 +51,7 @@ export interface Order {
   reopenCount?: number; // Tracks iterations (_re_1, _re_2)
   originalOrderId?: string; // Links back to parent if reopened
   pickedItems?: PickedItem[]; // Items actually picked in the warehouse
+  exportData?: any[]; // Legacy or extra data for exports
 }
 
 export interface StockItem {

@@ -66,6 +66,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       
       // Sort finished orders by most recent
       if (type === 'FINISHED') {
+          // Sort by creation date or completion date if available
           result.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime());
       }
 
