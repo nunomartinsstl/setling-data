@@ -50,8 +50,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
         if (jsonData.length === 0) throw new Error("O arquivo está vazio.");
 
         const firstRow = jsonData[0];
-        // Ensure columns exist (case sensitive usually, but users might have flexible headers, we strictly assume specific names based on previous prompt)
-        // Note: Logic allows extra columns, just checks for required ones.
+        // Ensure columns exist
         const requiredColumns = ['Material', 'Texto breve material', 'Utilização livre', 'Lote'];
         const missingColumns = requiredColumns.filter(col => !(col in firstRow));
         
@@ -103,7 +102,6 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
         setLoadingState('');
     };
 
-    // Use readAsArrayBuffer instead of readAsBinaryString for modern browser compatibility
     reader.readAsArrayBuffer(file);
   };
 
@@ -113,7 +111,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
 
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    if (!window.confirm("AVISO: Isso irá atualizar a lista 'Todos os Materiais'. Continuar?")) {
+    if (!window.confirm("AVISO: Isso irá ADICIONAR novos materiais à lista 'Todos os Materiais'. Itens existentes não serão alterados. Continuar?")) {
         return;
     }
 
@@ -152,9 +150,9 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
         if(newMaster.length === 0) throw new Error("Nenhum material válido encontrado.");
 
         setLoadingState('UPLOADING');
-        await StorageService.replaceMasterMaterials(newMaster);
+        await StorageService.mergeMasterMaterials(newMaster);
         refreshData();
-        setMessage({ type: 'success', text: `Catálogo atualizado. ${newMaster.length} materiais cadastrados.` });
+        setMessage({ type: 'success', text: `Catálogo atualizado. Novos materiais foram adicionados.` });
 
       } catch (err: any) {
           console.error("Master Upload Error:", err);
@@ -296,6 +294,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                 <p className="text-sm text-slate-600 mb-4">
                     Este arquivo define os materiais que "existem" no sistema.
                     Usado para autocompletar nomes ao criar pedidos manuais.
+                    <strong> Novos itens serão adicionados, os existentes não serão alterados.</strong>
                 </p>
                  <div className="bg-purple-50 p-4 rounded-md border border-purple-100 mb-4">
                      <p className="text-xs text-purple-700">

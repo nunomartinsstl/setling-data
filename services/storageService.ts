@@ -275,12 +275,6 @@ export const StorageService = {
             });
 
             parentOrder.items = parentItems;
-            
-            // Note: We do not force the parent to COMPLETED here. 
-            // The parent typically stays COMPLETED or OPEN depending on previous state. 
-            // The user request was just to "flag" the item.
-            // But if the parent was "Finished with missing items", this flag now clarifies where they went.
-
             updatedOrders[parentIndex] = parentOrder;
         }
     }
@@ -516,7 +510,8 @@ export const StorageService = {
             };
 
             ordersToCreate.push(newOrder);
-            ordersToUpdate.push({ ...order, items: updatedItems });
+            // Critical: Update the parent's reopenCount so next time it increments correctly
+            ordersToUpdate.push({ ...order, items: updatedItems, reopenCount: reopenCount });
         }
     }
 
@@ -556,21 +551,33 @@ export const StorageService = {
     return data.sort(sortBySku);
   },
 
-  replaceMasterMaterials: async (newMaster: MasterMaterial[]) => {
-    localStorage.setItem(KEYS.MASTER, JSON.stringify(newMaster));
+  mergeMasterMaterials: async (newMaterials: MasterMaterial[]) => {
+    const currentMaster = await StorageService.getMasterMaterials();
+    const currentSkuSet = new Set(currentMaster.map(m => m.sku));
+    
+    // Only add items that don't already exist
+    const addedMaterials = newMaterials.filter(m => !currentSkuSet.has(m.sku));
+    
+    if (addedMaterials.length === 0) {
+        return currentMaster;
+    }
+
+    const merged = [...currentMaster, ...addedMaterials].sort(sortBySku);
+
+    localStorage.setItem(KEYS.MASTER, JSON.stringify(merged));
 
     if (isFirebaseActive) {
       try {
-        await set(ref(db, KEYS.MASTER), newMaster);
+        await set(ref(db, KEYS.MASTER), merged);
       } catch (error: any) {
         console.error("Firebase Falhou (Escrita Master):", error.code || error.message);
       }
     }
     
     // Trigger Sync when master list is updated
-    await StorageService.syncCustomMaterials(newMaster);
+    await StorageService.syncCustomMaterials(merged);
     
-    return newMaster;
+    return merged;
   },
 
   // --- SETTINGS ---

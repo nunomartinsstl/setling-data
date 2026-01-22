@@ -803,7 +803,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         
                         items.forEach(i => {
                             const picked = getPickedQuantity(order, i.sku);
-                            if (picked >= i.quantity) {
+                            // Consider fulfilled in child order as completed
+                            if (picked >= i.quantity || i.fulfilledInOrderId) {
                                 completedItemsCount++;
                             } else {
                                 hasMissingItems = true;
@@ -925,7 +926,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         <tbody className="divide-y divide-slate-100">
                                             {items.map((item, idx) => {
                                                 const pickedQty = getPickedQuantity(order, item.sku);
-                                                const isShort = order.status === 'COMPLETED' && pickedQty < item.quantity;
+                                                const isShort = order.status === 'COMPLETED' && pickedQty < item.quantity && !item.fulfilledInOrderId;
                                                 return (
                                                     <tr key={idx} className={isShort ? 'bg-red-50' : ''}>
                                                         <td className="p-3 font-medium text-xs font-mono">{item.sku}</td>
@@ -942,7 +943,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                         <td className="p-3 text-right font-bold">{item.quantity}</td>
                                                         {order.status === 'COMPLETED' && (
                                                             <td className={`p-3 text-right font-bold ${isShort ? 'text-red-600' : 'text-green-600'}`}>
-                                                                {pickedQty}
+                                                                {item.fulfilledInOrderId ? item.quantity : pickedQty}
                                                             </td>
                                                         )}
                                                     </tr>
