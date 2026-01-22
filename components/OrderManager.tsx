@@ -423,15 +423,29 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       }
   };
 
-  // Helper to get picked quantity from the pickedItems array
-  const getPickedQuantity = (order: Order, sku: string): number => {
-      if (order.pickedItems && Array.isArray(order.pickedItems)) {
-          const cleanSku = sku.trim();
-          return order.pickedItems
+  // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
+  const getPickedQtyForSku = (order: Order, sku: string): number => {
+    if (order.pickedItems && Array.isArray(order.pickedItems)) {
+        const cleanSku = sku.trim();
+        return order.pickedItems
             .filter((p: any) => (p.material || '').trim() === cleanSku)
             .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
-      }
-      return 0;
+    }
+    return 0;
+  };
+
+  // Advanced helper that aggregates picked qty from the order AND its completed child backorders
+  const getTotalPickedQuantity = (order: Order, allOrders: Order[], sku: string): number => {
+     let total = getPickedQtyForSku(order, sku);
+     
+     // Find child orders (backorders) that are completed
+     const children = allOrders.filter(o => o.originalOrderId === order.id && o.status === 'COMPLETED');
+     
+     children.forEach(child => {
+        total += getPickedQtyForSku(child, sku);
+     });
+     
+     return total;
   };
 
   const downloadExcel = (order: Order) => {
@@ -802,9 +816,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         let completedItemsCount = 0;
                         
                         items.forEach(i => {
-                            const picked = getPickedQuantity(order, i.sku);
+                            const totalPicked = getTotalPickedQuantity(order, orders, i.sku);
                             // Consider fulfilled in child order as completed
-                            if (picked >= i.quantity || i.fulfilledInOrderId) {
+                            if (totalPicked >= i.quantity || i.fulfilledInOrderId) {
                                 completedItemsCount++;
                             } else {
                                 hasMissingItems = true;
@@ -925,15 +939,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {items.map((item, idx) => {
-                                                const pickedQty = getPickedQuantity(order, item.sku);
-                                                const isShort = order.status === 'COMPLETED' && pickedQty < item.quantity && !item.fulfilledInOrderId;
+                                                const localPicked = getPickedQtyForSku(order, item.sku);
+                                                const totalPicked = getTotalPickedQuantity(order, orders, item.sku);
+                                                const isFullyPicked = totalPicked >= item.quantity;
+                                                const isLocallyShort = localPicked < item.quantity && !item.fulfilledInOrderId && !isFullyPicked;
+
                                                 return (
-                                                    <tr key={idx} className={isShort ? 'bg-red-50' : ''}>
+                                                    <tr key={idx} className={isLocallyShort ? 'bg-red-50' : ''}>
                                                         <td className="p-3 font-medium text-xs font-mono">{item.sku}</td>
                                                         <td className="p-3">
                                                             {item.description}
                                                             {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
-                                                            {isShort && <span className="ml-2 text-[10px] bg-red-100 text-red-700 px-1 rounded flex-inline items-center gap-1"><AlertCircle className="w-3 h-3 inline"/> Falta</span>}
+                                                            {isLocallyShort && <span className="ml-2 text-[10px] bg-red-100 text-red-700 px-1 rounded flex-inline items-center gap-1"><AlertCircle className="w-3 h-3 inline"/> Falta</span>}
                                                             {item.fulfilledInOrderId && (
                                                                 <span className="ml-2 text-[10px] bg-green-100 text-green-700 px-1 rounded border border-green-200">
                                                                     (Abastecido no pedido #{item.fulfilledInOrderId})
@@ -942,8 +959,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                         </td>
                                                         <td className="p-3 text-right font-bold">{item.quantity}</td>
                                                         {order.status === 'COMPLETED' && (
-                                                            <td className={`p-3 text-right font-bold ${isShort ? 'text-red-600' : 'text-green-600'}`}>
-                                                                {item.fulfilledInOrderId ? item.quantity : pickedQty}
+                                                            <td className={`p-3 text-right font-bold ${!isFullyPicked ? 'text-red-600' : 'text-green-600'}`}>
+                                                                {isFullyPicked ? item.quantity : localPicked}
                                                             </td>
                                                         )}
                                                     </tr>
