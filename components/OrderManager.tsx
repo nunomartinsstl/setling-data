@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry } from '../types';
 import { StorageService } from '../services/storageService';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface OrderManagerProps {
@@ -22,6 +22,33 @@ interface ManualRow {
     customDesc: string;
 }
 
+// Helper for similarity scoring
+const calculateRelevance = (target: string, query: string): number => {
+    const t = target.toLowerCase();
+    const q = query.toLowerCase();
+    
+    // Exact match
+    if (t === q) return 100;
+    
+    const qWords = q.split(/\s+/).filter(w => w.length > 2);
+    const tWords = t.split(/\s+/).filter(w => w.length > 2);
+    
+    if (qWords.length === 0) return 0;
+
+    let score = 0;
+    let matches = 0;
+
+    qWords.forEach(qw => {
+        if (t.includes(qw)) {
+            matches++;
+            score += 10; // Base score for inclusion
+            if (tWords.includes(qw)) score += 5; // Bonus for exact word match
+        }
+    });
+
+    return matches > 0 ? score : 0;
+};
+
 const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -36,7 +63,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
-  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[]}>({ rows: [], duplicateCustom: [] });
+  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [] });
+
+  // Similarity Search State
+  const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
+  const [similarityTargetIdx, setSimilarityTargetIdx] = useState<number | null>(null);
+  const [similarityResults, setSimilarityResults] = useState<MasterMaterial[]>([]);
+  const [similarityStep, setSimilarityStep] = useState<'LIST' | 'CONFIRM_MATCH' | 'CONFIRM_NEW'>('LIST');
+  const [selectedCandidate, setSelectedCandidate] = useState<MasterMaterial | null>(null);
 
   // Pending Order Details (Finalization)
   const [pendingItems, setPendingItems] = useState<OrderLineItem[]>([]);
@@ -119,7 +153,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setCreationStep('INITIAL');
       setEditingOrderId(null);
       setExpandedRowIndex(0);
-      setFormErrors({ rows: [], duplicateCustom: [] });
+      setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [] });
   };
 
   const getMinDate = () => {
@@ -166,6 +200,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (stockItem) return stockItem.description;
       return "Material Desconhecido";
   };
+  
+  // Helper to check if SKU exists in our known list
+  const isKnownSku = (sku: string) => {
+     return materialOptions.some(opt => opt.sku === sku);
+  };
 
   const addManualRow = () => {
      const nextIdx = manualRows.length;
@@ -173,9 +212,86 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
      setExpandedRowIndex(nextIdx); // Auto collapse prev, expand new
   };
 
+  // --- SIMILARITY SEARCH LOGIC ---
+  const handleCheckSimilarity = (idx: number) => {
+    const row = manualRows[idx];
+    const query = row.sku; // In this context, 'sku' holds the text typed by user
+    
+    if (!query || query.trim().length < 3) {
+        alert("Digite ao menos 3 caracteres para buscar.");
+        return;
+    }
+
+    // 1. Filter Master List
+    const candidates = masterList
+        .map(m => ({ ...m, score: calculateRelevance(m.description, query) }))
+        .filter(m => m.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10); // Top 10
+
+    setSimilarityResults(candidates);
+    setSimilarityTargetIdx(idx);
+    setSimilarityStep('LIST');
+    setSimilarityModalOpen(true);
+  };
+
+  const handleSelectCandidate = (candidate: MasterMaterial) => {
+      setSelectedCandidate(candidate);
+      setSimilarityStep('CONFIRM_MATCH');
+  };
+
+  const handleConfirmMatch = () => {
+      if (similarityTargetIdx === null || !selectedCandidate) return;
+      
+      const newRows = [...manualRows];
+      newRows[similarityTargetIdx] = {
+          ...newRows[similarityTargetIdx],
+          sku: selectedCandidate.sku,
+          isCustom: false,
+          customDesc: ''
+      };
+      setManualRows(newRows);
+      
+      // Clear error if any
+      const newErrors = {...formErrors};
+      newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
+      setFormErrors(newErrors);
+
+      setSimilarityModalOpen(false);
+  };
+
+  const handleNotFound = () => {
+      setSimilarityStep('CONFIRM_NEW');
+  };
+
+  const handleConfirmNew = () => {
+      if (similarityTargetIdx === null) return;
+      
+      const newRows = [...manualRows];
+      const currentText = newRows[similarityTargetIdx].sku; // The text typed
+
+      newRows[similarityTargetIdx] = {
+          ...newRows[similarityTargetIdx],
+          sku: '',
+          isCustom: true,
+          customDesc: currentText
+      };
+      setManualRows(newRows);
+
+       // Clear error if any
+       const newErrors = {...formErrors};
+       newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
+       setFormErrors(newErrors);
+
+      setSimilarityModalOpen(false);
+  };
+
+  // -----------------------------
+
   const validateForm = (): boolean => {
       const errors: number[] = [];
       const duplicateErrors: number[] = [];
+      const invalidSkus: number[] = [];
       let isTitleValid = orderTitle.trim().length > 0;
       
       manualRows.forEach((row, idx) => {
@@ -192,16 +308,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                   }
               }
           }
-          else if (!row.isCustom && !row.sku) errors.push(idx);
+          else if (!row.isCustom) {
+              if (!row.sku) {
+                  errors.push(idx);
+              } else if (!isKnownSku(row.sku)) {
+                  // Entered text is not a known SKU -> Invalid
+                  invalidSkus.push(idx);
+              }
+          }
       });
 
       setFormErrors({
           title: !isTitleValid,
           rows: errors,
-          duplicateCustom: duplicateErrors
+          duplicateCustom: duplicateErrors,
+          invalidSkus: invalidSkus
       });
 
-      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0;
+      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0;
   };
 
   const handleManualNext = () => {
@@ -210,8 +334,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
              return row.isCustom && row.customDesc && masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
         });
         
+        // Only show checking logic if validation failed
+        // Check for invalid SKUs
+        const hasInvalidSkus = manualRows.some((row) => !row.isCustom && row.sku && !isKnownSku(row.sku));
+
         if (hasDuplicates) {
              setMessage({ type: 'error', text: "Alguns materiais manuais já existem na lista oficial. Por favor, desmarque a opção 'Novo' e selecione-os da lista." });
+        } else if (hasInvalidSkus) {
+             setMessage({ type: 'error', text: "Alguns itens não foram identificados. Use o botão 'Confirmar Material' para verificar se existem na lista." });
         } else {
              setMessage({ type: 'error', text: "Corrija os campos destacados em vermelho." });
         }
@@ -555,6 +685,131 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         ))}
       </datalist>
 
+      {/* Similarity Search Modal */}
+      {similarityModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
+                
+                {similarityStep === 'LIST' && (
+                    <>
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                                <Search className="w-5 h-5 text-brand-600" /> Verificação de Material
+                            </h3>
+                            <button onClick={() => setSimilarityModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1">
+                            <p className="text-sm text-slate-600 mb-3">
+                                Encontramos materiais semelhantes ao que você digitou. Selecione um se for o que procura:
+                            </p>
+                            <div className="space-y-2">
+                                {similarityResults.length > 0 ? (
+                                    similarityResults.map((res, idx) => (
+                                        <button 
+                                            key={idx}
+                                            onClick={() => handleSelectCandidate(res)}
+                                            className="w-full text-left p-3 border border-slate-200 rounded-lg hover:bg-brand-50 hover:border-brand-200 transition-colors group"
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <span className="font-bold text-brand-700 text-sm block group-hover:underline">{res.sku}</span>
+                                                <span className="bg-brand-100 text-brand-700 text-[10px] px-2 py-0.5 rounded-full font-bold">Encontrado</span>
+                                            </div>
+                                            <p className="text-sm text-slate-700 mt-1">{res.description}</p>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                                        Nenhuma similaridade encontrada.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-200 bg-slate-50">
+                            <button 
+                                onClick={handleNotFound}
+                                className="w-full py-3 bg-white border border-slate-300 text-slate-600 font-medium rounded-lg hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <AlertCircle className="w-4 h-4" /> Material não consta na lista
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {similarityStep === 'CONFIRM_MATCH' && selectedCandidate && (
+                    <>
+                         <div className="p-4 border-b border-slate-200 bg-green-50">
+                            <h3 className="font-bold text-green-800 flex items-center gap-2">
+                                <CheckCircle className="w-5 h-5" /> Confirmar Seleção
+                            </h3>
+                        </div>
+                        <div className="p-6 flex-1 text-center">
+                            <p className="text-slate-600 mb-4">Você confirma que o material desejado é:</p>
+                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 text-left">
+                                <p className="text-xs text-slate-400 font-bold uppercase">Material</p>
+                                <p className="font-mono font-bold text-lg text-slate-800">{selectedCandidate.sku}</p>
+                                <p className="text-sm text-slate-700 mt-1">{selectedCandidate.description}</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setSimilarityStep('LIST')}
+                                    className="flex-1 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50"
+                                >
+                                    Voltar
+                                </button>
+                                <button 
+                                    onClick={handleConfirmMatch}
+                                    className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                                >
+                                    Sim, é este
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {similarityStep === 'CONFIRM_NEW' && (
+                    <>
+                         <div className="p-4 border-b border-slate-200 bg-amber-50">
+                            <h3 className="font-bold text-amber-800 flex items-center gap-2">
+                                <HelpCircle className="w-5 h-5" /> Criar Novo Material?
+                            </h3>
+                        </div>
+                        <div className="p-6 flex-1 text-center">
+                            <p className="text-slate-600 mb-6">
+                                Você indicou que o material não está na lista. Deseja prosseguir com a criação de um item novo (Personalizado)?
+                            </p>
+                            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mb-6 text-left">
+                                <p className="text-xs text-amber-800 font-bold flex items-center gap-1">
+                                    <Clock className="w-3 h-3"/> Ação do Sistema:
+                                </p>
+                                <p className="text-sm text-amber-900 mt-1">
+                                    Um e-mail de notificação será enviado para a criação deste código no sistema.
+                                </p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setSimilarityStep('LIST')}
+                                    className="flex-1 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50"
+                                >
+                                    Voltar
+                                </button>
+                                <button 
+                                    onClick={handleConfirmNew}
+                                    className="flex-1 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium"
+                                >
+                                    Não, avançar com criação
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+            </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -624,13 +879,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             const isExpanded = idx === expandedRowIndex;
                             const isError = formErrors.rows.includes(idx);
                             const isDuplicate = formErrors.duplicateCustom && formErrors.duplicateCustom.includes(idx);
+                            const isInvalidSku = formErrors.invalidSkus && formErrors.invalidSkus.includes(idx);
                             const stockQty = getStockCount(row.sku);
+
+                            // Determine if we should show the "Confirm Material" button
+                            // Show if: Not Custom AND (Sku field has text BUT is not a valid known SKU)
+                            const showConfirmButton = !row.isCustom && row.sku.length > 0 && !isKnownSku(row.sku);
 
                             return (
                                 <div 
                                     key={idx} 
                                     className={`rounded-lg border transition-all duration-200 overflow-hidden ${
-                                        isError || isDuplicate ? 'border-red-300 bg-red-50' : 
+                                        isError || isDuplicate || isInvalidSku ? 'border-red-300 bg-red-50' : 
                                         isExpanded ? 'border-brand-200 bg-slate-50 shadow-md ring-1 ring-brand-100' : 'border-slate-200 bg-white hover:bg-slate-50'
                                     }`}
                                 >
@@ -640,7 +900,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
+                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate || isInvalidSku ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
                                             {!isExpanded && (
                                                 <span className="text-sm font-medium text-slate-700 truncate max-w-[150px] md:max-w-[300px]">
                                                     {row.isCustom ? row.customDesc || '(Sem descrição)' : row.sku || '(Selecione material)'} 
@@ -698,18 +958,39 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <input 
-                                                        list="stock-options"
-                                                        type="text" 
-                                                        value={row.sku}
-                                                        onChange={(e) => {
-                                                            const newRows = [...manualRows];
-                                                            newRows[idx].sku = e.target.value;
-                                                            setManualRows(newRows);
-                                                        }}
-                                                        placeholder="Código ou nome do material..."
-                                                        className={`w-full p-3 border rounded-md text-sm outline-none ${isError && !row.sku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
-                                                    />
+                                                    <div className="relative flex items-center gap-2">
+                                                        <input 
+                                                            list="stock-options"
+                                                            type="text" 
+                                                            value={row.sku}
+                                                            onChange={(e) => {
+                                                                const newRows = [...manualRows];
+                                                                newRows[idx].sku = e.target.value;
+                                                                // Reset invalid error when typing
+                                                                if (isInvalidSku) {
+                                                                    const newErrors = {...formErrors};
+                                                                    newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
+                                                                    setFormErrors(newErrors);
+                                                                }
+                                                                setManualRows(newRows);
+                                                            }}
+                                                            placeholder="Código ou nome do material..."
+                                                            className={`w-full p-3 border rounded-md text-sm outline-none ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                                                        />
+                                                        {showConfirmButton && (
+                                                            <button 
+                                                                onClick={() => handleCheckSimilarity(idx)}
+                                                                className="px-4 py-3 bg-blue-100 text-blue-700 rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-200 transition-colors flex items-center gap-2"
+                                                            >
+                                                                <Search className="w-4 h-4" /> Confirmar Material
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {isInvalidSku && !row.isCustom && (
+                                                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                                                        <AlertCircle className="w-3 h-3"/> Material não encontrado. Use o botão "Confirmar Material" para verificar.
+                                                    </p>
                                                 )}
                                             </div>
 
@@ -730,7 +1011,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                     />
                                                 </div>
                                                 <div className="flex-1 flex flex-col justify-end pb-3">
-                                                     {!row.isCustom && row.sku && (
+                                                     {!row.isCustom && row.sku && isKnownSku(row.sku) && (
                                                         <div className={`text-xs font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600 flex items-center gap-1'}`}>
                                                             {stockQty > 0 ? `Stock: ${stockQty} un` : <><AlertTriangle className="w-3 h-3"/> Sem Stock</>}
                                                         </div>
@@ -740,6 +1021,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                 </div>
                                             </div>
 
+                                            {/* Legacy Checkbox - kept but secondary to the Confirm Button flow */}
                                             <div className="flex items-center gap-2 border-t border-slate-200 pt-2 mt-2">
                                                 <input 
                                                     type="checkbox"
@@ -747,14 +1029,34 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                     checked={row.isCustom}
                                                     onChange={(e) => {
                                                         const newRows = [...manualRows];
-                                                        newRows[idx].isCustom = e.target.checked;
-                                                        newRows[idx].sku = ''; 
+                                                        const isChecked = e.target.checked;
+                                                        // Preserve text if user typed a description in SKU field before checking 'Novo'
+                                                        const currentSku = newRows[idx].sku;
+                                                        
+                                                        newRows[idx].isCustom = isChecked;
+                                                        
+                                                        if (isChecked) {
+                                                            if (currentSku && !newRows[idx].customDesc) {
+                                                                newRows[idx].customDesc = currentSku;
+                                                            }
+                                                            newRows[idx].sku = ''; 
+                                                        } else {
+                                                            newRows[idx].sku = ''; 
+                                                        }
+
                                                         // Reset duplicate error visual when toggling
                                                         if(isDuplicate) {
                                                             const newErrors = {...formErrors};
                                                             newErrors.duplicateCustom = newErrors.duplicateCustom?.filter(i => i !== idx);
                                                             setFormErrors(newErrors);
                                                         }
+                                                        // Reset invalid error when toggling
+                                                        if(isInvalidSku) {
+                                                            const newErrors = {...formErrors};
+                                                            newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
+                                                            setFormErrors(newErrors);
+                                                        }
+
                                                         setManualRows(newRows);
                                                     }}
                                                     className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
