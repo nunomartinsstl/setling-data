@@ -337,7 +337,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     // Filter for specific conditions
                     const missingStockItems = newOrder.items.filter(item => {
                         if (item.isCustom) return false;
-                        const currentStock = stock.find(s => s.sku === item.sku)?.quantity || 0;
+                        // FIX: Use getStockCount to sum up all batches/positions
+                        const currentStock = getStockCount(item.sku);
                         return currentStock < item.quantity;
                     });
 
