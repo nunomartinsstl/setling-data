@@ -20,6 +20,7 @@ interface ManualRow {
     qty: string | number;
     isCustom: boolean;
     customDesc: string;
+    similarityChecked: boolean;
 }
 
 // Helper for similarity scoring
@@ -58,12 +59,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null); 
   
   // Manual Entry Buffer (Drafts)
-  const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', isCustom: false, customDesc: ''}]);
+  const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', isCustom: false, customDesc: '', similarityChecked: false}]);
   const [orderTitle, setOrderTitle] = useState('');
   
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
-  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [] });
+  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [] });
 
   // Similarity Search State
   const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
@@ -146,14 +147,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const resetForm = () => {
-      setManualRows([{sku: '', qty: '', isCustom: false, customDesc: ''}]);
+      setManualRows([{sku: '', qty: '', isCustom: false, customDesc: '', similarityChecked: false}]);
       setOrderTitle('');
       setDueDate('');
       setPendingItems([]);
       setCreationStep('INITIAL');
       setEditingOrderId(null);
       setExpandedRowIndex(0);
-      setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [] });
+      setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [] });
   };
 
   const getMinDate = () => {
@@ -206,16 +207,70 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
      return materialOptions.some(opt => opt.sku === sku);
   };
 
+  const validateForm = (): boolean => {
+      const errors: number[] = [];
+      const duplicateErrors: number[] = [];
+      const invalidSkus: number[] = [];
+      const uncheckedErrors: number[] = [];
+      let isTitleValid = orderTitle.trim().length > 0;
+      
+      manualRows.forEach((row, idx) => {
+          const qty = Number(row.qty);
+          if (qty <= 0) errors.push(idx);
+          else if (row.isCustom) {
+              if (!row.customDesc) {
+                  errors.push(idx);
+              } else {
+                  // Must be checked via similarity
+                  if (!row.similarityChecked) {
+                      uncheckedErrors.push(idx);
+                  }
+                  
+                  // Check if description already exists in master list
+                  const exists = masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
+                  if (exists) {
+                      duplicateErrors.push(idx);
+                  }
+              }
+          }
+          else if (!row.isCustom) {
+              if (!row.sku) {
+                  errors.push(idx);
+              } else if (!isKnownSku(row.sku)) {
+                  // Entered text is not a known SKU -> Invalid
+                  invalidSkus.push(idx);
+              }
+          }
+      });
+
+      setFormErrors({
+          title: !isTitleValid,
+          rows: errors,
+          duplicateCustom: duplicateErrors,
+          invalidSkus: invalidSkus,
+          unchecked: uncheckedErrors
+      });
+
+      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0;
+  };
+
   const addManualRow = () => {
+     // Optional: Validate before adding new row to force user to finish current one
+     if (!validateForm()) {
+         setMessage({ type: 'error', text: "Preencha e verifique o item atual antes de adicionar outro." });
+         return;
+     }
+
      const nextIdx = manualRows.length;
-     setManualRows([...manualRows, { sku: '', qty: '', isCustom: false, customDesc: '' }]);
+     setManualRows([...manualRows, { sku: '', qty: '', isCustom: false, customDesc: '', similarityChecked: false }]);
      setExpandedRowIndex(nextIdx); // Auto collapse prev, expand new
+     setMessage(null);
   };
 
   // --- SIMILARITY SEARCH LOGIC ---
   const handleCheckSimilarity = (idx: number) => {
     const row = manualRows[idx];
-    const query = row.sku; // In this context, 'sku' holds the text typed by user
+    const query = row.isCustom ? row.customDesc : row.sku; 
     
     if (!query || query.trim().length < 3) {
         alert("Digite ao menos 3 caracteres para buscar.");
@@ -248,13 +303,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           ...newRows[similarityTargetIdx],
           sku: selectedCandidate.sku,
           isCustom: false,
-          customDesc: ''
+          customDesc: '',
+          similarityChecked: true // MARK CHECKED
       };
       setManualRows(newRows);
       
       // Clear error if any
       const newErrors = {...formErrors};
       newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
+      newErrors.unchecked = newErrors.unchecked?.filter(i => i !== similarityTargetIdx);
       setFormErrors(newErrors);
 
       setSimilarityModalOpen(false);
@@ -268,19 +325,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (similarityTargetIdx === null) return;
       
       const newRows = [...manualRows];
-      const currentText = newRows[similarityTargetIdx].sku; // The text typed
+      // Use the query they typed
+      const currentText = newRows[similarityTargetIdx].isCustom 
+          ? newRows[similarityTargetIdx].customDesc 
+          : newRows[similarityTargetIdx].sku;
 
       newRows[similarityTargetIdx] = {
           ...newRows[similarityTargetIdx],
           sku: '',
           isCustom: true,
-          customDesc: currentText
+          customDesc: currentText,
+          similarityChecked: true // MARK CHECKED
       };
       setManualRows(newRows);
 
        // Clear error if any
        const newErrors = {...formErrors};
        newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
+       newErrors.unchecked = newErrors.unchecked?.filter(i => i !== similarityTargetIdx);
        setFormErrors(newErrors);
 
       setSimilarityModalOpen(false);
@@ -288,58 +350,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   // -----------------------------
 
-  const validateForm = (): boolean => {
-      const errors: number[] = [];
-      const duplicateErrors: number[] = [];
-      const invalidSkus: number[] = [];
-      let isTitleValid = orderTitle.trim().length > 0;
-      
-      manualRows.forEach((row, idx) => {
-          const qty = Number(row.qty);
-          if (qty <= 0) errors.push(idx);
-          else if (row.isCustom) {
-              if (!row.customDesc) {
-                  errors.push(idx);
-              } else {
-                  // Check if description already exists in master list
-                  const exists = masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
-                  if (exists) {
-                      duplicateErrors.push(idx);
-                  }
-              }
-          }
-          else if (!row.isCustom) {
-              if (!row.sku) {
-                  errors.push(idx);
-              } else if (!isKnownSku(row.sku)) {
-                  // Entered text is not a known SKU -> Invalid
-                  invalidSkus.push(idx);
-              }
-          }
-      });
-
-      setFormErrors({
-          title: !isTitleValid,
-          rows: errors,
-          duplicateCustom: duplicateErrors,
-          invalidSkus: invalidSkus
-      });
-
-      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0;
-  };
-
   const handleManualNext = () => {
     if (!validateForm()) {
+        const unchecked = manualRows.some(r => r.isCustom && !r.similarityChecked);
         const hasDuplicates = manualRows.some((row, idx) => {
              return row.isCustom && row.customDesc && masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
         });
-        
-        // Only show checking logic if validation failed
-        // Check for invalid SKUs
         const hasInvalidSkus = manualRows.some((row) => !row.isCustom && row.sku && !isKnownSku(row.sku));
 
-        if (hasDuplicates) {
-             setMessage({ type: 'error', text: "Alguns materiais manuais já existem na lista oficial. Por favor, desmarque a opção 'Novo' e selecione-os da lista." });
+        if (unchecked) {
+             setMessage({ type: 'error', text: "Você possui itens novos que não foram verificados. Clique em 'Confirmar Material' para validar." });
+        } else if (hasDuplicates) {
+             setMessage({ type: 'error', text: "Alguns materiais manuais já existem na lista oficial. Por favor, selecione-os da lista." });
         } else if (hasInvalidSkus) {
              setMessage({ type: 'error', text: "Alguns itens não foram identificados. Use o botão 'Confirmar Material' para verificar se existem na lista." });
         } else {
@@ -354,7 +376,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         if (row.isCustom) {
             items.push({
                 sku: 'N/A',
-                // Removed "(Novo)" prefix as requested
                 description: row.customDesc,
                 quantity: qtyNum,
                 isCustom: true
@@ -377,8 +398,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           sku: item.isCustom ? '' : item.sku,
           qty: item.quantity,
           isCustom: !!item.isCustom,
-          // Handle cases where legacy items might still have the prefix
-          customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : ''
+          customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : '',
+          similarityChecked: true // Assume edited existing items are checked
       }));
 
       setManualRows(rows);
@@ -553,13 +574,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           }
       }
   };
+  
+  // Safe array helper
+  const toArray = (data: any) => {
+      if(!data) return [];
+      if(Array.isArray(data)) return data;
+      return Object.values(data);
+  };
 
   // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
   const getPickedQtyForSku = (order: Order, sku: string): number => {
-    if (order.pickedItems && Array.isArray(order.pickedItems)) {
-        const cleanSku = sku.trim();
-        return order.pickedItems
-            .filter((p: any) => (p.material || '').trim() === cleanSku)
+    // Handle both Array and Object (Firebase quirk)
+    const pickedList = toArray(order.pickedItems);
+    
+    if (pickedList.length > 0) {
+        const cleanSku = sku.trim().toLowerCase();
+        return pickedList
+            .filter((p: any) => (p.material || '').trim().toLowerCase() === cleanSku)
             .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
     }
     return 0;
@@ -580,14 +611,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const downloadExcel = (order: Order) => {
-      if (!order.pickedItems || order.pickedItems.length === 0) {
+      const pickedList = toArray(order.pickedItems);
+      if (pickedList.length === 0) {
           alert("Este pedido não tem itens processados para exportar.");
           return;
       }
 
       // Format required: Itm, C, I, Cen., Depósito de saída, Depósito, Material, Texto breve, Lote, Qtd.pedido, Dt.remessa
       const headers = ["Itm", "C", "I", "Cen.", "Depósito de saída", "Depósito", "Material", "Texto breve", "Lote", "Qtd.pedido", "Dt.remessa"];
-      const data = order.pickedItems.map((item, idx) => {
+      const data = pickedList.map((item: any, idx: number) => {
           return [
               (idx + 1) * 10, // Itm: 10, 20, 30...
               "P", // C: Fixed
@@ -880,17 +912,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             const isError = formErrors.rows.includes(idx);
                             const isDuplicate = formErrors.duplicateCustom && formErrors.duplicateCustom.includes(idx);
                             const isInvalidSku = formErrors.invalidSkus && formErrors.invalidSkus.includes(idx);
+                            const isUnchecked = formErrors.unchecked && formErrors.unchecked.includes(idx);
                             const stockQty = getStockCount(row.sku);
 
                             // Determine if we should show the "Confirm Material" button
-                            // Show if: Not Custom AND (Sku field has text BUT is not a valid known SKU)
-                            const showConfirmButton = !row.isCustom && row.sku.length > 0 && !isKnownSku(row.sku);
+                            // Show if: (Not Custom AND Unknown SKU) OR (Custom Item)
+                            const showConfirmButton = (!row.isCustom && row.sku.length > 0 && !isKnownSku(row.sku)) || row.isCustom;
 
                             return (
                                 <div 
                                     key={idx} 
                                     className={`rounded-lg border transition-all duration-200 overflow-hidden ${
-                                        isError || isDuplicate || isInvalidSku ? 'border-red-300 bg-red-50' : 
+                                        isError || isDuplicate || isInvalidSku || isUnchecked ? 'border-red-300 bg-red-50' : 
                                         isExpanded ? 'border-brand-200 bg-slate-50 shadow-md ring-1 ring-brand-100' : 'border-slate-200 bg-white hover:bg-slate-50'
                                     }`}
                                 >
@@ -900,7 +933,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate || isInvalidSku ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
+                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate || isInvalidSku || isUnchecked ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
                                             {!isExpanded && (
                                                 <span className="text-sm font-medium text-slate-700 truncate max-w-[150px] md:max-w-[300px]">
                                                     {row.isCustom ? row.customDesc || '(Sem descrição)' : row.sku || '(Selecione material)'} 
@@ -930,7 +963,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                             <div className="mb-3">
                                                 {row.isCustom ? (
                                                     <div>
-                                                        <div className="relative">
+                                                        <div className="relative flex items-center gap-2">
                                                             <input 
                                                                 type="text"
                                                                 value={row.customDesc}
@@ -938,22 +971,42 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                 onChange={(e) => {
                                                                     const newRows = [...manualRows];
                                                                     newRows[idx].customDesc = e.target.value;
+                                                                    newRows[idx].similarityChecked = false; // Reset check on edit
                                                                     setManualRows(newRows);
                                                                 }}
                                                                 placeholder="Descrição do novo material..."
-                                                                className={`w-full p-3 border rounded-md text-sm outline-none ${
-                                                                    (isError && !row.customDesc) || isDuplicate 
+                                                                className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none ${
+                                                                    (isError && !row.customDesc) || isDuplicate || isUnchecked
                                                                     ? 'border-red-500 bg-white ring-1 ring-red-200' 
                                                                     : 'border-blue-300 bg-blue-50 focus:ring-2 focus:ring-blue-500'
                                                                 }`}
                                                             />
-                                                            <div className="absolute right-2 bottom-2 text-[10px] text-slate-400">
-                                                                {row.customDesc.length}/40
-                                                            </div>
+                                                            {/* Button for Custom Mode - Always visible if not checked, or as badge if checked */}
+                                                            {!row.similarityChecked ? (
+                                                                <button 
+                                                                    onClick={() => handleCheckSimilarity(idx)}
+                                                                    className="flex-none px-4 py-3 bg-blue-600 text-white rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                                                                >
+                                                                    <Search className="w-4 h-4" /> Confirmar Material
+                                                                </button>
+                                                            ) : (
+                                                                <div className="flex-none px-3 py-2 bg-green-100 text-green-700 rounded-md font-bold text-sm flex items-center gap-1 border border-green-200">
+                                                                    <Check className="w-4 h-4" /> Verificado
+                                                                </div>
+                                                            )}
                                                         </div>
+                                                        <div className="text-right text-[10px] text-slate-400 mt-1">
+                                                            {row.customDesc.length}/40
+                                                        </div>
+                                                        
                                                         {isDuplicate && (
                                                             <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                                                                 <AlertCircle className="w-3 h-3"/> Este material já existe na lista. Por favor, desmarque "Novo" e busque pelo nome.
+                                                            </p>
+                                                        )}
+                                                        {isUnchecked && (
+                                                             <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
+                                                                <AlertCircle className="w-3 h-3"/> Validação obrigatória. Clique em "Confirmar Material".
                                                             </p>
                                                         )}
                                                     </div>
@@ -966,6 +1019,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                             onChange={(e) => {
                                                                 const newRows = [...manualRows];
                                                                 newRows[idx].sku = e.target.value;
+                                                                newRows[idx].similarityChecked = false; // Reset check
                                                                 // Reset invalid error when typing
                                                                 if (isInvalidSku) {
                                                                     const newErrors = {...formErrors};
@@ -975,12 +1029,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                 setManualRows(newRows);
                                                             }}
                                                             placeholder="Código ou nome do material..."
-                                                            className={`w-full p-3 border rounded-md text-sm outline-none ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                                                            className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
                                                         />
-                                                        {showConfirmButton && (
+                                                        {showConfirmButton && !row.similarityChecked && (
                                                             <button 
                                                                 onClick={() => handleCheckSimilarity(idx)}
-                                                                className="px-4 py-3 bg-blue-100 text-blue-700 rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-200 transition-colors flex items-center gap-2"
+                                                                className="flex-none px-4 py-3 bg-blue-100 text-blue-700 rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-200 transition-colors flex items-center gap-2"
                                                             >
                                                                 <Search className="w-4 h-4" /> Confirmar Material
                                                             </button>
@@ -1034,6 +1088,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                         const currentSku = newRows[idx].sku;
                                                         
                                                         newRows[idx].isCustom = isChecked;
+                                                        newRows[idx].similarityChecked = false; // Always force check when switching modes
                                                         
                                                         if (isChecked) {
                                                             if (currentSku && !newRows[idx].customDesc) {
@@ -1054,6 +1109,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                         if(isInvalidSku) {
                                                             const newErrors = {...formErrors};
                                                             newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
+                                                            setFormErrors(newErrors);
+                                                        }
+                                                        // Reset unchecked error
+                                                        if(isUnchecked) {
+                                                            const newErrors = {...formErrors};
+                                                            newErrors.unchecked = newErrors.unchecked?.filter(i => i !== idx);
                                                             setFormErrors(newErrors);
                                                         }
 
@@ -1106,7 +1167,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             ) : (
                 filteredOrders.map((order) => {
                     const isExpanded = expandedOrderId === order.id;
-                    const items = order.items || []; 
+                    const items = toArray(order.items) || []; 
                     const canModify = (currentUsername === order.creator || isAdmin);
                     const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
                     
@@ -1118,7 +1179,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         const totalItems = items.length;
                         let completedItemsCount = 0;
                         
-                        items.forEach(i => {
+                        items.forEach((i: any) => {
                             const totalPicked = getTotalPickedQuantity(order, orders, i.sku);
                             // Consider fulfilled in child order as completed
                             if (totalPicked >= i.quantity || i.fulfilledInOrderId) {
@@ -1241,7 +1302,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
-                                            {items.map((item, idx) => {
+                                            {items.map((item: any, idx: number) => {
                                                 const localPicked = getPickedQtyForSku(order, item.sku);
                                                 const totalPicked = getTotalPickedQuantity(order, orders, item.sku);
                                                 const isFullyPicked = totalPicked >= item.quantity;

@@ -48,7 +48,7 @@ const hashPassword = async (password: string): Promise<string> => {
 const toArray = <T>(data: any): T[] => {
   if (!data) return [];
   if (Array.isArray(data)) return data;
-  return Object.values(data);
+  return Object.values(data) as T[];
 };
 
 // Helper: Timeout wrapper
@@ -416,10 +416,14 @@ export const StorageService = {
     
     // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
     const getPickedQtyForSku = (order: Order, sku: string): number => {
-        if (order.pickedItems && Array.isArray(order.pickedItems)) {
-            const cleanSku = sku.trim();
-            return order.pickedItems
-                .filter((p: any) => (p.material || '').trim() === cleanSku)
+        // Handle object/array from Firebase
+        const rawPicked = order.pickedItems;
+        const pickedList: any[] = (!rawPicked) ? [] : (Array.isArray(rawPicked) ? rawPicked : Object.values(rawPicked));
+        
+        if (pickedList.length > 0) {
+            const cleanSku = sku.trim().toLowerCase();
+            return pickedList
+                .filter((p: any) => (p.material || '').trim().toLowerCase() === cleanSku)
                 .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
         }
         return 0;
@@ -445,7 +449,7 @@ export const StorageService = {
     const stockMap = new Map<string, number>();
     currentStock.forEach(s => {
         const existing = stockMap.get(s.sku) || 0;
-        stockMap.set(s.sku, existing + s.quantity);
+        stockMap.set(s.sku, existing + Number(s.quantity));
     });
 
     for (const order of candidates) {
