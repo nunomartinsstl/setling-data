@@ -394,7 +394,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const handleEditStart = (order: Order) => {
-      const rows: ManualRow[] = order.items.map(item => ({
+      const rows: ManualRow[] = (order.items || []).map(item => ({
           sku: item.isCustom ? '' : item.sku,
           qty: item.quantity,
           isCustom: !!item.isCustom,
@@ -416,7 +416,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (oldOrder.title !== newTitle) changes.push(`Título alterado.`);
       if (oldOrder.dueDate !== newDate) changes.push(`Data alterada para ${newDate}.`);
 
-      const oldMap = new Map(oldOrder.items.map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
+      const oldMap = new Map((oldOrder.items || []).map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
       const newMap = new Map(newItems.map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
 
       oldMap.forEach((qty, key) => {

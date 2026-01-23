@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle } from 'lucide-react';
+import { getAuth } from 'firebase/auth';
 
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -16,6 +17,9 @@ const UsersManager: React.FC = () => {
 
     // Editing State (Map of UID -> Loading State)
     const [processingUsers, setProcessingUsers] = useState<Record<string, boolean>>({});
+    
+    // Reset State
+    const [isResetting, setIsResetting] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -82,6 +86,25 @@ const UsersManager: React.FC = () => {
         }
     };
 
+    const handleResetAll = async () => {
+        const confirmMsg = "ATENÇÃO: Isso irá apagar TODOS os utilizadores (exceto você) e todos os convites. Todos terão que ser convidados e registados novamente. Tem certeza absoluta?";
+        if (!window.confirm(confirmMsg)) return;
+        
+        setIsResetting(true);
+        try {
+            const auth = getAuth();
+            if (auth.currentUser) {
+                await StorageService.resetAllUsers(auth.currentUser.uid);
+                alert("Todos os utilizadores foram resetados com sucesso.");
+                await fetchData();
+            }
+        } catch(err: any) {
+            alert("Erro ao resetar: " + err.message);
+        } finally {
+            setIsResetting(false);
+        }
+    };
+
     const getCompanyName = (id?: string) => {
         if (!id) return '-';
         const company = companies.find(c => c.id === id);
@@ -142,8 +165,17 @@ const UsersManager: React.FC = () => {
 
             {/* Users List */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50">
+                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
                     <h3 className="font-bold text-slate-700">Utilizadores Ativos ({users.length})</h3>
+                    
+                    <button 
+                        onClick={handleResetAll}
+                        disabled={isResetting}
+                        className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors border border-transparent hover:border-red-200"
+                    >
+                        {isResetting ? <Loader2 className="w-3 h-3 animate-spin"/> : <AlertTriangle className="w-3 h-3"/>}
+                        Resetar Todos
+                    </button>
                 </div>
                 {loading ? (
                     <div className="p-8 text-center text-slate-500">Carregando utilizadores...</div>

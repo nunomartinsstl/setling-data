@@ -29,7 +29,8 @@ const VALID_ADMIN_HASHES = [
 try {
   if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "API_KEY_HERE") {
     const app = initializeApp(firebaseConfig);
-    db = getDatabase(app);
+    // FIX: Explicitly pass databaseURL to handle custom regions (Europe West 1)
+    db = getDatabase(app, firebaseConfig.databaseURL);
     auth = getAuth(app);
     isFirebaseActive = true;
     console.log("Firebase: Cliente inicializado.");
@@ -110,11 +111,16 @@ export const StorageService = {
       const cleanEmail = sanitizeEmail(email);
       const inviteRef = ref(db, `${KEYS.INVITES}/${cleanEmail}`);
       
-      const snapshot = await get(inviteRef);
-      if (snapshot.exists() && snapshot.val().used) {
-          throw new Error("Este email já foi usado num registo.");
+      // Check if user exists in DB
+      const usersRef = ref(db, KEYS.USERS);
+      const q = query(usersRef, orderByChild('email'), equalTo(email));
+      const userSnap = await get(q);
+
+      if (userSnap.exists()) {
+          throw new Error("Este email já está associado a um utilizador ativo.");
       }
 
+      // Overwrite invite even if used, because user is not active in DB
       const inviteData: Invite = {
           email: email.toLowerCase(),
           role,
@@ -158,29 +164,57 @@ export const StorageService = {
 
     // 2. Try Firebase Auth
     let userCredential;
+    let reusedAuth = false;
+
     try {
         userCredential = await createUserWithEmailAndPassword(auth, email, password);
     } catch (e: any) {
-        console.error("Register Auth Error:", e.code, e.message);
-        
-        // --- FALLBACK FOR CONFIGURATION ERROR ---
-        if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
-            activateOfflineMode();
-            console.log("Fallback: Creating Local Admin User due to Firebase Config Error.");
-            return {
-                uid: 'offline_admin',
-                username: `${firstName}-${lastName}`,
-                email: email,
-                firstName,
-                lastName,
-                role: role // Keep requested role
-            };
-        }
-        // ----------------------------------------
+        // Check for existing auth user but missing DB profile
+        if (e.code === 'auth/email-already-in-use') {
+            try {
+                // Try to sign in to verify ownership
+                userCredential = await signInWithEmailAndPassword(auth, email, password);
+                
+                // Check if profile exists
+                const userRef = ref(db, `${KEYS.USERS}/${userCredential.user.uid}`);
+                const snap = await get(userRef);
+                
+                if (snap.exists()) {
+                    throw new Error("Este email já está registado e ativo.");
+                }
+                
+                // If we get here, Auth exists, Password matches, but DB profile is gone.
+                // Allow recreation (Reuse Auth).
+                reusedAuth = true;
+                console.log("Reusing existing Auth credentials for deleted user profile.");
 
-        if (e.code === 'auth/email-already-in-use') throw new Error("Este email já está registado.");
-        if (e.code === 'auth/weak-password') throw new Error("Senha muito fraca (min 6 caracteres).");
-        throw e;
+            } catch (innerE: any) {
+                // If sign in fails, throw original error or specific error
+                if (innerE.message === "Este email já está registado e ativo.") throw innerE;
+                // If wrong password or other login error, assume email is taken
+                throw new Error("Este email já está registado.");
+            }
+        } else {
+            console.error("Register Auth Error:", e.code, e.message);
+            
+            // --- FALLBACK FOR CONFIGURATION ERROR ---
+            if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
+                activateOfflineMode();
+                console.log("Fallback: Creating Local Admin User due to Firebase Config Error.");
+                return {
+                    uid: 'offline_admin',
+                    username: `${firstName}-${lastName}`,
+                    email: email,
+                    firstName,
+                    lastName,
+                    role: role // Keep requested role
+                };
+            }
+            // ----------------------------------------
+    
+            if (e.code === 'auth/weak-password') throw new Error("Senha muito fraca (min 6 caracteres).");
+            throw e;
+        }
     }
 
     const firebaseUser = userCredential.user;
@@ -196,9 +230,16 @@ export const StorageService = {
                 throw new Error("Este email não foi convidado. Peça ao administrador para o adicionar.");
             }
             const inviteData = inviteSnap.val();
-            if (inviteData.used) {
-                throw new Error("Este convite já foi utilizado.");
+            
+            // If reusing auth, we assume the invite check was done during invite creation (createInvite resets used status)
+            // But we should double check:
+            if (inviteData.used && !reusedAuth) { 
+                 // If reusing auth, we permit used invite IF we just verified the DB profile was missing?
+                 // Actually, createInvite sets used=false. So if it's true, it might be stolen?
+                 // Let's enforce used=false unless we handle specific logic.
+                 throw new Error("Este convite já foi utilizado.");
             }
+            
             if (role !== inviteData.role) {
                  role = inviteData.role; 
             }
@@ -250,8 +291,11 @@ export const StorageService = {
         return newUserProfile;
 
     } catch (err: any) {
-        console.error("Registration failed during DB phase, rolling back auth user.", err);
-        await deleteUser(firebaseUser).catch(e => console.error("Failed to rollback user", e));
+        console.error("Registration failed during DB phase.", err);
+        if (!reusedAuth) {
+            // Only delete user if we just created it. If we reused it, don't delete auth!
+            await deleteUser(firebaseUser).catch(e => console.error("Failed to rollback user", e));
+        }
         throw err;
     }
   },
@@ -364,6 +408,39 @@ export const StorageService = {
           await remove(ref(db, `${KEYS.USERS}/${uid}`));
       } catch(e: any) {
           throw new Error("Erro ao excluir utilizador: " + e.message);
+      }
+  },
+
+  // --- DANGER ZONE ---
+  resetAllUsers: async (currentAdminUid: string) => {
+      if (!isFirebaseActive) throw new Error("Disponível apenas online.");
+      
+      try {
+          // 1. Get all users
+          const usersSnap = await get(ref(db, KEYS.USERS));
+          if (!usersSnap.exists()) return; // Nothing to reset
+          
+          const allUsers = usersSnap.val();
+          const updates: Record<string, any> = {};
+
+          // 2. Prepare deletes for everyone except current admin
+          Object.keys(allUsers).forEach(key => {
+              if (key !== currentAdminUid) {
+                  updates[`${KEYS.USERS}/${key}`] = null;
+              }
+          });
+
+          // 3. Clear all invites as well (clean slate)
+          updates[KEYS.INVITES] = null;
+
+          // 4. Execute atomic update
+          if (Object.keys(updates).length > 0) {
+              await update(ref(db), updates);
+          }
+
+      } catch (e: any) {
+          console.error("Reset All Users Error:", e);
+          throw new Error("Erro ao resetar utilizadores: " + e.message);
       }
   },
 
