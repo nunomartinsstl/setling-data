@@ -1,6 +1,6 @@
 import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem, Invite } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, set, child, DataSnapshot, query, orderByChild, equalTo, limitToFirst } from 'firebase/database';
+import { getDatabase, ref, get, set, child, DataSnapshot, query, orderByChild, equalTo, limitToFirst, remove, update } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
 
 // --- CONFIGURAÇÃO DO FIREBASE ---
@@ -341,6 +341,27 @@ export const StorageService = {
           } catch(e) {}
       } 
       return users;
+  },
+
+  updateUserRole: async (uid: string, newRole: UserRole) => {
+      if (!isFirebaseActive) throw new Error("Disponível apenas online.");
+      try {
+          await update(ref(db, `${KEYS.USERS}/${uid}`), { role: newRole });
+      } catch(e: any) {
+          throw new Error("Erro ao atualizar função: " + e.message);
+      }
+  },
+
+  deleteUserProfile: async (uid: string) => {
+      if (!isFirebaseActive) throw new Error("Disponível apenas online.");
+      try {
+          // Note: This deletes the database record. 
+          // The Auth user (Login credentials) remains until deleted via Firebase Console, 
+          // BUT they won't be able to enter the app because 'authenticateUser' checks the DB record.
+          await remove(ref(db, `${KEYS.USERS}/${uid}`));
+      } catch(e: any) {
+          throw new Error("Erro ao excluir utilizador: " + e.message);
+      }
   },
 
   // --- DATA METHODS ---

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit } from 'lucide-react';
 
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -12,6 +12,9 @@ const UsersManager: React.FC = () => {
     const [inviteRole, setInviteRole] = useState<UserRole>(UserRole.WAREHOUSE);
     const [isInviting, setIsInviting] = useState(false);
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+
+    // Editing State (Map of UID -> Loading State)
+    const [processingUsers, setProcessingUsers] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
         fetchUsers();
@@ -46,16 +49,31 @@ const UsersManager: React.FC = () => {
         }
     };
 
-    const getRoleBadge = (role: UserRole) => {
-        switch (role) {
-            case UserRole.ADMIN:
-                return <span className="bg-purple-100 text-purple-700 text-xs px-2 py-1 rounded-full font-bold">Admin</span>;
-            case UserRole.MANAGEMENT:
-                return <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold">Coordenação</span>;
-            case UserRole.WAREHOUSE:
-                return <span className="bg-amber-100 text-amber-700 text-xs px-2 py-1 rounded-full font-bold">Logística</span>;
-            default:
-                return <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded-full">Visualizador</span>;
+    const handleChangeRole = async (user: User, newRole: string) => {
+        if (!user.uid) return;
+        setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
+        try {
+            await StorageService.updateUserRole(user.uid, newRole as UserRole);
+            await fetchUsers(); // Reload list
+        } catch(err: any) {
+            alert(err.message);
+        } finally {
+            setProcessingUsers(prev => ({ ...prev, [user.uid!]: false }));
+        }
+    };
+
+    const handleDeleteUser = async (user: User) => {
+        if (!user.uid) return;
+        if (!window.confirm(`Tem certeza que deseja EXCLUIR o acesso de ${user.username}? O histórico de login será perdido, mas os registros criados por ele permanecerão.`)) return;
+
+        setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
+        try {
+            await StorageService.deleteUserProfile(user.uid);
+            await fetchUsers(); // Reload list
+        } catch(err: any) {
+            alert(err.message);
+        } finally {
+            setProcessingUsers(prev => ({ ...prev, [user.uid!]: false }));
         }
     };
 
@@ -90,7 +108,7 @@ const UsersManager: React.FC = () => {
                          >
                              <option value={UserRole.WAREHOUSE}>Logística</option>
                              <option value={UserRole.MANAGEMENT}>Coordenação</option>
-                             {/* Admin role usually requires manual admin code, but can be invited too technically */}
+                             <option value={UserRole.ADMIN}>Administrador</option>
                          </select>
                     </div>
                     <button 
@@ -127,26 +145,57 @@ const UsersManager: React.FC = () => {
                                     <th className="p-4">Email</th>
                                     <th className="p-4">Nome Completo</th>
                                     <th className="p-4">Função</th>
+                                    <th className="p-4 text-center">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {users.map((user, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                        <td className="p-4 font-medium text-slate-800 flex items-center gap-2">
-                                            <div className="bg-slate-100 p-1.5 rounded-full">
-                                                <UserIcon className="w-4 h-4 text-slate-500" />
-                                            </div>
-                                            {user.username}
-                                        </td>
-                                        <td className="p-4 font-mono text-xs">{user.email}</td>
-                                        <td className="p-4">
-                                            {user.firstName} {user.lastName}
-                                        </td>
-                                        <td className="p-4">
-                                            {getRoleBadge(user.role)}
-                                        </td>
-                                    </tr>
-                                ))}
+                                {users.map((user, idx) => {
+                                    const isProcessing = user.uid && processingUsers[user.uid];
+                                    
+                                    return (
+                                        <tr key={idx} className="hover:bg-slate-50">
+                                            <td className="p-4 font-medium text-slate-800 flex items-center gap-2">
+                                                <div className="bg-slate-100 p-1.5 rounded-full">
+                                                    <UserIcon className="w-4 h-4 text-slate-500" />
+                                                </div>
+                                                {user.username}
+                                            </td>
+                                            <td className="p-4 font-mono text-xs">{user.email}</td>
+                                            <td className="p-4">
+                                                {user.firstName} {user.lastName}
+                                            </td>
+                                            <td className="p-4">
+                                                <select
+                                                    value={user.role}
+                                                    onChange={(e) => handleChangeRole(user, e.target.value)}
+                                                    disabled={isProcessing}
+                                                    className={`bg-transparent text-xs font-bold px-2 py-1 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none ${
+                                                        user.role === UserRole.ADMIN ? 'text-purple-700 bg-purple-100' :
+                                                        user.role === UserRole.MANAGEMENT ? 'text-blue-700 bg-blue-100' :
+                                                        'text-amber-700 bg-amber-100'
+                                                    }`}
+                                                >
+                                                    <option value={UserRole.WAREHOUSE}>Logística</option>
+                                                    <option value={UserRole.MANAGEMENT}>Coordenação</option>
+                                                    <option value={UserRole.ADMIN}>Admin</option>
+                                                </select>
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                {isProcessing ? (
+                                                    <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => handleDeleteUser(user)}
+                                                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                                                        title="Remover Acesso"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
