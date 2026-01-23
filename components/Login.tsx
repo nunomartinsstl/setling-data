@@ -61,6 +61,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     } catch (err: any) {
         let msg = err.message;
         if (msg.includes('auth/invalid-credential')) msg = "Credenciais incorretas.";
+        else if (msg.includes('auth/invalid-email')) msg = "Formato de email inválido ou nome de utilizador não encontrado.";
         else if (msg.includes('auth/too-many-requests')) msg = "Muitas tentativas falhadas. Tente mais tarde.";
         else if (msg.includes('index')) msg = "Erro de configuração do banco (Index). Avise o Admin.";
         setError(msg || 'Erro ao entrar.');

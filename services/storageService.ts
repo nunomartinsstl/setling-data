@@ -254,10 +254,9 @@ export const StorageService = {
 
   authenticateUser: async (identifier: string, password: string): Promise<User> => {
     // --- OFFLINE/FALLBACK LOGIN ---
-    // If Firebase is down OR config is missing, allow admin/admin login
     if (!isFirebaseActive || identifier === 'admin') {
         if ((identifier === 'admin' && (password === 'admin' || password === 'admin97'))) {
-             if (isFirebaseActive) activateOfflineMode(); // Force offline if they used the backdoor
+             if (isFirebaseActive) activateOfflineMode();
              return {
                  uid: 'offline_admin',
                  username: 'Admin Local',
@@ -272,7 +271,8 @@ export const StorageService = {
 
     let targetEmail = identifier.trim();
 
-    // 1. Resolve Username (Skip if strict rules prevent it)
+    // 1. Resolve Username
+    // Only try to resolve if it is NOT an email
     if (!targetEmail.includes('@')) {
         const usersRef = ref(db, KEYS.USERS);
         let userFound: User | null = null;
@@ -283,11 +283,18 @@ export const StorageService = {
                 userFound = Object.values(snapshot.val())[0] as User;
             }
         } catch (err: any) {
-             // Ignore
+             // In many security configurations, unauthenticated users cannot Query the DB.
+             // This catch prevents the app from crashing, but userFound remains null.
+             console.warn("Username lookup failed (likely permission issue):", err);
         }
+        
         if (userFound && userFound.email) {
             targetEmail = userFound.email;
-        } 
+        } else {
+             // CRITICAL: If we couldn't resolve the username (because it doesn't exist OR permissions blocked it),
+             // we must stop here. Passing a raw username to signInWithEmailAndPassword throws "auth/invalid-email".
+             throw new Error("Nome de utilizador não encontrado ou não permitido. Por favor, entre com o seu Email.");
+        }
     }
 
     // 2. Auth Login
@@ -297,16 +304,16 @@ export const StorageService = {
     } catch (e: any) {
         console.error("Login Auth Error:", e.code, e.message);
         
-        // --- FALLBACK FOR CONFIGURATION ERROR ---
         if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
             activateOfflineMode();
-            // If they are trying to log in and config failed, tell them about the fallback
             throw new Error("Erro Firebase. Tente entrar com: admin / admin (Modo Offline)");
         }
-        // ----------------------------------------
 
         if (e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password') {
              throw new Error("Email ou senha incorretos.");
+        }
+        if (e.code === 'auth/invalid-email') {
+             throw new Error("Formato de email inválido.");
         }
         throw e;
     }
@@ -326,7 +333,6 @@ export const StorageService = {
       if (isFirebaseActive) {
           await signOut(auth);
       }
-      // If offline, nothing to do, app state handles it
   },
 
   getUsers: async (): Promise<User[]> => {
@@ -355,9 +361,6 @@ export const StorageService = {
   deleteUserProfile: async (uid: string) => {
       if (!isFirebaseActive) throw new Error("Disponível apenas online.");
       try {
-          // Note: This deletes the database record. 
-          // The Auth user (Login credentials) remains until deleted via Firebase Console, 
-          // BUT they won't be able to enter the app because 'authenticateUser' checks the DB record.
           await remove(ref(db, `${KEYS.USERS}/${uid}`));
       } catch(e: any) {
           throw new Error("Erro ao excluir utilizador: " + e.message);
