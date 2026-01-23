@@ -831,7 +831,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                     onClick={handleConfirmNew}
                                     className="flex-1 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium"
                                 >
-                                    Não, avançar com criação
+                                    Sim, avançar com criação
                                 </button>
                             </div>
                         </div>

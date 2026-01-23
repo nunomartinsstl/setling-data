@@ -7,10 +7,19 @@ export enum UserRole {
 }
 
 export interface User {
-  username: string;
+  uid?: string; // Firebase Auth ID
+  username: string; // Kept for display (First-Last)
+  email: string;
   role: UserRole;
   firstName?: string;
   lastName?: string;
+}
+
+export interface Invite {
+  email: string;
+  role: UserRole;
+  used: boolean;
+  dateCreated: string;
 }
 
 // Inner item within an order

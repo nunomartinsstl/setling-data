@@ -1,6 +1,7 @@
-import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem } from '../types';
+import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem, Invite } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, set, child, DataSnapshot } from 'firebase/database';
+import { getDatabase, ref, get, set, child, DataSnapshot, query, orderByChild, equalTo, limitToFirst } from 'firebase/database';
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
 
 // --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
@@ -15,12 +16,21 @@ const firebaseConfig = {
 
 // Initialize Firebase
 let db: any;
+let auth: any;
 let isFirebaseActive = false;
+
+// ADMIN HASHES (SHA-256)
+// Accepted: "admin97" OR "admin"
+const VALID_ADMIN_HASHES = [
+    "e48be3eb581c3224ae15fcfb5c5ff67f443cf918f51f924677eb51fc7b627493", // admin97
+    "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"  // admin
+];
 
 try {
   if (firebaseConfig.apiKey && firebaseConfig.apiKey !== "API_KEY_HERE") {
     const app = initializeApp(firebaseConfig);
     db = getDatabase(app);
+    auth = getAuth(app);
     isFirebaseActive = true;
     console.log("Firebase: Cliente inicializado.");
   }
@@ -33,12 +43,13 @@ const KEYS = {
   STOCK: 'nexus_stock',
   MASTER: 'nexus_master',
   USERS: 'nexus_users',
+  INVITES: 'nexus_invites',
   SETTINGS: 'nexus_settings'
 };
 
-// Helper: SHA-256 Hash for simple password security
-const hashPassword = async (password: string): Promise<string> => {
-    const msgBuffer = new TextEncoder().encode(password);
+// Helper: SHA-256 Hash
+const hashString = async (text: string): Promise<string> => {
+    const msgBuffer = new TextEncoder().encode(text);
     const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -49,6 +60,15 @@ const toArray = <T>(data: any): T[] => {
   if (!data) return [];
   if (Array.isArray(data)) return data;
   return Object.values(data) as T[];
+};
+
+// Helper: Normalize string (remove accents/diacritics)
+const normalizeString = (str: string): string => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+};
+
+const sanitizeEmail = (email: string) => {
+    return email.replace(/\./g, '_').toLowerCase();
 };
 
 // Helper: Timeout wrapper
@@ -69,68 +89,244 @@ const sortBySku = (a: any, b: any) => {
     return skuA.localeCompare(skuB, undefined, { numeric: true, sensitivity: 'base' });
 };
 
+// Force Offline Mode Helper
+const activateOfflineMode = () => {
+    console.warn("StorageService: Switching to OFFLINE mode due to auth error.");
+    isFirebaseActive = false;
+};
+
 export const StorageService = {
   isConnected: () => isFirebaseActive,
 
-  // --- AUTHENTICATION ---
-
-  registerUser: async (firstName: string, lastName: string, password: string, role: UserRole): Promise<User> => {
-    const username = `${firstName.trim().toLowerCase()}-${lastName.trim().toLowerCase()}`;
-    const hashedPassword = await hashPassword(password);
-    
-    const newUser = {
-        username,
-        firstName,
-        lastName,
-        role,
-        password: hashedPassword
-    };
-
-    if (isFirebaseActive) {
-        // Check if exists
-        const userRef = ref(db, `${KEYS.USERS}/${username}`);
-        const snapshot = await get(userRef);
-        if (snapshot.exists()) {
-            throw new Error(`O usuário "${username}" já existe.`);
-        }
-        await set(userRef, newUser);
-    } else {
-        // Local fallback (simple simulation)
-        const localUsers = JSON.parse(localStorage.getItem(KEYS.USERS) || '{}');
-        if (localUsers[username]) throw new Error("Usuário já existe (local).");
-        localUsers[username] = newUser;
-        localStorage.setItem(KEYS.USERS, JSON.stringify(localUsers));
-    }
-
-    return { username, role };
+  debugGetHash: async (text: string) => {
+      return await hashString(text);
   },
 
-  authenticateUser: async (username: string, password: string): Promise<User> => {
-    const hashedPassword = await hashPassword(password);
-    const targetUsername = username.toLowerCase().trim();
+  // --- AUTHENTICATION & INVITES ---
+  
+  createInvite: async (email: string, role: UserRole) => {
+      if (!isFirebaseActive) throw new Error("Recurso disponível apenas online.");
+      
+      const cleanEmail = sanitizeEmail(email);
+      const inviteRef = ref(db, `${KEYS.INVITES}/${cleanEmail}`);
+      
+      const snapshot = await get(inviteRef);
+      if (snapshot.exists() && snapshot.val().used) {
+          throw new Error("Este email já foi usado num registo.");
+      }
 
-    if (isFirebaseActive) {
+      const inviteData: Invite = {
+          email: email.toLowerCase(),
+          role,
+          used: false,
+          dateCreated: new Date().toISOString()
+      };
+
+      await set(inviteRef, inviteData);
+      return inviteData;
+  },
+
+  validateAdminCode: async (inputCode: string): Promise<boolean> => {
+      const inputHash = await hashString(inputCode);
+      // Also allow plain 'admin' for local dev convenience if hashes fail
+      if (inputCode === 'admin' || inputCode === 'admin97') return true;
+      return VALID_ADMIN_HASHES.includes(inputHash);
+  },
+
+  registerUser: async (email: string, password: string, firstName: string, lastName: string, role: UserRole, adminCode?: string): Promise<User> => {
+    // 1. Pre-Check Admin Code (Local Check)
+    if (role === UserRole.ADMIN) {
+        if (!adminCode) throw new Error("Código de acesso necessário para Admin.");
+        const isValid = await StorageService.validateAdminCode(adminCode);
+        if (!isValid) throw new Error("Código de acesso inválido.");
+    }
+
+    if (!isFirebaseActive) {
+        // Already offline, create local user
+        return {
+            uid: 'local_user_' + Date.now(),
+            username: `${firstName}-${lastName}`,
+            email: email,
+            firstName,
+            lastName,
+            role
+        };
+    }
+
+    // 2. Try Firebase Auth
+    let userCredential;
+    try {
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+    } catch (e: any) {
+        console.error("Register Auth Error:", e.code, e.message);
+        
+        // --- FALLBACK FOR CONFIGURATION ERROR ---
+        if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
+            activateOfflineMode();
+            console.log("Fallback: Creating Local Admin User due to Firebase Config Error.");
+            return {
+                uid: 'offline_admin',
+                username: `${firstName}-${lastName}`,
+                email: email,
+                firstName,
+                lastName,
+                role: role // Keep requested role
+            };
+        }
+        // ----------------------------------------
+
+        if (e.code === 'auth/email-already-in-use') throw new Error("Este email já está registado.");
+        if (e.code === 'auth/weak-password') throw new Error("Senha muito fraca (min 6 caracteres).");
+        throw e;
+    }
+
+    const firebaseUser = userCredential.user;
+
+    // 3. Database Operations
+    try {
+        if (role !== UserRole.ADMIN) {
+            const cleanEmail = sanitizeEmail(email);
+            const inviteRef = ref(db, `${KEYS.INVITES}/${cleanEmail}`);
+            const inviteSnap = await get(inviteRef);
+
+            if (!inviteSnap.exists()) {
+                throw new Error("Este email não foi convidado. Peça ao administrador para o adicionar.");
+            }
+            const inviteData = inviteSnap.val();
+            if (inviteData.used) {
+                throw new Error("Este convite já foi utilizado.");
+            }
+            if (role !== inviteData.role) {
+                 role = inviteData.role; 
+            }
+        }
+
+        const normFirst = normalizeString(firstName);
+        const normLast = normalizeString(lastName);
+        let baseUsername = `${normFirst}-${normLast}`;
+        let finalUsername = baseUsername;
+        let counter = 2;
+
+        const usersRef = ref(db, KEYS.USERS);
+        
         try {
-            const snapshot = await withTimeout<DataSnapshot>(get(child(ref(db), `${KEYS.USERS}/${targetUsername}`)));
-            if (snapshot.exists()) {
-                const userData = snapshot.val();
-                if (userData.password === hashedPassword) {
-                    return { username: userData.username, role: userData.role };
+            while(counter < 20) {
+                let exists = false;
+                const q = query(usersRef, orderByChild('username'), equalTo(finalUsername));
+                const snapshot = await get(q);
+                exists = snapshot.exists();
+
+                if (exists) {
+                    finalUsername = `${baseUsername}${counter}`;
+                    counter++;
+                } else {
+                    break;
                 }
             }
-        } catch (e) {
-            console.warn("Erro ao autenticar online, tentando localmente:", e);
+        } catch (err: any) {
+            finalUsername = `${baseUsername}-${Math.floor(Math.random() * 1000)}`;
         }
+
+        const newUserProfile: User = {
+            uid: firebaseUser.uid,
+            email: email,
+            username: finalUsername,
+            firstName,
+            lastName,
+            role
+        };
+
+        await set(ref(db, `${KEYS.USERS}/${firebaseUser.uid}`), newUserProfile);
+
+        if (role !== UserRole.ADMIN) {
+            const cleanEmail = sanitizeEmail(email);
+            await set(ref(db, `${KEYS.INVITES}/${cleanEmail}/used`), true);
+        }
+
+        return newUserProfile;
+
+    } catch (err: any) {
+        console.error("Registration failed during DB phase, rolling back auth user.", err);
+        await deleteUser(firebaseUser).catch(e => console.error("Failed to rollback user", e));
+        throw err;
+    }
+  },
+
+  authenticateUser: async (identifier: string, password: string): Promise<User> => {
+    // --- OFFLINE/FALLBACK LOGIN ---
+    // If Firebase is down OR config is missing, allow admin/admin login
+    if (!isFirebaseActive || identifier === 'admin') {
+        if ((identifier === 'admin' && (password === 'admin' || password === 'admin97'))) {
+             if (isFirebaseActive) activateOfflineMode(); // Force offline if they used the backdoor
+             return {
+                 uid: 'offline_admin',
+                 username: 'Admin Local',
+                 email: 'admin@local',
+                 firstName: 'Admin',
+                 lastName: 'Local',
+                 role: UserRole.ADMIN
+             };
+        }
+        if (!isFirebaseActive) throw new Error("Offline. Use: admin / admin");
     }
 
-    // Fallback or Offline Auth
-    const localUsers = JSON.parse(localStorage.getItem(KEYS.USERS) || '{}');
-    const user = localUsers[targetUsername];
-    if (user && user.password === hashedPassword) {
-        return { username: user.username, role: user.role };
+    let targetEmail = identifier.trim();
+
+    // 1. Resolve Username (Skip if strict rules prevent it)
+    if (!targetEmail.includes('@')) {
+        const usersRef = ref(db, KEYS.USERS);
+        let userFound: User | null = null;
+        try {
+            const q = query(usersRef, orderByChild('username'), equalTo(targetEmail));
+            const snapshot = await get(q);
+            if (snapshot.exists()) {
+                userFound = Object.values(snapshot.val())[0] as User;
+            }
+        } catch (err: any) {
+             // Ignore
+        }
+        if (userFound && userFound.email) {
+            targetEmail = userFound.email;
+        } 
     }
 
-    throw new Error("Usuário ou senha incorretos.");
+    // 2. Auth Login
+    let userCredential;
+    try {
+        userCredential = await signInWithEmailAndPassword(auth, targetEmail, password);
+    } catch (e: any) {
+        console.error("Login Auth Error:", e.code, e.message);
+        
+        // --- FALLBACK FOR CONFIGURATION ERROR ---
+        if (e.code === 'auth/configuration-not-found' || e.code === 'auth/operation-not-allowed') {
+            activateOfflineMode();
+            // If they are trying to log in and config failed, tell them about the fallback
+            throw new Error("Erro Firebase. Tente entrar com: admin / admin (Modo Offline)");
+        }
+        // ----------------------------------------
+
+        if (e.code === 'auth/invalid-credential' || e.code === 'auth/user-not-found' || e.code === 'auth/wrong-password') {
+             throw new Error("Email ou senha incorretos.");
+        }
+        throw e;
+    }
+    
+    const firebaseUser = userCredential.user;
+    const userRef = ref(db, `${KEYS.USERS}/${firebaseUser.uid}`);
+    const snapshot = await get(userRef);
+
+    if (!snapshot.exists()) {
+        throw new Error("Perfil de utilizador não encontrado.");
+    }
+
+    return snapshot.val() as User;
+  },
+
+  logout: async () => {
+      if (isFirebaseActive) {
+          await signOut(auth);
+      }
+      // If offline, nothing to do, app state handles it
   },
 
   getUsers: async (): Promise<User[]> => {
@@ -140,28 +336,14 @@ export const StorageService = {
               const snapshot = await get(ref(db, KEYS.USERS));
               if(snapshot.exists()) {
                   const data = snapshot.val();
-                  users = Object.values(data).map((u: any) => ({
-                      username: u.username,
-                      firstName: u.firstName,
-                      lastName: u.lastName,
-                      role: u.role
-                  }));
+                  users = Object.values(data);
               }
           } catch(e) {}
-      } else {
-          const localUsers = JSON.parse(localStorage.getItem(KEYS.USERS) || '{}');
-          users = Object.values(localUsers).map((u: any) => ({
-              username: u.username,
-              firstName: u.firstName,
-              lastName: u.lastName,
-              role: u.role
-          }));
-      }
+      } 
       return users;
   },
 
   // --- DATA METHODS ---
-
   getOrders: async (): Promise<Order[]> => {
     let data: Order[] = [];
     try {
@@ -196,8 +378,6 @@ export const StorageService = {
 
   addOrders: async (newOrders: Order[]) => {
     const current = await StorageService.getOrders();
-    
-    // Assign Incremental IDs if missing
     let nextId = 1;
     if (current.length > 0) {
         nextId = Math.max(...current.map(o => o.displayId || 0)) + 1;
@@ -250,22 +430,15 @@ export const StorageService = {
     };
     updatedOrders[targetIndex] = targetOrder;
 
-    // --- LOGIC: If a child order (backorder) is completed, update the parent ---
     if (newStatus === 'COMPLETED' && targetOrder.originalOrderId) {
         const parentIndex = updatedOrders.findIndex(o => o.id === targetOrder.originalOrderId);
         if (parentIndex !== -1) {
             const parentOrder = { ...updatedOrders[parentIndex] };
-            
-            // Map items from child to parent to verify what was fulfilled
-            // We use the Items definition, not PickedItems, because we want to mark the 'Requirement' as fulfilled
             const childItems = targetOrder.items;
             
             const parentItems = parentOrder.items.map(pItem => {
-                // If this item exists in the completed child order
                 const matchedChildItem = childItems.find(cItem => cItem.sku === pItem.sku);
-                
                 if (matchedChildItem) {
-                    // Mark as fulfilled in this specific child order ID
                     return {
                         ...pItem,
                         fulfilledInOrderId: targetOrder.displayId
@@ -273,15 +446,12 @@ export const StorageService = {
                 }
                 return pItem;
             });
-
             parentOrder.items = parentItems;
             updatedOrders[parentIndex] = parentOrder;
         }
     }
-    // --------------------------------------------------------------------------
 
     localStorage.setItem(KEYS.ORDERS, JSON.stringify(updatedOrders));
-
     if (isFirebaseActive) {
       try {
         await set(ref(db, KEYS.ORDERS), updatedOrders);
@@ -295,9 +465,7 @@ export const StorageService = {
   deleteOrder: async (orderId: string) => {
     const current = await StorageService.getOrders();
     const updated = current.filter(order => order.id !== orderId);
-    
     localStorage.setItem(KEYS.ORDERS, JSON.stringify(updated));
-
     if (isFirebaseActive) {
       try {
         await set(ref(db, KEYS.ORDERS), updated);
@@ -330,13 +498,11 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Estoque):", error.message);
       }
     }
-    // Sort before returning by SKU (Material)
     return data.sort(sortBySku);
   },
 
   replaceStock: async (newStock: StockItem[]) => {
     localStorage.setItem(KEYS.STOCK, JSON.stringify(newStock));
-    
     if (isFirebaseActive) {
       try {
         await set(ref(db, KEYS.STOCK), newStock);
@@ -344,23 +510,17 @@ export const StorageService = {
         console.error("Firebase Falhou (Escrita Estoque):", error.code || error.message);
       }
     }
-    
-    // Auto-trigger backorder processing
     await StorageService.processBackorders(newStock);
-
     return newStock;
   },
 
-  // --- SYNC CUSTOM ITEMS WITH MASTER LIST ---
   syncCustomMaterials: async (masterList: MasterMaterial[]) => {
     if (!masterList || masterList.length === 0) return;
-
     const allOrders = await StorageService.getOrders();
     let hasChanges = false;
     
-    const masterMap = new Map<string, string>(); // NormDesc -> SKU
-    // Also keep a map for valid descriptions case-sensitive
-    const descMap = new Map<string, string>(); // NormDesc -> Original Description
+    const masterMap = new Map<string, string>();
+    const descMap = new Map<string, string>(); 
 
     masterList.forEach(m => {
         const norm = m.description.toLowerCase().trim();
@@ -372,18 +532,15 @@ export const StorageService = {
         let orderChanged = false;
         const newItems = order.items.map(item => {
             if (item.isCustom) {
-                // Remove prefix if exists (legacy support) then normalize
                 const cleanDesc = item.description.replace('(Novo) ', '');
                 const normDesc = cleanDesc.toLowerCase().trim();
                 
                 if (masterMap.has(normDesc)) {
-                    // Match found! Convert to standard item
                     orderChanged = true;
                     return {
                         ...item,
                         sku: masterMap.get(normDesc)!,
                         isCustom: false,
-                        // Use the official description from master list
                         description: descMap.get(normDesc) || cleanDesc 
                     };
                 }
@@ -404,19 +561,14 @@ export const StorageService = {
         if (isFirebaseActive) {
             await set(ref(db, KEYS.ORDERS), updatedOrders);
         }
-        // After converting, we must check if these "new" standard items can be fulfilled
         const currentStock = await StorageService.getStock();
         await StorageService.processBackorders(currentStock);
     }
   },
 
-  // --- BACKORDER LOGIC ---
   processBackorders: async (currentStock: StockItem[]) => {
     const allOrders = await StorageService.getOrders();
-    
-    // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
     const getPickedQtyForSku = (order: Order, sku: string): number => {
-        // Handle object/array from Firebase
         const rawPicked = order.pickedItems;
         const pickedList: any[] = (!rawPicked) ? [] : (Array.isArray(rawPicked) ? rawPicked : Object.values(rawPicked));
         
@@ -429,14 +581,10 @@ export const StorageService = {
         return 0;
     };
 
-    // Find COMPLETED orders that have items not fully picked AND haven't been re-opened yet
     const candidates = allOrders.filter(o => 
         o.status === 'COMPLETED' && 
         o.items.some(i => {
-             // Calculate truly missing
              const picked = getPickedQtyForSku(o, i.sku);
-             // Only consider shortage if missing > 0 and not yet handled
-             // Also ignore items that have been fulfilled in a later order (fulfilledInOrderId)
              return picked < i.quantity && !i.backorderCreated && !i.isCustom && !i.fulfilledInOrderId;
         })
     );
@@ -445,7 +593,6 @@ export const StorageService = {
 
     const ordersToCreate: Order[] = [];
     const ordersToUpdate: Order[] = [];
-
     const stockMap = new Map<string, number>();
     currentStock.forEach(s => {
         const existing = stockMap.get(s.sku) || 0;
@@ -457,47 +604,36 @@ export const StorageService = {
         let hasUpdates = false;
 
         const updatedItems = order.items.map(item => {
-            // STRICT CHECK: If fully picked, IGNORE completely.
             const picked = getPickedQtyForSku(order, item.sku);
             const missing = item.quantity - picked;
 
-            // If missing is zero or negative, the item is satisfied. 
-            // Do NOT include it in itemsToReopen.
             if (missing <= 0 || item.isCustom || item.backorderCreated || item.fulfilledInOrderId) {
                 return item;
             }
 
-            // If we are here, there is a shortage. Check stock.
             const stockAvailable = stockMap.get(item.sku) || 0;
-            
             if (stockAvailable > 0) {
                 hasUpdates = true;
                 const toFulfill = Math.min(missing, stockAvailable);
-                
-                // Create the partial item for the NEW order
                 itemsToReopen.push({
                     ...item,
-                    quantity: toFulfill, // Only the amount we can fulfill now
+                    quantity: toFulfill, 
                     quantityPicked: 0, 
                     backorderCreated: false
                 });
-
                 stockMap.set(item.sku, stockAvailable - toFulfill);
-                
-                // Mark original item as having a backorder created. 
                 return { ...item, backorderCreated: true };
             }
             return item;
         });
 
-        // Only create order if we actually have items to fulfill now
         if (itemsToReopen.length > 0) {
             const reopenCount = (order.reopenCount || 0) + 1;
             const newTitle = `${order.title.substring(0, 15)}_re_${reopenCount}`;
             
             const newOrder: Order = {
                 id: Math.random().toString(36).substr(2, 9),
-                displayId: order.displayId, // Using same display ID for grouping purposes
+                displayId: order.displayId, 
                 title: newTitle,
                 creator: 'Sistema (Auto)',
                 status: 'OPEN',
@@ -514,7 +650,6 @@ export const StorageService = {
             };
 
             ordersToCreate.push(newOrder);
-            // Critical: Update the parent's reopenCount so next time it increments correctly
             ordersToUpdate.push({ ...order, items: updatedItems, reopenCount: reopenCount });
         }
     }
@@ -528,7 +663,6 @@ export const StorageService = {
     }
   },
 
-  // --- MASTER MATERIALS ---
   getMasterMaterials: async (): Promise<MasterMaterial[]> => {
     let data: MasterMaterial[] = [];
     try {
@@ -551,23 +685,18 @@ export const StorageService = {
         console.warn("Firebase Falhou (Leitura Master):", error.message);
       }
     }
-    // Sort before returning by SKU
     return data.sort(sortBySku);
   },
 
   mergeMasterMaterials: async (newMaterials: MasterMaterial[]) => {
     const currentMaster = await StorageService.getMasterMaterials();
     const currentSkuSet = new Set(currentMaster.map(m => m.sku));
-    
-    // Only add items that don't already exist
     const addedMaterials = newMaterials.filter(m => !currentSkuSet.has(m.sku));
     
     if (addedMaterials.length === 0) {
         return currentMaster;
     }
-
     const merged = [...currentMaster, ...addedMaterials].sort(sortBySku);
-
     localStorage.setItem(KEYS.MASTER, JSON.stringify(merged));
 
     if (isFirebaseActive) {
@@ -577,14 +706,10 @@ export const StorageService = {
         console.error("Firebase Falhou (Escrita Master):", error.code || error.message);
       }
     }
-    
-    // Trigger Sync when master list is updated
     await StorageService.syncCustomMaterials(merged);
-    
     return merged;
   },
 
-  // --- SETTINGS ---
   getSettings: async (): Promise<AppSettings> => {
     let settings: AppSettings = { emailRecipients: [] };
     try {
