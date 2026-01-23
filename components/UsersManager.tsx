@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
+import { User, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building } from 'lucide-react';
 
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
+    const [companies, setCompanies] = useState<Company[]>([]);
     const [loading, setLoading] = useState(true);
     
     // Invite State
@@ -17,15 +18,19 @@ const UsersManager: React.FC = () => {
     const [processingUsers, setProcessingUsers] = useState<Record<string, boolean>>({});
 
     useEffect(() => {
-        fetchUsers();
+        fetchData();
     }, []);
 
-    const fetchUsers = async () => {
+    const fetchData = async () => {
         try {
-            const data = await StorageService.getUsers();
-            setUsers(data);
+            const [usersData, settings] = await Promise.all([
+                StorageService.getUsers(),
+                StorageService.getSettings()
+            ]);
+            setUsers(usersData);
+            setCompanies(settings.companies || []);
         } catch (e) {
-            console.error("Failed to load users", e);
+            console.error("Failed to load users or settings", e);
         } finally {
             setLoading(false);
         }
@@ -54,7 +59,7 @@ const UsersManager: React.FC = () => {
         setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
         try {
             await StorageService.updateUserRole(user.uid, newRole as UserRole);
-            await fetchUsers(); // Reload list
+            await fetchData(); // Reload list
         } catch(err: any) {
             alert(err.message);
         } finally {
@@ -69,12 +74,18 @@ const UsersManager: React.FC = () => {
         setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
         try {
             await StorageService.deleteUserProfile(user.uid);
-            await fetchUsers(); // Reload list
+            await fetchData(); // Reload list
         } catch(err: any) {
             alert(err.message);
         } finally {
             setProcessingUsers(prev => ({ ...prev, [user.uid!]: false }));
         }
+    };
+
+    const getCompanyName = (id?: string) => {
+        if (!id) return '-';
+        const company = companies.find(c => c.id === id);
+        return company ? company.name : 'Desconhecida';
     };
 
     return (
@@ -143,6 +154,7 @@ const UsersManager: React.FC = () => {
                                 <tr>
                                     <th className="p-4">Utilizador</th>
                                     <th className="p-4">Email</th>
+                                    <th className="p-4">Empresa</th>
                                     <th className="p-4">Nome Completo</th>
                                     <th className="p-4">Função</th>
                                     <th className="p-4 text-center">Ações</th>
@@ -161,6 +173,16 @@ const UsersManager: React.FC = () => {
                                                 {user.username}
                                             </td>
                                             <td className="p-4 font-mono text-xs">{user.email}</td>
+                                            <td className="p-4 text-xs font-semibold text-slate-500">
+                                                {user.role === UserRole.ADMIN ? (
+                                                    <span className="text-purple-600 italic">Global</span>
+                                                ) : (
+                                                    <div className="flex items-center gap-1">
+                                                        <Building className="w-3 h-3"/>
+                                                        {getCompanyName(user.companyId)}
+                                                    </div>
+                                                )}
+                                            </td>
                                             <td className="p-4">
                                                 {user.firstName} {user.lastName}
                                             </td>

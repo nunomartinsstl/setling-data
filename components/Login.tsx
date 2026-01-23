@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key } from 'lucide-react';
+import { User, UserRole, Company } from '../types';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
@@ -21,17 +21,32 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [regPassword, setRegPassword] = useState('');
   const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
   const [adminCode, setAdminCode] = useState('');
+  const [companyId, setCompanyId] = useState('');
+
+  // Data
+  const [companies, setCompanies] = useState<Company[]>([]);
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [touched, setTouched] = useState(false); // Validation trigger
   
-  // Persistence logic
+  // Persistence logic & Fetch Companies
   useEffect(() => {
     const savedId = localStorage.getItem('last_login_identifier');
     if (savedId) {
         setLoginIdentifier(savedId);
     }
+    
+    // Fetch companies for registration form
+    const loadCompanies = async () => {
+        try {
+            const settings = await StorageService.getSettings();
+            setCompanies(settings.companies || []);
+        } catch (e) {
+            console.error("Failed to load companies", e);
+        }
+    };
+    loadCompanies();
   }, []);
 
   // Developer Helper: Log Hash when typing admin code
@@ -85,16 +100,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         return;
     }
 
-    if (role === UserRole.ADMIN && !adminCode) {
-        setError("Administradores precisam do Código de Acesso Mestre.");
-        return;
+    if (role === UserRole.ADMIN) {
+        if (!adminCode) {
+            setError("Administradores precisam do Código de Acesso Mestre.");
+            return;
+        }
+    } else {
+        // Non-admin roles must select a company
+        if (!companyId) {
+            setError("Selecione a sua empresa.");
+            return;
+        }
     }
 
     setIsLoading(true);
 
     try {
         // Automatically handles incremental usernames inside service
-        const user = await StorageService.registerUser(email, regPassword, firstName, lastName, role, adminCode);
+        const user = await StorageService.registerUser(email, regPassword, firstName, lastName, role, adminCode, companyId);
         localStorage.setItem('last_login_identifier', user.username); // Store username for next login convenience
         onLogin(user);
     } catch (err: any) {
@@ -201,6 +224,31 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         </label>
                     </div>
                 </div>
+
+                {role !== UserRole.ADMIN && (
+                    <div className="animate-fade-in">
+                        <label className={labelClass(companyId)}>Empresa*</label>
+                        <div className="relative">
+                            <Building className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+                            <select
+                                value={companyId}
+                                onChange={(e) => setCompanyId(e.target.value)}
+                                className={`pl-9 ${inputClass(companyId)} appearance-none bg-white`}
+                            >
+                                <option value="">Selecione sua empresa</option>
+                                {companies.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700">
+                                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                            </div>
+                        </div>
+                        {companies.length === 0 && (
+                            <p className="text-[10px] text-red-500 mt-1">Nenhuma empresa cadastrada. Contacte o administrador.</p>
+                        )}
+                    </div>
+                )}
 
                 <div>
                     <label className={labelClass(regPassword)}>Senha Pessoal (min 6 chars)</label>

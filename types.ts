@@ -6,6 +6,11 @@ export enum UserRole {
   VIEWER = 'VIEWER'
 }
 
+export interface Company {
+  id: string;
+  name: string;
+}
+
 export interface User {
   uid?: string; // Firebase Auth ID
   username: string; // Kept for display (First-Last)
@@ -13,6 +18,7 @@ export interface User {
   role: UserRole;
   firstName?: string;
   lastName?: string;
+  companyId?: string; // Optional for Admins, required for others
 }
 
 export interface Invite {
@@ -87,6 +93,7 @@ export interface AppSettings {
   // Legacy support optional
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
+  companies?: Company[];
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS';

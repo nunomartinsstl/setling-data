@@ -133,12 +133,14 @@ export const StorageService = {
       return VALID_ADMIN_HASHES.includes(inputHash);
   },
 
-  registerUser: async (email: string, password: string, firstName: string, lastName: string, role: UserRole, adminCode?: string): Promise<User> => {
+  registerUser: async (email: string, password: string, firstName: string, lastName: string, role: UserRole, adminCode?: string, companyId?: string): Promise<User> => {
     // 1. Pre-Check Admin Code (Local Check)
     if (role === UserRole.ADMIN) {
         if (!adminCode) throw new Error("Código de acesso necessário para Admin.");
         const isValid = await StorageService.validateAdminCode(adminCode);
         if (!isValid) throw new Error("Código de acesso inválido.");
+    } else {
+        if (!companyId) throw new Error("É obrigatório selecionar uma empresa.");
     }
 
     if (!isFirebaseActive) {
@@ -149,7 +151,8 @@ export const StorageService = {
             email: email,
             firstName,
             lastName,
-            role
+            role,
+            companyId: role !== UserRole.ADMIN ? companyId : undefined
         };
     }
 
@@ -233,7 +236,8 @@ export const StorageService = {
             username: finalUsername,
             firstName,
             lastName,
-            role
+            role,
+            companyId: role !== UserRole.ADMIN ? companyId : undefined
         };
 
         await set(ref(db, `${KEYS.USERS}/${firebaseUser.uid}`), newUserProfile);
@@ -283,16 +287,12 @@ export const StorageService = {
                 userFound = Object.values(snapshot.val())[0] as User;
             }
         } catch (err: any) {
-             // In many security configurations, unauthenticated users cannot Query the DB.
-             // This catch prevents the app from crashing, but userFound remains null.
              console.warn("Username lookup failed (likely permission issue):", err);
         }
         
         if (userFound && userFound.email) {
             targetEmail = userFound.email;
         } else {
-             // CRITICAL: If we couldn't resolve the username (because it doesn't exist OR permissions blocked it),
-             // we must stop here. Passing a raw username to signInWithEmailAndPassword throws "auth/invalid-email".
              throw new Error("Nome de utilizador não encontrado ou não permitido. Por favor, entre com o seu Email.");
         }
     }
@@ -735,7 +735,7 @@ export const StorageService = {
   },
 
   getSettings: async (): Promise<AppSettings> => {
-    let settings: AppSettings = { emailRecipients: [] };
+    let settings: AppSettings = { emailRecipients: [], companies: [] };
     try {
         const localData = localStorage.getItem(KEYS.SETTINGS);
         if (localData) settings = JSON.parse(localData);
@@ -751,6 +751,7 @@ export const StorageService = {
         } catch(e) {}
     }
     if(!settings.emailRecipients) settings.emailRecipients = [];
+    if(!settings.companies) settings.companies = [];
     return settings;
   },
 
