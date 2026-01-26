@@ -29,6 +29,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   // Data
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [existingUsernames, setExistingUsernames] = useState<Set<string>>(new Set());
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +57,24 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     loadCompanies();
   }, []);
 
+  // Fetch usernames when entering registration mode to check for collisions
+  useEffect(() => {
+    if (isRegistering) {
+        const loadUsernames = async () => {
+            try {
+                const users = await StorageService.getUsers();
+                if (users && users.length > 0) {
+                    const names = new Set(users.map(u => u.username.toLowerCase()));
+                    setExistingUsernames(names);
+                }
+            } catch (e) {
+                console.warn("Could not load usernames for preview (likely permission issue)", e);
+            }
+        };
+        loadUsernames();
+    }
+  }, [isRegistering]);
+
   // Developer Helper: Log Hash when typing admin code
   useEffect(() => {
     if (adminCode.length > 3) {
@@ -71,7 +90,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     if (!firstName && !lastName) return '';
     const first = norm(firstName);
     const last = norm(lastName);
-    return `${first}-${last}`;
+    const base = `${first}-${last}`;
+
+    // Collision detection
+    if (existingUsernames.has(base)) {
+        let counter = 2;
+        while (existingUsernames.has(`${base}${counter}`) && counter < 50) {
+            counter++;
+        }
+        return `${base}${counter}`;
+    }
+
+    return base;
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -268,7 +298,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                         <span className="font-mono text-sm font-semibold text-slate-700">
                             {getPreviewUsername() || '...'}
                         </span>
-                        {getPreviewUsername() && <span className="text-[10px] text-slate-400 ml-auto">(Pode conter números se repetido)</span>}
+                        {getPreviewUsername() && (
+                            existingUsernames.has(getPreviewUsername().replace(/\d+$/, '')) && /[0-9]$/.test(getPreviewUsername()) ? (
+                                <span className="text-[10px] text-amber-500 ml-auto flex items-center gap-1 font-medium">
+                                    <AlertCircle className="w-3 h-3"/> Nome ajustado (repetido)
+                                </span>
+                            ) : null
+                        )}
                     </div>
                 </div>
 
