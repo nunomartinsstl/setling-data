@@ -1,6 +1,6 @@
 import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem, Invite } from '../types';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, set, child, DataSnapshot, query, orderByChild, equalTo, limitToFirst, remove, update } from 'firebase/database';
+import { getDatabase, ref, get, set, child, DataSnapshot, remove, update } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
 
 // --- CONFIGURAÇÃO DO FIREBASE ---
@@ -19,7 +19,7 @@ let db: any;
 let auth: any;
 let isFirebaseActive = false;
 
-// ADMIN HASHES (SHA-256)
+// ADMIN HASHES (SHA-256) - FALLBACK ONLY
 // Accepted: "admin97" OR "admin"
 const VALID_ADMIN_HASHES = [
     "e48be3eb581c3224ae15fcfb5c5ff67f443cf918f51f924677eb51fc7b627493", // admin97
@@ -112,11 +112,17 @@ export const StorageService = {
       const inviteRef = ref(db, `${KEYS.INVITES}/${cleanEmail}`);
       
       // Check if user exists in DB
+      // FIX: Changed from orderByChild query to client-side filter to avoid Index errors
       const usersRef = ref(db, KEYS.USERS);
-      const q = query(usersRef, orderByChild('email'), equalTo(email));
-      const userSnap = await get(q);
-
+      const userSnap = await get(usersRef);
+      let emailExists = false;
+      
       if (userSnap.exists()) {
+          const allUsers = Object.values(userSnap.val()) as User[];
+          emailExists = allUsers.some(u => u.email.trim().toLowerCase() === email.trim().toLowerCase());
+      }
+
+      if (emailExists) {
           throw new Error("Este email já está associado a um utilizador ativo.");
       }
 
@@ -133,8 +139,19 @@ export const StorageService = {
   },
 
   validateAdminCode: async (inputCode: string): Promise<boolean> => {
+      // 1. Check DB Custom Code first
+      try {
+          const settings = await StorageService.getSettings();
+          if (settings.adminAccessCode && settings.adminAccessCode.trim() !== '') {
+              // Compare directly
+              return settings.adminAccessCode === inputCode;
+          }
+      } catch (e) {
+          console.warn("Could not fetch settings for admin validation, using fallback.");
+      }
+
+      // 2. Fallback to hardcoded hashes (Initialization or Recovery)
       const inputHash = await hashString(inputCode);
-      // Also allow plain 'admin' for local dev convenience if hashes fail
       if (inputCode === 'admin' || inputCode === 'admin97') return true;
       return VALID_ADMIN_HASHES.includes(inputHash);
   },
@@ -234,9 +251,6 @@ export const StorageService = {
             // If reusing auth, we assume the invite check was done during invite creation (createInvite resets used status)
             // But we should double check:
             if (inviteData.used && !reusedAuth) { 
-                 // If reusing auth, we permit used invite IF we just verified the DB profile was missing?
-                 // Actually, createInvite sets used=false. So if it's true, it might be stolen?
-                 // Let's enforce used=false unless we handle specific logic.
                  throw new Error("Este convite já foi utilizado.");
             }
             
@@ -254,13 +268,16 @@ export const StorageService = {
         const usersRef = ref(db, KEYS.USERS);
         
         try {
-            while(counter < 20) {
-                let exists = false;
-                const q = query(usersRef, orderByChild('username'), equalTo(finalUsername));
-                const snapshot = await get(q);
-                exists = snapshot.exists();
+            // FIX: Changed from orderByChild query to client-side filtering
+            const allUsersSnap = await get(usersRef);
+            const takenUsernames = new Set<string>();
+            if (allUsersSnap.exists()) {
+                 const allUsers = Object.values(allUsersSnap.val()) as User[];
+                 allUsers.forEach(u => takenUsernames.add(u.username.toLowerCase()));
+            }
 
-                if (exists) {
+            while(counter < 20) {
+                if (takenUsernames.has(finalUsername.toLowerCase())) {
                     finalUsername = `${baseUsername}${counter}`;
                     counter++;
                 } else {
@@ -271,14 +288,16 @@ export const StorageService = {
             finalUsername = `${baseUsername}-${Math.floor(Math.random() * 1000)}`;
         }
 
-        const newUserProfile: User = {
+        // FIX: Firebase set() fails if property is undefined. Must use null or omit.
+        const newUserProfile: any = {
             uid: firebaseUser.uid,
             email: email,
             username: finalUsername,
             firstName,
             lastName,
             role,
-            companyId: role !== UserRole.ADMIN ? companyId : undefined
+            // Ensure companyId is null if not set, not undefined
+            companyId: (role !== UserRole.ADMIN && companyId) ? companyId : null
         };
 
         await set(ref(db, `${KEYS.USERS}/${firebaseUser.uid}`), newUserProfile);
@@ -288,7 +307,7 @@ export const StorageService = {
             await set(ref(db, `${KEYS.INVITES}/${cleanEmail}/used`), true);
         }
 
-        return newUserProfile;
+        return newUserProfile as User;
 
     } catch (err: any) {
         console.error("Registration failed during DB phase.", err);
@@ -325,10 +344,11 @@ export const StorageService = {
         const usersRef = ref(db, KEYS.USERS);
         let userFound: User | null = null;
         try {
-            const q = query(usersRef, orderByChild('username'), equalTo(targetEmail));
-            const snapshot = await get(q);
+            // FIX: Changed from orderByChild query to client-side filtering
+            const snapshot = await get(usersRef);
             if (snapshot.exists()) {
-                userFound = Object.values(snapshot.val())[0] as User;
+                const allUsers = Object.values(snapshot.val()) as User[];
+                userFound = allUsers.find(u => u.username === targetEmail) || null;
             }
         } catch (err: any) {
              console.warn("Username lookup failed (likely permission issue):", err);
@@ -828,7 +848,13 @@ export const StorageService = {
         } catch(e) {}
     }
     if(!settings.emailRecipients) settings.emailRecipients = [];
-    if(!settings.companies) settings.companies = [];
+    if(!settings.companies || settings.companies.length === 0) {
+        // Seed default companies
+        settings.companies = [
+            { id: '1', name: 'Setling AVAC' },
+            { id: '2', name: 'Setling Hotelaria' }
+        ];
+    }
     return settings;
   },
 

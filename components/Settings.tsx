@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from '../services/storageService';
 import { EmailRecipient, Company } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building } from 'lucide-react';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck } from 'lucide-react';
 
 const Settings: React.FC = () => {
   const [recipients, setRecipients] = useState<EmailRecipient[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [newCompany, setNewCompany] = useState('');
+  const [adminAccessCode, setAdminAccessCode] = useState('');
   
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -24,6 +25,7 @@ const Settings: React.FC = () => {
         setRecipients(settings.emailRecipients || []);
     }
     setCompanies(settings.companies || []);
+    setAdminAccessCode(settings.adminAccessCode || '');
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -33,7 +35,8 @@ const Settings: React.FC = () => {
       await StorageService.saveSettings({ 
           emailRecipients: recipients,
           notificationEmail: recipients.length > 0 ? recipients[0].email : '', // Legacy fallback
-          companies: companies
+          companies: companies,
+          adminAccessCode: adminAccessCode // Save the new admin code
       });
       setMessage('Configurações salvas com sucesso.');
       setTimeout(() => setMessage(''), 3000);
@@ -76,6 +79,30 @@ const Settings: React.FC = () => {
       <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
         Configurações do Sistema
       </h2>
+
+      {/* ADMIN CODE */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-800">
+            <ShieldCheck className="w-5 h-5 text-purple-600"/> Segurança Admin
+        </h3>
+        <p className="text-sm text-slate-500 mb-4">
+            Defina o código necessário para criar novas contas de Administrador.
+        </p>
+        
+        <div>
+            <label className="block text-xs font-semibold text-slate-600 mb-1">Código de Acesso Mestre</label>
+            <input 
+                type="text" 
+                value={adminAccessCode}
+                onChange={(e) => setAdminAccessCode(e.target.value)}
+                placeholder="Ex: SenhaForte123 (Deixe em branco para usar o padrão)"
+                className="w-full p-2 border border-purple-200 rounded-md bg-purple-50 text-purple-900 focus:ring-2 focus:ring-purple-500 outline-none font-mono"
+            />
+            <p className="text-[10px] text-slate-400 mt-1">
+                Se deixar em branco, o sistema usará o código de recuperação padrão.
+            </p>
+        </div>
+      </div>
 
       {/* EMAIL SETTINGS */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">

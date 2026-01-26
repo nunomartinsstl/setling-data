@@ -94,6 +94,7 @@ export interface AppSettings {
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
   companies?: Company[];
+  adminAccessCode?: string; // Dynamic admin password
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS';

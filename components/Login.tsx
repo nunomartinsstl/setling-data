@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
@@ -13,12 +13,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   // Login State
   const [loginIdentifier, setLoginIdentifier] = useState(''); // Email OR Username
   const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   
   // Register State
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [regPassword, setRegPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+
   const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
   const [adminCode, setAdminCode] = useState('');
   const [companyId, setCompanyId] = useState('');
@@ -30,6 +34,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [touched, setTouched] = useState(false); // Validation trigger
   
+  // New State for Success Screen
+  const [createdUser, setCreatedUser] = useState<User | null>(null);
+
   // Persistence logic & Fetch Companies
   useEffect(() => {
     const savedId = localStorage.getItem('last_login_identifier');
@@ -57,6 +64,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         });
     }
   }, [adminCode]);
+
+  // Helper to preview username
+  const getPreviewUsername = () => {
+    const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
+    if (!firstName && !lastName) return '';
+    const first = norm(firstName);
+    const last = norm(lastName);
+    return `${first}-${last}`;
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -90,13 +106,18 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setTouched(true);
     setError('');
     
-    if (!email || !firstName || !lastName || !regPassword) {
+    if (!email || !firstName || !lastName || !regPassword || !confirmPassword) {
         setError("Preencha os campos obrigatórios.");
         return;
     }
 
     if (regPassword.length < 6) {
         setError("A senha deve ter pelo menos 6 caracteres.");
+        return;
+    }
+
+    if (regPassword !== confirmPassword) {
+        setError("As senhas não coincidem.");
         return;
     }
 
@@ -119,7 +140,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         // Automatically handles incremental usernames inside service
         const user = await StorageService.registerUser(email, regPassword, firstName, lastName, role, adminCode, companyId);
         localStorage.setItem('last_login_identifier', user.username); // Store username for next login convenience
-        onLogin(user);
+        
+        // SHOW SUCCESS SCREEN INSTEAD OF DIRECT LOGIN
+        setCreatedUser(user);
+
     } catch (err: any) {
         let msg = err.message;
         if (msg.includes('auth/email-already-in-use')) msg = "Este email já está registado.";
@@ -133,6 +157,36 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   // Helper for input validation classes
   const inputClass = (value: string) => `w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm transition-colors ${touched && !value ? 'border-red-400 bg-red-50 focus:ring-red-200' : 'border-slate-300 focus:ring-brand-500'}`;
   const labelClass = (value: string) => `block text-xs font-semibold mb-1 ${touched && !value ? 'text-red-500' : 'text-slate-600'}`;
+
+  // RENDER SUCCESS SCREEN
+  if (createdUser) {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
+            <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-200 text-center animate-fade-in">
+                <div className="flex justify-center mb-6">
+                    <div className="bg-green-100 p-4 rounded-full">
+                        <CheckCircle className="w-12 h-12 text-green-600" />
+                    </div>
+                </div>
+                <h2 className="text-2xl font-bold text-slate-800 mb-2">Conta Criada!</h2>
+                <p className="text-slate-500 mb-6">Seu registo foi realizado com sucesso.</p>
+                
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6">
+                    <p className="text-xs text-slate-500 uppercase font-bold mb-1">Seu Utilizador de Acesso</p>
+                    <p className="text-2xl font-mono font-bold text-brand-600 tracking-wide">{createdUser.username}</p>
+                    <p className="text-xs text-slate-400 mt-2">Use este nome ou seu email para entrar.</p>
+                </div>
+
+                <button
+                    onClick={() => onLogin(createdUser)}
+                    className="w-full bg-brand-600 text-white py-3 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                >
+                    <LogIn className="w-4 h-4" /> Aceder à Plataforma
+                </button>
+            </div>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
@@ -204,6 +258,20 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                     </div>
                 </div>
 
+                {/* USERNAME PREVIEW */}
+                <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                    <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
+                        Utilizador Gerado (Automático)
+                    </label>
+                    <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-slate-400" />
+                        <span className="font-mono text-sm font-semibold text-slate-700">
+                            {getPreviewUsername() || '...'}
+                        </span>
+                        {getPreviewUsername() && <span className="text-[10px] text-slate-400 ml-auto">(Pode conter números se repetido)</span>}
+                    </div>
+                </div>
+
                 <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">Função</label>
                     <div className="grid grid-cols-3 gap-2">
@@ -252,13 +320,48 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 <div>
                     <label className={labelClass(regPassword)}>Senha Pessoal (min 6 chars)</label>
-                    <input
-                        type="password"
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        className={inputClass(regPassword)}
-                        placeholder="Crie sua senha"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showRegPassword ? "text" : "password"}
+                            value={regPassword}
+                            onChange={(e) => setRegPassword(e.target.value)}
+                            className={`${inputClass(regPassword)} pr-10`}
+                            placeholder="Crie sua senha"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowRegPassword(!showRegPassword)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
+                            tabIndex={-1}
+                        >
+                            {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <label className={labelClass(confirmPassword)}>Confirmar Senha</label>
+                    <div className="relative">
+                        <input
+                            type={showRegPassword ? "text" : "password"}
+                            value={confirmPassword}
+                            onChange={(e) => setConfirmPassword(e.target.value)}
+                            className={`${inputClass(confirmPassword)} pr-10`}
+                            placeholder="Repita sua senha"
+                        />
+                         {/* We use same toggle state for both password fields in register for better UX */}
+                         <button
+                            type="button"
+                            onClick={() => setShowRegPassword(!showRegPassword)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
+                            tabIndex={-1}
+                        >
+                            {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    </div>
+                    {regPassword && confirmPassword && regPassword !== confirmPassword && (
+                        <p className="text-[10px] text-red-500 mt-1">As senhas não coincidem.</p>
+                    )}
                 </div>
 
                 {role === UserRole.ADMIN ? (
@@ -271,9 +374,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             value={adminCode}
                             onChange={(e) => setAdminCode(e.target.value)}
                             className={`w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200' : 'border-purple-300 bg-purple-50 focus:ring-purple-500'}`}
-                            placeholder="Código: admin97"
+                            placeholder="Insira o código de acesso"
                         />
-                        <p className="text-[10px] text-purple-600 mt-1">Código padrão: <strong>admin97</strong> ou <strong>admin</strong></p>
                     </div>
                 ) : (
                     <div className="p-3 bg-blue-50 border border-blue-100 rounded text-xs text-blue-700 flex items-start gap-2">
@@ -310,13 +412,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </div>
                 <div>
                     <label className={labelClass(loginPassword)}>Senha</label>
-                    <input
-                        type="password"
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        className={inputClass(loginPassword)}
-                        placeholder="Sua senha"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showLoginPassword ? "text" : "password"}
+                            value={loginPassword}
+                            onChange={(e) => setLoginPassword(e.target.value)}
+                            className={`${inputClass(loginPassword)} pr-10`}
+                            placeholder="Sua senha"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowLoginPassword(!showLoginPassword)}
+                            className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 focus:outline-none"
+                            tabIndex={-1}
+                        >
+                            {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                    </div>
                 </div>
 
                 <button
