@@ -18,8 +18,29 @@ const App: React.FC = () => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
   const [loading, setLoading] = useState(false);
-  
+
+  // Dark Mode State
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('theme');
+        return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
+  });
+
   const isConnected = StorageService.isConnected();
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  const toggleTheme = () => setDarkMode(!darkMode);
 
   useEffect(() => {
     if (user) {
@@ -67,7 +88,7 @@ const App: React.FC = () => {
   };
 
   if (!user || view === 'LOGIN') {
-    return <Login onLogin={handleLogin} />;
+    return <Login onLogin={handleLogin} toggleTheme={toggleTheme} isDarkMode={darkMode} />;
   }
 
   const renderContent = () => {
@@ -149,6 +170,8 @@ const App: React.FC = () => {
       onLogout={handleLogout}
       isConnected={isConnected}
       onRefresh={refreshData}
+      toggleTheme={toggleTheme}
+      isDarkMode={darkMode}
     >
       {renderContent()}
     </Layout>

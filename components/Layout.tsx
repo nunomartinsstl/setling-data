@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -10,6 +10,8 @@ interface LayoutProps {
   children: React.ReactNode;
   isConnected: boolean;
   onRefresh?: () => void;
+  toggleTheme: () => void;
+  isDarkMode: boolean;
 }
 
 const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void }) => {
@@ -18,17 +20,17 @@ const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewSta
       onClick={onClick}
       className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
         isActive 
-          ? 'bg-brand-50 text-brand-700 font-semibold' 
-          : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+          ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-semibold' 
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
       }`}
     >
-      <Icon className={`w-5 h-5 ${isActive ? 'text-brand-600' : 'text-slate-400'}`} />
+      <Icon className={`w-5 h-5 ${isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`} />
       <span>{label}</span>
     </button>
   );
 };
 
-const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh }) => {
+const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh, toggleTheme, isDarkMode }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -56,15 +58,15 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   };
 
   const getRoleColor = () => {
-     if (isAdmin) return 'bg-purple-100 text-purple-700';
-     if (isManagement) return 'bg-blue-100 text-blue-700';
-     return 'bg-amber-100 text-amber-700';
+     if (isAdmin) return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
+     if (isManagement) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+     return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
   };
 
   const canCreate = isAdmin || isManagement;
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setMobileMenuOpen(false)} />
@@ -72,19 +74,19 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
       {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white border-r border-slate-200 transform transition-transform duration-200 ease-in-out
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="h-full flex flex-col">
-          <div className="p-6 border-b border-slate-100">
-            <h1 className="text-2xl font-bold text-[#2c52ad] tracking-tight">SETLING</h1>
+          <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+            <h1 className="text-2xl font-bold text-[#2c52ad] dark:text-blue-400 tracking-tight">SETLING</h1>
             <p className="text-xs text-slate-400 font-medium">Gestão Inteligente</p>
           </div>
 
           <div className="p-4">
-            <div className="mb-6 px-4 py-3 bg-slate-50 rounded-lg border border-slate-100">
-              <p className="text-xs text-slate-500 uppercase font-semibold">Logado como</p>
-              <p className="font-medium text-slate-800 truncate">{user.username}</p>
+            <div className="mb-6 px-4 py-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700">
+              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Logado como</p>
+              <p className="font-medium text-slate-800 dark:text-slate-200 truncate">{user.username}</p>
               <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${getRoleColor()}`}>
                 {getRoleLabel()}
               </span>
@@ -162,16 +164,15 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </nav>
           </div>
 
-          <div className="mt-auto p-4 border-t border-slate-100 space-y-2">
-            
-            <div className={`px-4 py-2 rounded-lg text-xs flex items-center gap-2 ${isConnected ? 'bg-green-50 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
+          <div className="mt-auto p-4 border-t border-slate-100 dark:border-slate-700 space-y-2">
+            <div className={`px-4 py-2 rounded-lg text-xs flex items-center gap-2 ${isConnected ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
                {isConnected ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
                <span className="font-semibold">{isConnected ? 'Online' : 'Offline'}</span>
             </div>
 
             <button
               onClick={onLogout}
-              className="w-full flex items-center space-x-3 px-4 py-2 text-slate-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+              className="w-full flex items-center space-x-3 px-4 py-2 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
             >
               <LogOut className="w-5 h-5" />
               <span>Sair</span>
@@ -182,27 +183,41 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-        <header className="lg:hidden h-16 bg-white border-b border-slate-200 flex items-center px-4 justify-between">
-          <span className="font-bold text-[#2c52ad] text-xl">SETLING</span>
+        <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200">
+          <span className="font-bold text-[#2c52ad] dark:text-blue-400 text-xl">SETLING</span>
           <div className="flex items-center gap-2">
             <button 
+                onClick={toggleTheme}
+                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all"
+                title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
+            >
+                {isDarkMode ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
+            </button>
+            <button 
                 onClick={handleRefresh}
-                className="p-2 text-slate-500 hover:bg-slate-100 rounded-full"
+                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full"
                 title="Atualizar"
             >
                 <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin text-brand-600' : ''}`} />
             </button>
-            <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-slate-600">
+            <button onClick={() => setMobileMenuOpen(true)} className="p-2 text-slate-600 dark:text-slate-300">
                 <Menu className="w-6 h-6" />
             </button>
           </div>
         </header>
 
-        {/* Desktop Refresh Button (Floating) */}
-        <div className="hidden lg:block absolute top-6 right-8 z-10">
+        {/* Desktop Header Actions (Floating) */}
+        <div className="hidden lg:flex absolute top-6 right-8 z-10 gap-3">
+             <button 
+                onClick={toggleTheme}
+                className="flex items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
+                title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
+            >
+                {isDarkMode ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
+            </button>
              <button 
                 onClick={handleRefresh}
-                className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 shadow-sm rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-all hover:text-brand-600"
+                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
             >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Atualizar

@@ -31,15 +31,15 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
   const StatCard = ({ title, value, icon: Icon, color, onClick, children }: any) => (
     <div 
       onClick={onClick}
-      className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow hover:bg-slate-50 relative overflow-hidden"
+      className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow hover:bg-slate-50 dark:hover:bg-slate-700 relative overflow-hidden"
     >
       <div className="flex items-center space-x-4">
         <div className={`p-4 rounded-full ${color}`}>
             <Icon className="w-6 h-6 text-white" />
         </div>
         <div>
-            <p className="text-sm text-slate-500 font-medium">{title}</p>
-            <p className="text-3xl font-bold text-slate-800">{value}</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{title}</p>
+            <p className="text-3xl font-bold text-slate-800 dark:text-white">{value}</p>
             {children}
         </div>
       </div>
@@ -48,7 +48,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <h2 className="text-2xl font-bold text-slate-800">Controlo de Pedidos</h2>
+      <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Controlo de Pedidos</h2>
 
       {/* Main Create Button */}
       {canCreate && (
@@ -70,7 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
             onClick={() => onNavigate('OPEN_ORDERS')}
         >
              {hasInProcess && (
-                <div className="mt-1 flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-full w-fit">
+                <div className="mt-1 flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-full w-fit">
                     <Activity className="w-3 h-3 animate-pulse" />
                     Há pedidos em curso
                 </div>

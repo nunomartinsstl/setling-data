@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle, Moon, Sun } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
   onLogin: (user: User) => void;
+  toggleTheme: () => void;
+  isDarkMode: boolean;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Login State
@@ -185,25 +187,25 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   // Helper for input validation classes
-  const inputClass = (value: string) => `w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm transition-colors ${touched && !value ? 'border-red-400 bg-red-50 focus:ring-red-200' : 'border-slate-300 focus:ring-brand-500'}`;
-  const labelClass = (value: string) => `block text-xs font-semibold mb-1 ${touched && !value ? 'text-red-500' : 'text-slate-600'}`;
+  const inputClass = (value: string) => `w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm transition-colors dark:bg-slate-900 dark:text-white ${touched && !value ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 focus:ring-brand-500 dark:border-slate-600'}`;
+  const labelClass = (value: string) => `block text-xs font-semibold mb-1 ${touched && !value ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`;
 
   // RENDER SUCCESS SCREEN
   if (createdUser) {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-            <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-200 text-center animate-fade-in">
+        <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-4 transition-colors duration-200">
+            <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-700 text-center animate-fade-in">
                 <div className="flex justify-center mb-6">
-                    <div className="bg-green-100 p-4 rounded-full">
-                        <CheckCircle className="w-12 h-12 text-green-600" />
+                    <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full">
+                        <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
                     </div>
                 </div>
-                <h2 className="text-2xl font-bold text-slate-800 mb-2">Conta Criada!</h2>
-                <p className="text-slate-500 mb-6">Seu registo foi realizado com sucesso.</p>
+                <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Conta Criada!</h2>
+                <p className="text-slate-500 dark:text-slate-400 mb-6">Seu registo foi realizado com sucesso.</p>
                 
-                <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 mb-6">
-                    <p className="text-xs text-slate-500 uppercase font-bold mb-1">Seu Utilizador de Acesso</p>
-                    <p className="text-2xl font-mono font-bold text-brand-600 tracking-wide">{createdUser.username}</p>
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Utilizador de Acesso</p>
+                    <p className="text-2xl font-mono font-bold text-brand-600 dark:text-brand-400 tracking-wide">{createdUser.username}</p>
                     <p className="text-xs text-slate-400 mt-2">Use este nome ou seu email para entrar.</p>
                 </div>
 
@@ -219,31 +221,41 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100 p-4">
-      <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-200 relative">
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-4 transition-colors duration-200">
+      <div className="absolute top-4 right-4">
+        <button 
+            onClick={toggleTheme}
+            className="p-2 rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400 transition-all"
+        >
+            {isDarkMode ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
+        </button>
+      </div>
+      <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-700 relative transition-all duration-200">
         <div className="flex justify-center mb-6">
-          <div className="bg-brand-100 p-3 rounded-full">
-            <Lock className="w-8 h-8 text-brand-600" />
-          </div>
+          <img 
+            src="https://mainpage.pt/wp-content/uploads/2024/11/logo-mainpage-vertical.svg" 
+            alt="Mainpage Logo"
+            className="h-20 mb-2 object-contain dark:brightness-0 dark:invert transition-all duration-200"
+          />
         </div>
-        <h2 className="text-2xl font-bold text-center text-slate-800 mb-2">
+        <h2 className="text-2xl font-bold text-center text-slate-800 dark:text-white mb-2">
             {isRegistering ? 'Criar Conta' : 'Login Setling'}
         </h2>
-        <p className="text-center text-slate-500 mb-6">Plataforma de Gestão</p>
+        <p className="text-center text-slate-500 dark:text-slate-400 mb-6">Gestão de Pedidos</p>
 
         {/* Toggle */}
-        <div className="flex bg-slate-100 p-1 rounded-lg mb-6">
+        <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg mb-6">
             <button 
                 type="button"
                 onClick={() => { setIsRegistering(false); setError(''); setTouched(false); }}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
             >
                 Entrar
             </button>
             <button 
                 type="button"
                 onClick={() => { setIsRegistering(true); setError(''); setTouched(false); }}
-                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
             >
                 Criar Conta
             </button>
@@ -289,13 +301,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </div>
 
                 {/* USERNAME PREVIEW */}
-                <div className="bg-slate-50 p-2 rounded border border-slate-200">
+                <div className="bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700">
                     <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
                         Utilizador Gerado (Automático)
                     </label>
                     <div className="flex items-center gap-2">
                         <UserIcon className="w-4 h-4 text-slate-400" />
-                        <span className="font-mono text-sm font-semibold text-slate-700">
+                        <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
                             {getPreviewUsername() || '...'}
                         </span>
                         {getPreviewUsername() && (
@@ -309,22 +321,22 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </div>
 
                 <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">Função</label>
+                    <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Função</label>
                     <div className="grid grid-cols-3 gap-2">
-                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 text-purple-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                             <input type="radio" name="role" className="hidden" checked={role === UserRole.ADMIN} onChange={() => setRole(UserRole.ADMIN)} />
-                            <ShieldCheck className="w-3 h-3" />
-                            <span className="font-semibold text-[9px]">Admin</span>
+                            <ShieldCheck className={`w-3 h-3 ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                            <span className={`font-semibold text-[9px] ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`}>Admin</span>
                         </label>
-                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 text-brand-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                             <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
-                            <UserIcon className="w-3 h-3" />
-                            <span className="font-semibold text-[9px]">Coordenador</span>
+                            <UserIcon className={`w-3 h-3 ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                            <span className={`font-semibold text-[9px] ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`}>Coordenador</span>
                         </label>
-                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-200 hover:bg-slate-50'}`}>
+                        <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                             <input type="radio" name="role" className="hidden" checked={role === UserRole.WAREHOUSE} onChange={() => setRole(UserRole.WAREHOUSE)} />
-                            <Lock className="w-3 h-3" />
-                            <span className="font-semibold text-[9px]">Logística</span>
+                            <Lock className={`w-3 h-3 ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                            <span className={`font-semibold text-[9px] ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`}>Logística</span>
                         </label>
                     </div>
                 </div>
@@ -337,14 +349,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                             <select
                                 value={companyId}
                                 onChange={(e) => setCompanyId(e.target.value)}
-                                className={`pl-9 ${inputClass(companyId)} appearance-none bg-white`}
+                                className={`pl-9 ${inputClass(companyId)} appearance-none bg-white dark:bg-slate-900`}
                             >
                                 <option value="">Selecione sua empresa</option>
                                 {companies.map(c => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
                             </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700">
+                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700 dark:text-slate-400">
                                 <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
                             </div>
                         </div>
@@ -402,19 +414,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 {role === UserRole.ADMIN ? (
                      <div className="animate-fade-in">
-                        <label className={`block text-xs font-bold mb-1 flex items-center gap-1 ${touched && !adminCode ? 'text-red-600' : 'text-purple-600'}`}>
+                        <label className={`block text-xs font-bold mb-1 flex items-center gap-1 ${touched && !adminCode ? 'text-red-600' : 'text-purple-600 dark:text-purple-400'}`}>
                             <Key className="w-3 h-3" /> Código Mestre (Admin)
                         </label>
                         <input
                             type="password"
                             value={adminCode}
                             onChange={(e) => setAdminCode(e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200' : 'border-purple-300 bg-purple-50 focus:ring-purple-500'}`}
+                            className={`w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm dark:bg-slate-900 dark:text-white ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-purple-300 bg-purple-50 dark:bg-purple-900/20 focus:ring-purple-500 dark:border-purple-800'}`}
                             placeholder="Insira o código de acesso"
                         />
                     </div>
                 ) : (
-                    <div className="p-3 bg-blue-50 border border-blue-100 rounded text-xs text-blue-700 flex items-start gap-2">
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
                         <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
                         <div>
                             <p className="font-bold">Convite necessário</p>
@@ -478,7 +490,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         )}
 
         {error && (
-            <div className="mt-4 p-3 bg-red-50 text-red-700 text-sm rounded-md border border-red-200 flex items-start gap-2 animate-pulse">
+            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded-md border border-red-200 dark:border-red-800 flex items-start gap-2 animate-pulse">
                 <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 {error}
             </div>

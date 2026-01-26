@@ -113,32 +113,32 @@ const UsersManager: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-fade-in">
-            <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                <Users className="text-purple-600" /> Gestão de Utilizadores
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                <Users className="text-purple-600 dark:text-purple-400" /> Gestão de Utilizadores
             </h2>
 
             {/* Invite Section */}
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-purple-200">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-900">
-                    <Mail className="w-5 h-5 text-purple-600" /> Convidar Novo Utilizador
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-purple-200 dark:border-purple-900/50">
+                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-900 dark:text-purple-300">
+                    <Mail className="w-5 h-5 text-purple-600 dark:text-purple-400" /> Convidar Novo Utilizador
                 </h3>
                 <form onSubmit={handleCreateInvite} className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full">
-                        <label className="block text-xs font-semibold text-slate-500 mb-1">Email do Colaborador</label>
+                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email do Colaborador</label>
                         <input 
                             type="email" 
                             value={inviteEmail}
                             onChange={(e) => setInviteEmail(e.target.value)}
-                            className="w-full p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-purple-500 outline-none"
+                            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                             placeholder="colaborador@empresa.com"
                         />
                     </div>
                     <div className="w-full md:w-48">
-                         <label className="block text-xs font-semibold text-slate-500 mb-1">Função Permitida</label>
+                         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Função Permitida</label>
                          <select 
                             value={inviteRole}
                             onChange={(e) => setInviteRole(e.target.value as UserRole)}
-                            className="w-full p-2 border border-slate-300 rounded-md bg-white focus:ring-2 focus:ring-purple-500 outline-none"
+                            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                          >
                              <option value={UserRole.WAREHOUSE}>Logística</option>
                              <option value={UserRole.MANAGEMENT}>Coordenação</option>
@@ -156,7 +156,7 @@ const UsersManager: React.FC = () => {
                 </form>
 
                 {message && (
-                    <div className={`mt-4 p-3 rounded-md text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                    <div className={`mt-4 p-3 rounded-md text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
                         {message.type === 'success' ? <CheckCircle className="w-4 h-4"/> : <AlertCircle className="w-4 h-4"/>}
                         {message.text}
                     </div>
@@ -164,25 +164,25 @@ const UsersManager: React.FC = () => {
             </div>
 
             {/* Users List */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-700">Utilizadores Ativos ({users.length})</h3>
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
+                    <h3 className="font-bold text-slate-700 dark:text-slate-300">Utilizadores Ativos ({users.length})</h3>
                     
                     <button 
                         onClick={handleResetAll}
                         disabled={isResetting}
-                        className="text-xs text-red-600 hover:text-red-800 hover:bg-red-50 px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors border border-transparent hover:border-red-200"
+                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800"
                     >
                         {isResetting ? <Loader2 className="w-3 h-3 animate-spin"/> : <AlertTriangle className="w-3 h-3"/>}
                         Resetar Todos
                     </button>
                 </div>
                 {loading ? (
-                    <div className="p-8 text-center text-slate-500">Carregando utilizadores...</div>
+                    <div className="p-8 text-center text-slate-500 dark:text-slate-400">Carregando utilizadores...</div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600">
-                            <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-700">
+                        <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
                                 <tr>
                                     <th className="p-4">Utilizador</th>
                                     <th className="p-4">Email</th>
@@ -192,22 +192,22 @@ const UsersManager: React.FC = () => {
                                     <th className="p-4 text-center">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-slate-100">
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                                 {users.map((user, idx) => {
                                     const isProcessing = user.uid && processingUsers[user.uid];
                                     
                                     return (
-                                        <tr key={idx} className="hover:bg-slate-50">
-                                            <td className="p-4 font-medium text-slate-800 flex items-center gap-2">
-                                                <div className="bg-slate-100 p-1.5 rounded-full">
-                                                    <UserIcon className="w-4 h-4 text-slate-500" />
+                                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                            <td className="p-4 font-medium text-slate-800 dark:text-white flex items-center gap-2">
+                                                <div className="bg-slate-100 dark:bg-slate-700 p-1.5 rounded-full">
+                                                    <UserIcon className="w-4 h-4 text-slate-500 dark:text-slate-300" />
                                                 </div>
                                                 {user.username}
                                             </td>
                                             <td className="p-4 font-mono text-xs">{user.email}</td>
-                                            <td className="p-4 text-xs font-semibold text-slate-500">
+                                            <td className="p-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
                                                 {user.role === UserRole.ADMIN ? (
-                                                    <span className="text-purple-600 italic">Global</span>
+                                                    <span className="text-purple-600 dark:text-purple-400 italic">Global</span>
                                                 ) : (
                                                     <div className="flex items-center gap-1">
                                                         <Building className="w-3 h-3"/>
@@ -224,14 +224,14 @@ const UsersManager: React.FC = () => {
                                                     onChange={(e) => handleChangeRole(user, e.target.value)}
                                                     disabled={isProcessing}
                                                     className={`bg-transparent text-xs font-bold px-2 py-1 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none ${
-                                                        user.role === UserRole.ADMIN ? 'text-purple-700 bg-purple-100' :
-                                                        user.role === UserRole.MANAGEMENT ? 'text-blue-700 bg-blue-100' :
-                                                        'text-amber-700 bg-amber-100'
+                                                        user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
+                                                        user.role === UserRole.MANAGEMENT ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30' :
+                                                        'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30'
                                                     }`}
                                                 >
-                                                    <option value={UserRole.WAREHOUSE}>Logística</option>
-                                                    <option value={UserRole.MANAGEMENT}>Coordenação</option>
-                                                    <option value={UserRole.ADMIN}>Admin</option>
+                                                    <option value={UserRole.WAREHOUSE} className="dark:bg-slate-800">Logística</option>
+                                                    <option value={UserRole.MANAGEMENT} className="dark:bg-slate-800">Coordenação</option>
+                                                    <option value={UserRole.ADMIN} className="dark:bg-slate-800">Admin</option>
                                                 </select>
                                             </td>
                                             <td className="p-4 text-center">
@@ -240,7 +240,7 @@ const UsersManager: React.FC = () => {
                                                 ) : (
                                                     <button 
                                                         onClick={() => handleDeleteUser(user)}
-                                                        className="text-red-400 hover:text-red-600 hover:bg-red-50 p-2 rounded-lg transition-colors"
+                                                        className="text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors"
                                                         title="Remover Acesso"
                                                     >
                                                         <Trash2 className="w-4 h-4" />

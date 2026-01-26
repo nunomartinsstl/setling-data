@@ -33,6 +33,8 @@ export interface OrderLineItem {
   sku: string; // Internal ID, but displayed as "Material"
   description: string;
   quantity: number;
+  unit?: string; // Unit of Measure (e.g., UN, KG, M)
+  category?: string; // Material Category (e.g., 'CMV - COMANDOS')
   quantityPicked?: number; // How much was actually fulfilled
   backorderCreated?: boolean; // Flag to prevent duplicate re-opens
   isCustom?: boolean; // Flag for manually typed items
@@ -89,12 +91,18 @@ export interface EmailRecipient {
   type: 'TO' | 'CC';
 }
 
+export interface UnitOption {
+  value: string; // The Abbreviation (UN, KG)
+  description: string; // The full name (Unidade, Kilograma)
+}
+
 export interface AppSettings {
   // Legacy support optional
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
   companies?: Company[];
   adminAccessCode?: string; // Dynamic admin password
+  unitOptions?: UnitOption[]; // List of available units of measure with descriptions
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS';

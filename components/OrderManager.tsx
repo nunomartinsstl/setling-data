@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry } from '../types';
-import { StorageService } from '../services/storageService';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle } from 'lucide-react';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption } from '../types';
+import { StorageService, MATERIAL_CATEGORIES } from '../services/storageService';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 interface OrderManagerProps {
@@ -18,6 +18,9 @@ interface OrderManagerProps {
 interface ManualRow {
     sku: string;
     qty: string | number;
+    unit: string; // Unit of Measure
+    category: string; // Material Category
+    customCategory: string; // If 'A00' or other generic is selected and user types manually
     isCustom: boolean;
     customDesc: string;
     similarityChecked: boolean;
@@ -59,12 +62,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null); 
   
   // Manual Entry Buffer (Drafts)
-  const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', isCustom: false, customDesc: '', similarityChecked: false}]);
+  const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false}]);
   const [orderTitle, setOrderTitle] = useState('');
   
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
-  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [] });
+  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[], missingCategory?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
 
   // Similarity Search State
   const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
@@ -77,6 +80,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [pendingItems, setPendingItems] = useState<OrderLineItem[]>([]);
   const [dueDate, setDueDate] = useState('');
   
+  // Settings Options
+  const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
+
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -120,6 +126,19 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     return Array.from(optionsMap.entries()).map(([sku, desc]) => ({ sku, desc }));
   }, [masterList, stock]);
 
+  // Load Settings for Units
+  useEffect(() => {
+      const loadOpts = async () => {
+          const settings = await StorageService.getSettings();
+          if (settings.unitOptions && settings.unitOptions.length > 0) {
+              setUnitOptions(settings.unitOptions);
+          } else {
+              setUnitOptions([{ value: "UN", description: "Unidade" }]); // Fallback
+          }
+      };
+      loadOpts();
+  }, []);
+
   useEffect(() => {
     if (editingOrderId) return; 
     const savedRows = localStorage.getItem('draft_rows');
@@ -147,14 +166,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const resetForm = () => {
-      setManualRows([{sku: '', qty: '', isCustom: false, customDesc: '', similarityChecked: false}]);
+      setManualRows([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false}]);
       setOrderTitle('');
       setDueDate('');
       setPendingItems([]);
       setCreationStep('INITIAL');
       setEditingOrderId(null);
       setExpandedRowIndex(0);
-      setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [] });
+      setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
   };
 
   const getMinDate = () => {
@@ -212,6 +231,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const duplicateErrors: number[] = [];
       const invalidSkus: number[] = [];
       const uncheckedErrors: number[] = [];
+      const missingCategoryErrors: number[] = [];
       let isTitleValid = orderTitle.trim().length > 0;
       
       manualRows.forEach((row, idx) => {
@@ -224,6 +244,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                   // Must be checked via similarity
                   if (!row.similarityChecked) {
                       uncheckedErrors.push(idx);
+                  }
+                  
+                  // Category Check
+                  if (!row.category) {
+                      missingCategoryErrors.push(idx);
+                  } else if (row.category === '_OTHER_' && !row.customCategory.trim()) {
+                      missingCategoryErrors.push(idx);
                   }
                   
                   // Check if description already exists in master list
@@ -248,10 +275,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           rows: errors,
           duplicateCustom: duplicateErrors,
           invalidSkus: invalidSkus,
-          unchecked: uncheckedErrors
+          unchecked: uncheckedErrors,
+          missingCategory: missingCategoryErrors
       });
 
-      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0;
+      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0 && missingCategoryErrors.length === 0;
   };
 
   const addManualRow = () => {
@@ -262,7 +290,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
      }
 
      const nextIdx = manualRows.length;
-     setManualRows([...manualRows, { sku: '', qty: '', isCustom: false, customDesc: '', similarityChecked: false }]);
+     setManualRows([...manualRows, { sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false }]);
      setExpandedRowIndex(nextIdx); // Auto collapse prev, expand new
      setMessage(null);
   };
@@ -304,6 +332,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           sku: selectedCandidate.sku,
           isCustom: false,
           customDesc: '',
+          unit: 'UN', // Default unit for existing items
+          category: '', // Reset
           similarityChecked: true // MARK CHECKED
       };
       setManualRows(newRows);
@@ -312,6 +342,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const newErrors = {...formErrors};
       newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
       newErrors.unchecked = newErrors.unchecked?.filter(i => i !== similarityTargetIdx);
+      newErrors.missingCategory = newErrors.missingCategory?.filter(i => i !== similarityTargetIdx);
       setFormErrors(newErrors);
 
       setSimilarityModalOpen(false);
@@ -353,6 +384,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const handleManualNext = () => {
     if (!validateForm()) {
         const unchecked = manualRows.some(r => r.isCustom && !r.similarityChecked);
+        const missingCat = manualRows.some((r) => r.isCustom && (!r.category || (r.category === '_OTHER_' && !r.customCategory)));
         const hasDuplicates = manualRows.some((row, idx) => {
              return row.isCustom && row.customDesc && masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
         });
@@ -360,6 +392,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
         if (unchecked) {
              setMessage({ type: 'error', text: "Você possui itens novos que não foram verificados. Clique em 'Confirmar Material' para validar." });
+        } else if (missingCat) {
+             setMessage({ type: 'error', text: "Selecione uma categoria para os novos materiais." });
         } else if (hasDuplicates) {
              setMessage({ type: 'error', text: "Alguns materiais manuais já existem na lista oficial. Por favor, selecione-os da lista." });
         } else if (hasInvalidSkus) {
@@ -374,10 +408,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     for (const row of manualRows) {
         const qtyNum = Number(row.qty);
         if (row.isCustom) {
+            let finalCategory = row.category;
+            if (row.category === '_OTHER_') {
+                finalCategory = row.customCategory;
+            } else {
+                // Find full name
+                const catObj = MATERIAL_CATEGORIES.find(c => c.code === row.category);
+                if (catObj) finalCategory = `${catObj.code} - ${catObj.name}`;
+            }
+
             items.push({
                 sku: 'N/A',
                 description: row.customDesc,
                 quantity: qtyNum,
+                unit: row.unit,
+                category: finalCategory,
                 isCustom: true
             });
         } else {
@@ -397,6 +442,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const rows: ManualRow[] = (order.items || []).map(item => ({
           sku: item.isCustom ? '' : item.sku,
           qty: item.quantity,
+          unit: item.unit || 'UN',
+          category: item.category || '', 
+          customCategory: '', // We don't restore custom text perfectly, user has to re-select if editing
           isCustom: !!item.isCustom,
           customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : '',
           similarityChecked: true // Assume edited existing items are checked
@@ -521,10 +569,22 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         hasAlerts = true;
                         body += `Necessário criar código:\n`;
                         newMaterialItems.forEach(item => {
-                            // For new items, we don't have a SKU yet.
+                            // Find unit description
+                            const uom = unitOptions.find(u => u.value === item.unit);
+                            const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
+
                             body += `Referência: A Definir\n`;
                             body += `Descrição: ${item.description}\n`;
-                            body += `Quantidade pedida: ${item.quantity}\n\n`;
+                            // Add Category
+                            if (item.category) {
+                                body += `Categoria: ${item.category}\n`;
+                            }
+                            body += `Quantidade pedida: ${item.quantity}\n`;
+                            // ADD UNIT TO EMAIL
+                            if (item.unit) {
+                                body += `Unidade: ${unitDesc}\n`;
+                            }
+                            body += `\n`;
                         });
                     }
 
@@ -644,25 +704,25 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const FinalizeOrderForm = () => (
-    <div className="space-y-4 animate-fade-in bg-slate-50 p-6 rounded-lg border border-slate-200">
-        <h4 className="font-semibold text-slate-800 border-b border-slate-200 pb-2 mb-4">
+    <div className="space-y-4 animate-fade-in bg-slate-50 dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+        <h4 className="font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
             {editingOrderId ? 'Salvar Alterações' : 'Finalizar Pedido'}
         </h4>
         
         <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Título do Pedido</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Título do Pedido</label>
             <input 
                 type="text"
                 value={orderTitle}
                 maxLength={19}
                 onChange={e => setOrderTitle(e.target.value)}
-                className="w-full p-2 border border-slate-300 rounded-md bg-slate-100 text-slate-500 cursor-not-allowed"
+                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                 disabled
             />
         </div>
 
         <div>
-            <label className={`block text-sm font-medium mb-1 ${formErrors.date ? 'text-red-600' : 'text-slate-700'}`}>
+            <label className={`block text-sm font-medium mb-1 ${formErrors.date ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>
                 Data Levantamento {formErrors.date && '*'}
             </label>
             <input 
@@ -670,18 +730,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 value={dueDate}
                 min={getMinDate()}
                 onChange={handleDateChange}
-                className={`w-full p-2 border rounded-md focus:ring-2 outline-none ${formErrors.date ? 'border-red-500 focus:ring-red-200 bg-red-50' : 'border-slate-300 focus:ring-brand-500'}`}
+                className={`w-full p-2 border rounded-md focus:ring-2 outline-none dark:bg-slate-800 dark:text-white ${formErrors.date ? 'border-red-500 focus:ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-brand-500 dark:border-slate-600'}`}
             />
             {formErrors.date && <p className="text-xs text-red-500 mt-1">Data obrigatória.</p>}
         </div>
 
-        <div className="text-sm text-slate-600 mt-4">
-            <p className="font-medium mb-2">Resumo dos Itens:</p>
-            <ul className="list-disc list-inside space-y-1 bg-white p-3 rounded border border-slate-200 max-h-40 overflow-y-auto">
+        <div className="text-sm text-slate-600 dark:text-slate-400 mt-4">
+            <p className="font-medium mb-2 text-slate-700 dark:text-slate-300">Resumo dos Itens:</p>
+            <ul className="list-disc list-inside space-y-1 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto">
                 {pendingItems.map((item, idx) => (
                     <li key={idx} className="truncate flex items-center gap-2">
                         <span className="font-bold">{item.quantity}x</span> 
                         <span>{item.description}</span>
+                        {item.unit && item.isCustom && (
+                             <span className="text-xs bg-slate-100 dark:bg-slate-700 px-1 rounded">{item.unit}</span>
+                        )}
                     </li>
                 ))}
             </ul>
@@ -690,7 +753,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         <div className="pt-4 flex justify-end gap-3">
              <button
                 onClick={() => setCreationStep('INITIAL')}
-                className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg transition-colors"
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
             >
                 Voltar
             </button>
@@ -720,20 +783,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       {/* Similarity Search Modal */}
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
                 
                 {similarityStep === 'LIST' && (
                     <>
-                        <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-                            <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
                                 <Search className="w-5 h-5 text-brand-600" /> Verificação de Material
                             </h3>
-                            <button onClick={() => setSimilarityModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+                            <button onClick={() => setSimilarityModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="p-4 overflow-y-auto flex-1">
-                            <p className="text-sm text-slate-600 mb-3">
+                        <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
                                 Encontramos materiais semelhantes ao que você digitou. Selecione um se for o que procura:
                             </p>
                             <div className="space-y-2">
@@ -742,26 +805,26 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         <button 
                                             key={idx}
                                             onClick={() => handleSelectCandidate(res)}
-                                            className="w-full text-left p-3 border border-slate-200 rounded-lg hover:bg-brand-50 hover:border-brand-200 transition-colors group"
+                                            className="w-full text-left p-3 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/20 hover:border-brand-200 dark:hover:border-brand-800 transition-colors group"
                                         >
                                             <div className="flex justify-between items-start">
-                                                <span className="font-bold text-brand-700 text-sm block group-hover:underline">{res.sku}</span>
-                                                <span className="bg-brand-100 text-brand-700 text-[10px] px-2 py-0.5 rounded-full font-bold">Encontrado</span>
+                                                <span className="font-bold text-brand-700 dark:text-brand-400 text-sm block group-hover:underline">{res.sku}</span>
+                                                <span className="bg-brand-100 dark:bg-brand-900/40 text-brand-700 dark:text-brand-300 text-[10px] px-2 py-0.5 rounded-full font-bold">Encontrado</span>
                                             </div>
-                                            <p className="text-sm text-slate-700 mt-1">{res.description}</p>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{res.description}</p>
                                         </button>
                                     ))
                                 ) : (
-                                    <div className="text-center py-8 text-slate-500 bg-slate-50 rounded-lg border border-dashed border-slate-300">
+                                    <div className="text-center py-8 text-slate-500 bg-slate-50 dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
                                         Nenhuma similaridade encontrada.
                                     </div>
                                 )}
                             </div>
                         </div>
-                        <div className="p-4 border-t border-slate-200 bg-slate-50">
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
                             <button 
                                 onClick={handleNotFound}
-                                className="w-full py-3 bg-white border border-slate-300 text-slate-600 font-medium rounded-lg hover:bg-slate-100 transition-colors flex items-center justify-center gap-2"
+                                className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
                             >
                                 <AlertCircle className="w-4 h-4" /> Material não consta na lista
                             </button>
@@ -771,22 +834,22 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                 {similarityStep === 'CONFIRM_MATCH' && selectedCandidate && (
                     <>
-                         <div className="p-4 border-b border-slate-200 bg-green-50">
-                            <h3 className="font-bold text-green-800 flex items-center gap-2">
+                         <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-green-50 dark:bg-green-900/20">
+                            <h3 className="font-bold text-green-800 dark:text-green-300 flex items-center gap-2">
                                 <CheckCircle className="w-5 h-5" /> Confirmar Seleção
                             </h3>
                         </div>
                         <div className="p-6 flex-1 text-center">
-                            <p className="text-slate-600 mb-4">Você confirma que o material desejado é:</p>
-                            <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6 text-left">
+                            <p className="text-slate-600 dark:text-slate-300 mb-4">Você confirma que o material desejado é:</p>
+                            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-6 text-left">
                                 <p className="text-xs text-slate-400 font-bold uppercase">Material</p>
-                                <p className="font-mono font-bold text-lg text-slate-800">{selectedCandidate.sku}</p>
-                                <p className="text-sm text-slate-700 mt-1">{selectedCandidate.description}</p>
+                                <p className="font-mono font-bold text-lg text-slate-800 dark:text-white">{selectedCandidate.sku}</p>
+                                <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{selectedCandidate.description}</p>
                             </div>
                             <div className="flex gap-3">
                                 <button 
                                     onClick={() => setSimilarityStep('LIST')}
-                                    className="flex-1 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50"
+                                    className="flex-1 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                                 >
                                     Voltar
                                 </button>
@@ -803,27 +866,27 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                 {similarityStep === 'CONFIRM_NEW' && (
                     <>
-                         <div className="p-4 border-b border-slate-200 bg-amber-50">
-                            <h3 className="font-bold text-amber-800 flex items-center gap-2">
+                         <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">
+                            <h3 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
                                 <HelpCircle className="w-5 h-5" /> Criar Novo Material?
                             </h3>
                         </div>
                         <div className="p-6 flex-1 text-center">
-                            <p className="text-slate-600 mb-6">
+                            <p className="text-slate-600 dark:text-slate-300 mb-6">
                                 Você indicou que o material não está na lista. Deseja prosseguir com a criação de um item novo (Personalizado)?
                             </p>
-                            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200 mb-6 text-left">
-                                <p className="text-xs text-amber-800 font-bold flex items-center gap-1">
+                            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800 mb-6 text-left">
+                                <p className="text-xs text-amber-800 dark:text-amber-400 font-bold flex items-center gap-1">
                                     <Clock className="w-3 h-3"/> Ação do Sistema:
                                 </p>
-                                <p className="text-sm text-amber-900 mt-1">
+                                <p className="text-sm text-amber-900 dark:text-amber-300 mt-1">
                                     Um e-mail de notificação será enviado para a criação deste código no sistema.
                                 </p>
                             </div>
                             <div className="flex gap-3">
                                 <button 
                                     onClick={() => setSimilarityStep('LIST')}
-                                    className="flex-1 py-2 border border-slate-300 rounded-lg text-slate-600 hover:bg-slate-50"
+                                    className="flex-1 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                                 >
                                     Voltar
                                 </button>
@@ -844,11 +907,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
           {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
           {mode === 'CREATE' ? 'Novo Pedido' : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos Finalizados')}
           {mode === 'LIST' && (
-             <span className="text-sm font-normal text-slate-500 ml-2 bg-slate-100 px-2 py-1 rounded-full">
+             <span className="text-sm font-normal text-slate-500 dark:text-slate-400 ml-2 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
                 {filteredOrders.length}
              </span>
           )}
@@ -863,7 +926,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     placeholder="Buscar pedido..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none"
+                    className="w-full pl-9 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-sm focus:ring-2 focus:ring-brand-500 outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                 />
              </div>
         )}
@@ -871,12 +934,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
       {/* CREATION/EDIT AREA */}
       {showForm && (
-        <div className={`bg-white p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100' : 'border-brand-200'}`}>
+        <div className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100 dark:ring-amber-900' : 'border-brand-200 dark:border-slate-700'}`}>
           {editingOrderId && (
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                <Edit className="w-5 h-5 text-amber-600" /> 
-                <span className="text-amber-700">Editando Pedido</span>
-                <button onClick={resetForm} className="text-xs text-slate-500 underline ml-2 hover:text-red-500">(Cancelar)</button>
+                <Edit className="w-5 h-5 text-amber-600 dark:text-amber-400" /> 
+                <span className="text-amber-700 dark:text-amber-400">Editando Pedido</span>
+                <button onClick={resetForm} className="text-xs text-slate-500 dark:text-slate-400 underline ml-2 hover:text-red-500">(Cancelar)</button>
             </h3>
           )}
 
@@ -886,7 +949,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             <div>
                 <div className="space-y-3 animate-fade-in">
                     <div className="mb-4">
-                        <label className={`block text-xs font-semibold mb-1 ${formErrors.title ? 'text-red-600' : 'text-slate-500'}`}>
+                        <label className={`block text-xs font-semibold mb-1 ${formErrors.title ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>
                             Título do Pedido {formErrors.title && '*'}
                         </label>
                         <input 
@@ -898,7 +961,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                 if(formErrors.title) setFormErrors({...formErrors, title: false});
                             }}
                             placeholder="Nome da obra (máx 19 chars)"
-                            className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all ${formErrors.title ? 'border-red-500 ring-1 ring-red-200 bg-red-50' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                            className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.title ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                         />
                         <div className="text-right text-[10px] text-slate-400 mt-1">
                             {orderTitle.length}/19
@@ -913,6 +976,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             const isDuplicate = formErrors.duplicateCustom && formErrors.duplicateCustom.includes(idx);
                             const isInvalidSku = formErrors.invalidSkus && formErrors.invalidSkus.includes(idx);
                             const isUnchecked = formErrors.unchecked && formErrors.unchecked.includes(idx);
+                            const isMissingCat = formErrors.missingCategory && formErrors.missingCategory.includes(idx);
                             const stockQty = getStockCount(row.sku);
 
                             // Determine if we should show the "Confirm Material" button
@@ -923,8 +987,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                 <div 
                                     key={idx} 
                                     className={`rounded-lg border transition-all duration-200 overflow-hidden ${
-                                        isError || isDuplicate || isInvalidSku || isUnchecked ? 'border-red-300 bg-red-50' : 
-                                        isExpanded ? 'border-brand-200 bg-slate-50 shadow-md ring-1 ring-brand-100' : 'border-slate-200 bg-white hover:bg-slate-50'
+                                        isError || isDuplicate || isInvalidSku || isUnchecked || isMissingCat ? 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800' : 
+                                        isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-md ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                     }`}
                                 >
                                     {/* Header (Always Visible) */}
@@ -933,9 +997,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate || isInvalidSku || isUnchecked ? 'text-red-500' : 'text-slate-500'}`}>Item {idx + 1}</span>
+                                            <span className={`text-xs font-bold uppercase ${isError || isDuplicate || isInvalidSku || isUnchecked || isMissingCat ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>Item {idx + 1}</span>
                                             {!isExpanded && (
-                                                <span className="text-sm font-medium text-slate-700 truncate max-w-[150px] md:max-w-[300px]">
+                                                <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px] md:max-w-[300px]">
                                                     {row.isCustom ? row.customDesc || '(Sem descrição)' : row.sku || '(Selecione material)'} 
                                                     {row.qty ? ` - ${row.qty} un` : ''}
                                                 </span>
@@ -959,7 +1023,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                                     {/* Expanded Content */}
                                     {isExpanded && (
-                                        <div className="p-4 border-t border-slate-200 animate-fade-in">
+                                        <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
                                             <div className="mb-3">
                                                 {row.isCustom ? (
                                                     <div>
@@ -975,10 +1039,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                     setManualRows(newRows);
                                                                 }}
                                                                 placeholder="Descrição do novo material..."
-                                                                className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none ${
+                                                                className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${
                                                                     (isError && !row.customDesc) || isDuplicate || isUnchecked
                                                                     ? 'border-red-500 bg-white ring-1 ring-red-200' 
-                                                                    : 'border-blue-300 bg-blue-50 focus:ring-2 focus:ring-blue-500'
+                                                                    : 'border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 focus:ring-2 focus:ring-blue-500'
                                                                 }`}
                                                             />
                                                             {/* Button for Custom Mode - Always visible if not checked, or as badge if checked */}
@@ -990,7 +1054,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                     <Search className="w-4 h-4" /> Confirmar Material
                                                                 </button>
                                                             ) : (
-                                                                <div className="flex-none px-3 py-2 bg-green-100 text-green-700 rounded-md font-bold text-sm flex items-center gap-1 border border-green-200">
+                                                                <div className="flex-none px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-md font-bold text-sm flex items-center gap-1 border border-green-200 dark:border-green-800">
                                                                     <Check className="w-4 h-4" /> Verificado
                                                                 </div>
                                                             )}
@@ -999,6 +1063,46 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                             {row.customDesc.length}/40
                                                         </div>
                                                         
+                                                        {/* Category Select for Custom Items */}
+                                                        <div className="mt-3">
+                                                            <label className={`block text-xs font-bold uppercase mb-1 ${isMissingCat ? 'text-red-500' : 'text-slate-400'}`}>Categoria Obrigatória</label>
+                                                            <div className="relative">
+                                                                <select
+                                                                    value={row.category}
+                                                                    onChange={(e) => {
+                                                                        const newRows = [...manualRows];
+                                                                        newRows[idx].category = e.target.value;
+                                                                        setManualRows(newRows);
+                                                                    }}
+                                                                    className={`w-full p-2.5 border rounded-md text-sm outline-none appearance-none dark:bg-slate-900 dark:text-white ${isMissingCat ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                                                                >
+                                                                    <option value="">Selecione uma categoria...</option>
+                                                                    {MATERIAL_CATEGORIES.map(cat => (
+                                                                        <option key={cat.code} value={cat.code}>
+                                                                            {cat.code} - {cat.name}
+                                                                        </option>
+                                                                    ))}
+                                                                    <option value="_OTHER_">Outra (Digitar)</option>
+                                                                </select>
+                                                                <Tag className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
+                                                            </div>
+                                                            
+                                                            {/* Custom Category Input if "Other" selected */}
+                                                            {row.category === '_OTHER_' && (
+                                                                <input 
+                                                                    type="text"
+                                                                    value={row.customCategory}
+                                                                    onChange={(e) => {
+                                                                        const newRows = [...manualRows];
+                                                                        newRows[idx].customCategory = e.target.value;
+                                                                        setManualRows(newRows);
+                                                                    }}
+                                                                    placeholder="Digite a categoria sugerida..."
+                                                                    className="w-full mt-2 p-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white"
+                                                                />
+                                                            )}
+                                                        </div>
+
                                                         {isDuplicate && (
                                                             <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
                                                                 <AlertCircle className="w-3 h-3"/> Este material já existe na lista. Por favor, desmarque "Novo" e busque pelo nome.
@@ -1029,7 +1133,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                 setManualRows(newRows);
                                                             }}
                                                             placeholder="Código ou nome do material..."
-                                                            className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                                                            className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                                                         />
                                                         {showConfirmButton && !row.similarityChecked && (
                                                             <button 
@@ -1060,71 +1164,41 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                             setManualRows(newRows);
                                                         }}
                                                         placeholder="0"
-                                                        className={`w-full p-3 border rounded-md text-sm outline-none ${isError && (!row.qty || Number(row.qty) <= 0) ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500'}`}
+                                                        className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && (!row.qty || Number(row.qty) <= 0) ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                                                         min="0"
                                                     />
                                                 </div>
+                                                
+                                                {/* Unit Selector for Custom Items */}
+                                                {row.isCustom && (
+                                                    <div className="w-1/3">
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Unid.</label>
+                                                        <div className="relative">
+                                                            <select
+                                                                value={row.unit || 'UN'}
+                                                                onChange={(e) => {
+                                                                    const newRows = [...manualRows];
+                                                                    newRows[idx].unit = e.target.value;
+                                                                    setManualRows(newRows);
+                                                                }}
+                                                                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md text-sm outline-none bg-white dark:bg-slate-900 dark:text-white appearance-none"
+                                                            >
+                                                                {unitOptions.map(opt => (
+                                                                    <option key={opt.value} value={opt.value}>{opt.value} - {opt.description}</option>
+                                                                ))}
+                                                            </select>
+                                                            <Scale className="absolute right-3 top-3.5 w-4 h-4 text-slate-400 pointer-events-none" />
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 <div className="flex-1 flex flex-col justify-end pb-3">
                                                      {!row.isCustom && row.sku && isKnownSku(row.sku) && (
-                                                        <div className={`text-xs font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600 flex items-center gap-1'}`}>
-                                                            {stockQty > 0 ? `Stock: ${stockQty} un` : <><AlertTriangle className="w-3 h-3"/> Sem Stock</>}
+                                                        <div className={`text-xs font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                            Stock: {stockQty}
                                                         </div>
                                                      )}
-                                                     {!row.isCustom && !row.sku && <span className="text-xs text-slate-400">-</span>}
-                                                     {row.isCustom && <span className="text-xs text-blue-600 font-medium">Material Manual</span>}
                                                 </div>
-                                            </div>
-
-                                            {/* Legacy Checkbox - kept but secondary to the Confirm Button flow */}
-                                            <div className="flex items-center gap-2 border-t border-slate-200 pt-2 mt-2">
-                                                <input 
-                                                    type="checkbox"
-                                                    id={`custom-check-${idx}`}
-                                                    checked={row.isCustom}
-                                                    onChange={(e) => {
-                                                        const newRows = [...manualRows];
-                                                        const isChecked = e.target.checked;
-                                                        // Preserve text if user typed a description in SKU field before checking 'Novo'
-                                                        const currentSku = newRows[idx].sku;
-                                                        
-                                                        newRows[idx].isCustom = isChecked;
-                                                        newRows[idx].similarityChecked = false; // Always force check when switching modes
-                                                        
-                                                        if (isChecked) {
-                                                            if (currentSku && !newRows[idx].customDesc) {
-                                                                newRows[idx].customDesc = currentSku;
-                                                            }
-                                                            newRows[idx].sku = ''; 
-                                                        } else {
-                                                            newRows[idx].sku = ''; 
-                                                        }
-
-                                                        // Reset duplicate error visual when toggling
-                                                        if(isDuplicate) {
-                                                            const newErrors = {...formErrors};
-                                                            newErrors.duplicateCustom = newErrors.duplicateCustom?.filter(i => i !== idx);
-                                                            setFormErrors(newErrors);
-                                                        }
-                                                        // Reset invalid error when toggling
-                                                        if(isInvalidSku) {
-                                                            const newErrors = {...formErrors};
-                                                            newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
-                                                            setFormErrors(newErrors);
-                                                        }
-                                                        // Reset unchecked error
-                                                        if(isUnchecked) {
-                                                            const newErrors = {...formErrors};
-                                                            newErrors.unchecked = newErrors.unchecked?.filter(i => i !== idx);
-                                                            setFormErrors(newErrors);
-                                                        }
-
-                                                        setManualRows(newRows);
-                                                    }}
-                                                    className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
-                                                />
-                                                <label htmlFor={`custom-check-${idx}`} className="text-xs text-slate-500 cursor-pointer select-none">
-                                                    Não encontrei na lista (Criar novo)
-                                                </label>
                                             </div>
                                         </div>
                                     )}
@@ -1132,244 +1206,197 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             );
                         })}
                     </div>
-                    
-                    <button onClick={addManualRow} className="w-full py-3 border-2 border-dashed border-slate-200 rounded-lg text-slate-500 hover:text-brand-600 hover:border-brand-200 hover:bg-brand-50 transition-all text-sm font-medium flex items-center justify-center gap-2 mt-4">
-                        <Plus className="w-4 h-4" /> Adicionar Outro Item
+
+                    {/* Add Item Button */}
+                    <button
+                        onClick={addManualRow}
+                        className="w-full py-3 bg-brand-50 dark:bg-brand-900/20 border-2 border-dashed border-brand-200 dark:border-brand-800 rounded-lg text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors flex items-center justify-center gap-2"
+                    >
+                        <Plus className="w-5 h-5" /> Adicionar Outro Item
                     </button>
 
-                    <div className="pt-6 flex justify-end">
-                        <button
+                    {/* Submit Button (Next Step) */}
+                    <div className="pt-4 flex justify-end">
+                         <button
                             onClick={handleManualNext}
-                            className="bg-brand-600 text-white px-8 py-3 rounded-xl hover:bg-brand-700 flex items-center gap-2 shadow-sm font-medium transition-all"
+                            className="bg-brand-600 text-white px-6 py-3 rounded-lg hover:bg-brand-700 font-medium flex items-center gap-2 shadow-sm"
                         >
-                            Próximo: Conferir <ArrowRightCircle className="w-5 h-5" />
+                            <ArrowRightCircle className="w-5 h-5" /> Avançar para Finalização
                         </button>
                     </div>
                 </div>
-                
-                {message && (
-                  <div className={`mt-4 p-4 rounded-lg text-sm font-medium border ${message.type === 'success' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
-                    {message.text}
-                  </div>
-                )}
             </div>
           )}
         </div>
       )}
 
-      {/* ORDERS LIST */}
+      {/* LIST AREA */}
       {showList && (
-        <div className="space-y-4">
-            {filteredOrders.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">
-                    Nenhum pedido encontrado.
-                </div>
-            ) : (
-                filteredOrders.map((order) => {
-                    const isExpanded = expandedOrderId === order.id;
-                    const items = toArray(order.items) || []; 
-                    const canModify = (currentUsername === order.creator || isAdmin);
-                    const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
-                    
-                    // Progress Calculation for FINISHED orders
-                    let progressPercent = 0;
-                    let hasMissingItems = false;
-                    
-                    if (order.status === 'COMPLETED') {
-                        const totalItems = items.length;
-                        let completedItemsCount = 0;
-                        
-                        items.forEach((i: any) => {
-                            const totalPicked = getTotalPickedQuantity(order, orders, i.sku);
-                            // Consider fulfilled in child order as completed
-                            if (totalPicked >= i.quantity || i.fulfilledInOrderId) {
-                                completedItemsCount++;
-                            } else {
-                                hasMissingItems = true;
-                            }
-                        });
-                        
-                        progressPercent = totalItems > 0 ? Math.round((completedItemsCount / totalItems) * 100) : 0;
-                    }
+        <div className="space-y-4 animate-fade-in">
+           {filteredOrders.length === 0 ? (
+               <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                   <div className="bg-slate-100 dark:bg-slate-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                       <Search className="w-8 h-8 text-slate-400" />
+                   </div>
+                   <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-1">Nenhum pedido encontrado</h3>
+                   <p className="text-slate-500 dark:text-slate-400">Tente ajustar seus filtros ou crie um novo pedido.</p>
+               </div>
+           ) : (
+               filteredOrders.map(order => {
+                   const isExpanded = expandedOrderId === order.id;
+                   const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
+                   const hasBackorder = order.reopenCount && order.reopenCount > 0;
+                   const isReopen = !!order.originalOrderId;
 
-                    return (
-                        <div key={order.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden transition-all relative">
-                            <div 
-                                className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50"
-                                onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-                            >
-                                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 pr-4">
-                                    {/* Order Info */}
-                                    <div className="md:col-span-5">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs font-mono font-bold text-slate-400 bg-slate-100 px-1 rounded">#{order.displayId || '?'}</span>
-                                            <h4 className="font-bold text-slate-800 text-lg">{order.title || "Sem Título"}</h4>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                                            <User className="w-3 h-3"/> 
-                                            {order.creator || 'Desconhecido'}
-                                            <span className="text-slate-300">|</span>
-                                            <span>Criado: {new Date(order.dateCreated).toLocaleDateString()}</span>
-                                        </div>
-                                    </div>
-
-                                    {/* Date & Progress */}
-                                    <div className="md:col-span-4 flex flex-col justify-center">
-                                         <div className="flex items-center gap-2 text-xs text-slate-600 mb-1">
-                                            <Calendar className="w-3 h-3 text-brand-600" />
-                                            Para: <span className="font-semibold">{order.dueDate ? new Date(order.dueDate).toLocaleDateString() : 'N/A'}</span>
-                                         </div>
-                                         {order.status === 'COMPLETED' && (
-                                             <div className="flex items-center gap-3">
-                                                <div className="flex items-center gap-2 w-full max-w-[150px]">
-                                                    <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                                        <div className={`h-full ${hasMissingItems ? 'bg-amber-500' : 'bg-green-500'}`} style={{ width: `${progressPercent}%` }}></div>
-                                                    </div>
-                                                    <span className="text-[10px] font-bold text-slate-500">{progressPercent}%</span>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); downloadExcel(order); }}
-                                                    className="bg-green-50 text-green-700 hover:bg-green-100 p-1.5 rounded transition-colors"
-                                                    title="Exportar Excel"
-                                                >
-                                                    <Download className="w-4 h-4" />
-                                                </button>
-                                             </div>
-                                         )}
-                                    </div>
-
-                                    {/* Status Badge */}
-                                    <div className="md:col-span-3 flex items-center justify-end gap-2">
-                                        {isInProcess ? (
-                                            <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700 animate-pulse flex items-center gap-1 border border-amber-200">
-                                                <Activity className="w-3 h-3" /> Em curso
+                   return (
+                       <div key={order.id} className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'}`}>
+                           <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
+                               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                   <div className="flex items-start gap-4">
+                                       <div className={`p-3 rounded-full hidden md:block ${type === 'OPEN' ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'}`}>
+                                           {type === 'OPEN' ? <Clock className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />}
+                                       </div>
+                                       <div>
+                                           <div className="flex items-center gap-2">
+                                               <h3 className="font-bold text-lg text-slate-800 dark:text-white">{order.title}</h3>
+                                               {hasBackorder && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-bold">Reabertura ({order.reopenCount})</span>}
+                                               {isReopen && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-bold">Derivado</span>}
+                                           </div>
+                                           <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-1">
+                                               <span className="flex items-center gap-1"><User className="w-3 h-3" /> {order.creator}</span>
+                                               <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full"></span>
+                                               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(order.dateCreated).toLocaleDateString()}</span>
+                                               {type === 'OPEN' && (
+                                                   <>
+                                                     <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full"></span>
+                                                     <span className={`font-semibold ${new Date(order.dueDate) < new Date() ? 'text-red-500' : 'text-blue-500'}`}>
+                                                        Levantar: {new Date(order.dueDate).toLocaleDateString()}
+                                                     </span>
+                                                   </>
+                                               )}
+                                           </div>
+                                       </div>
+                                   </div>
+                                   
+                                   <div className="flex items-center gap-3 ml-14 md:ml-0">
+                                       {isInProcess && (
+                                            <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full flex items-center gap-1 border border-amber-100 dark:border-amber-800">
+                                                <Activity className="w-3 h-3 animate-pulse" /> Em Separação
                                             </span>
-                                        ) : (
+                                       )}
+                                       {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400"/> : <ChevronDown className="w-5 h-5 text-slate-400"/>}
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           {isExpanded && (
+                               <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 animate-fade-in">
+                                   <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
+                                       <table className="w-full text-sm text-left">
+                                           <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
+                                               <tr>
+                                                   <th className="p-3">Material</th>
+                                                   <th className="p-3">Descrição</th>
+                                                   <th className="p-3 text-right">Qtd</th>
+                                                   {type === 'FINISHED' && <th className="p-3 text-right">Processado</th>}
+                                                   {type === 'FINISHED' && <th className="p-3">Status</th>}
+                                               </tr>
+                                           </thead>
+                                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                                               {order.items.map((item, idx) => {
+                                                   const picked = type === 'FINISHED' ? getTotalPickedQuantity(order, orders, item.sku) : 0;
+                                                   const isFullyPicked = picked >= item.quantity;
+                                                   return (
+                                                       <tr key={idx}>
+                                                           <td className="p-3 font-mono text-xs">{item.sku}</td>
+                                                           <td className="p-3">
+                                                               {item.description}
+                                                               {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
+                                                           </td>
+                                                           <td className="p-3 text-right font-bold">{item.quantity}</td>
+                                                           {type === 'FINISHED' && (
+                                                               <>
+                                                                 <td className="p-3 text-right font-bold">{picked}</td>
+                                                                 <td className="p-3">
+                                                                     {isFullyPicked ? (
+                                                                         <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
+                                                                     ) : (
+                                                                         <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
+                                                                     )}
+                                                                 </td>
+                                                               </>
+                                                           )}
+                                                       </tr>
+                                                   );
+                                               })}
+                                           </tbody>
+                                       </table>
+                                   </div>
+
+                                   {/* Change Log */}
+                                   {order.changeLog && order.changeLog.length > 0 && (
+                                       <div className="mb-4">
+                                           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1">
+                                               <History className="w-3 h-3" /> Histórico de Alterações
+                                           </p>
+                                           <div className="space-y-2">
+                                               {order.changeLog.map((log, idx) => (
+                                                   <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700">
+                                                       <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(log.date).toLocaleString()}</span>
+                                                       <span className="mx-1 text-slate-300">|</span>
+                                                       <span className="text-brand-600 dark:text-brand-400 font-medium">{log.actor}</span>
+                                                       <span className="mx-1 text-slate-300">|</span>
+                                                       <span>{log.details}</span>
+                                                   </div>
+                                               ))}
+                                           </div>
+                                       </div>
+                                   )}
+
+                                   <div className="flex justify-end gap-3">
+                                       {/* Actions for OPEN orders */}
+                                       {type === 'OPEN' && canEdit && (
                                             <>
-                                                {order.status === 'COMPLETED' ? (
-                                                    hasMissingItems ? (
-                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
-                                                            Finalizado com itens em falta
-                                                        </span>
-                                                    ) : (
-                                                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                                            Finalizado
-                                                        </span>
-                                                    )
-                                                ) : (
-                                                    <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                                        Aberto
-                                                    </span>
-                                                )}
+                                                <button 
+                                                    onClick={() => handleDeleteOrder(order.id)}
+                                                    className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"
+                                                >
+                                                    <Trash2 className="w-4 h-4" /> Excluir
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleEditStart(order)}
+                                                    className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"
+                                                >
+                                                    <Edit className="w-4 h-4" /> Editar Pedido
+                                                </button>
                                             </>
-                                        )}
-                                    </div>
-                                </div>
-                                
-                                <div className="ml-4 flex items-center gap-2">
-                                    {isAdmin && type !== 'FINISHED' && (
-                                        <button 
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
-                                            className="text-red-400 hover:text-red-600 p-2"
-                                        >
-                                            <Trash2 className="w-4 h-4" />
-                                        </button>
-                                    )}
-                                    {isExpanded ? <ChevronUp className="text-slate-400"/> : <ChevronDown className="text-slate-400"/>}
-                                </div>
-                            </div>
-
-                            {isExpanded && (
-                                <div className="bg-slate-50 border-t border-slate-200 p-4 animate-fade-in">
-                                    {isInProcess && (
-                                        <div className="mb-4 bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-3">
-                                            <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
-                                            <div>
-                                                <p className="text-amber-800 font-bold text-sm">Pedido em curso</p>
-                                                <p className="text-amber-700 text-xs">A equipe de armazém iniciou a separação deste pedido.</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    <table className="w-full text-left text-sm text-slate-600 mb-4 bg-white rounded-lg overflow-hidden shadow-sm">
-                                        <thead className="bg-slate-100 font-semibold text-slate-700">
-                                            <tr>
-                                                <th className="p-3">Material</th>
-                                                <th className="p-3">Descrição</th>
-                                                <th className="p-3 text-right">Pedida</th>
-                                                {/* Only show Picked column if Finished */}
-                                                {order.status === 'COMPLETED' && <th className="p-3 text-right">Satisfeita</th>}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {items.map((item: any, idx: number) => {
-                                                const localPicked = getPickedQtyForSku(order, item.sku);
-                                                const totalPicked = getTotalPickedQuantity(order, orders, item.sku);
-                                                const isFullyPicked = totalPicked >= item.quantity;
-                                                const isLocallyShort = localPicked < item.quantity && !item.fulfilledInOrderId && !isFullyPicked;
-
-                                                return (
-                                                    <tr key={idx} className={isLocallyShort ? 'bg-red-50' : ''}>
-                                                        <td className="p-3 font-medium text-xs font-mono">{item.sku}</td>
-                                                        <td className="p-3">
-                                                            {item.description}
-                                                            {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">Novo</span>}
-                                                            {isLocallyShort && <span className="ml-2 text-[10px] bg-red-100 text-red-700 px-1 rounded flex-inline items-center gap-1"><AlertCircle className="w-3 h-3 inline"/> Falta</span>}
-                                                            {item.fulfilledInOrderId && (
-                                                                <span className="ml-2 text-[10px] bg-green-100 text-green-700 px-1 rounded border border-green-200">
-                                                                    (Abastecido no pedido #{item.fulfilledInOrderId})
-                                                                </span>
-                                                            )}
-                                                        </td>
-                                                        <td className="p-3 text-right font-bold">{item.quantity}</td>
-                                                        {order.status === 'COMPLETED' && (
-                                                            <td className={`p-3 text-right font-bold ${!isFullyPicked ? 'text-red-600' : 'text-green-600'}`}>
-                                                                {isFullyPicked ? item.quantity : localPicked}
-                                                            </td>
-                                                        )}
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-
-                                    {/* Action Buttons */}
-                                    {type === 'OPEN' && canEdit && order.status === 'OPEN' && canModify && (
-                                        <div className="flex justify-end gap-3 mb-4">
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
-                                                className="bg-amber-100 text-amber-700 px-4 py-2 rounded-lg hover:bg-amber-200 transition-colors flex items-center gap-2 shadow-sm text-sm font-medium"
+                                       )}
+                                       {/* Actions for FINISHED orders */}
+                                       {type === 'FINISHED' && (
+                                           <button 
+                                                onClick={() => downloadExcel(order)}
+                                                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm"
                                             >
-                                                <Edit className="w-4 h-4" /> Editar
+                                                <Download className="w-4 h-4" /> Exportar Excel
                                             </button>
-                                        </div>
-                                    )}
+                                       )}
+                                   </div>
+                               </div>
+                           )}
+                       </div>
+                   );
+               })
+           )}
+        </div>
+      )}
 
-                                    {/* Change Log */}
-                                    {order.changeLog && order.changeLog.length > 0 && (
-                                        <div className="mt-4 border-t border-slate-200 pt-4">
-                                            <h5 className="text-xs font-bold text-slate-500 uppercase mb-2 flex items-center gap-1">
-                                                <History className="w-3 h-3"/> Histórico de Alterações
-                                            </h5>
-                                            <div className="space-y-2">
-                                                {order.changeLog.map((log, i) => (
-                                                    <div key={i} className="text-xs bg-white p-2 rounded border border-slate-200 text-slate-600">
-                                                        <div className="flex justify-between mb-1">
-                                                            <span className="font-semibold text-slate-800">{log.actor}</span>
-                                                            <span className="text-slate-400">{new Date(log.date).toLocaleString('pt-BR')}</span>
-                                                        </div>
-                                                        <p>{log.details}</p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })
-            )}
+      {message && (
+        <div className={`fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center gap-2 animate-slide-up ${message.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+            {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5"/>}
+            <span className="font-medium">{message.text}</span>
+            <button onClick={() => setMessage(null)} className="ml-2 p-1 hover:bg-white/20 rounded-full">
+                <X className="w-4 h-4" />
+            </button>
         </div>
       )}
     </div>

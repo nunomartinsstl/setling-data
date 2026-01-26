@@ -96,6 +96,54 @@ const activateOfflineMode = () => {
     isFirebaseActive = false;
 };
 
+// --- CONSTANTS ---
+export const MATERIAL_CATEGORIES = [
+    { code: 'CMV', name: 'COMANDOS' },
+    { code: 'EQU', name: 'EQUIPAMENTOS' },
+    { code: 'DIF', name: 'DIFUSÃO' },
+    { code: 'ISO', name: 'ISOLAMENTO' },
+    { code: 'COM', name: 'COMPONENTES' },
+    { code: 'PRF', name: 'PERFIL' },
+    { code: 'VEN', name: 'VENTILADORES' },
+    { code: 'ELE', name: 'ELETRICO' },
+    { code: 'PPR', name: 'PPR' },
+    { code: 'LAT', name: 'LATÃO' },
+    { code: 'GAL', name: 'GALVANIZADOS' },
+    { code: 'ABR', name: 'ABRAÇADEIRAS' },
+    { code: 'ACC', name: 'ACESSÓRIOS' },
+    { code: 'CIH', name: 'CABO ISE' },
+    { code: 'CBL', name: 'CABO LIYCY' },
+    { code: 'CBV', name: 'CABO VARIADO' },
+    { code: 'COB', name: 'COBRE' },
+    { code: 'CDR', name: 'CONDUTA' },
+    { code: 'CON', name: 'CONSUMÍVEIS' },
+    { code: 'FIL', name: 'FILTROS' },
+    { code: 'HID', name: 'HIDRÁULICA' },
+    { code: 'DVS', name: 'DIVERSOS' },
+    { code: 'FRM', name: 'FERRAMENTAS' },
+    { code: 'SOL', name: 'SOLAR' },
+    { code: 'CCF', name: 'CABO' },
+    { code: 'CBP', name: 'CABO PRETO' },
+    { code: 'PAR', name: 'PARAFUSOS' },
+    { code: 'PIR', name: 'PISO RADIANTE' },
+    { code: 'PVC', name: 'PVC' },
+    { code: 'ROU', name: 'ROUPA' },
+    { code: 'TUB', name: 'TUBO' },
+    { code: 'TUC', name: 'TUBO' },
+    { code: 'TUF', name: 'TUBO FLÉXIVEL' },
+    { code: 'TUG', name: 'TUBO GRIS' },
+    { code: 'TUS', name: 'TUBO SPIRO' },
+    { code: 'A00', name: 'GENERICAS' },
+    { code: 'LIV', name: 'GENERICAS' },
+    { code: 'LIQ', name: 'LIQUIDOS' },
+    { code: 'GAS', name: 'GASES' },
+    { code: 'CBR', name: 'CABO DE REDE' },
+    { code: 'VDE', name: 'VASOS DE' },
+    { code: 'REN', name: 'RENTING' },
+    { code: 'INX', name: 'INOX' },
+    { code: 'ARC', name: 'AR COMPRIMIDO' }
+];
+
 export const StorageService = {
   isConnected: () => isFirebaseActive,
 
@@ -855,6 +903,20 @@ export const StorageService = {
             { id: '2', name: 'Setling Hotelaria' }
         ];
     }
+    
+    // Seed default Unit Options if empty or legacy string array
+    if(!settings.unitOptions || settings.unitOptions.length === 0 || typeof settings.unitOptions[0] === 'string') {
+        settings.unitOptions = [
+            { value: "UN", description: "Unidade" },
+            { value: "M", description: "Metro" },
+            { value: "KG", description: "Kilograma" },
+            { value: "L", description: "Litro" },
+            { value: "CX", description: "Caixa" },
+            { value: "RL", description: "Rolo" },
+            { value: "PC", description: "Pack" }
+        ];
+    }
+
     return settings;
   },
 
