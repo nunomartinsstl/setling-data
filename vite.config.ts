@@ -5,6 +5,15 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
-    // Removed rollupOptions.external to force bundling of all dependencies
+    rollupOptions: {
+      external: ['jspdf', 'jspdf-autotable', 'xlsx'],
+      output: {
+        globals: {
+          jspdf: 'jspdf',
+          'jspdf-autotable': 'jspdfAutotable',
+          xlsx: 'XLSX'
+        }
+      }
+    }
   }
 });
