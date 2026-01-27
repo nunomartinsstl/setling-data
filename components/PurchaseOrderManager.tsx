@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Printer } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
 
 // Access global libraries
 declare const window: any;
@@ -277,15 +277,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       XLSX.writeFile(wb, fileName);
   };
 
-  // Replaced jsPDF with window.print()
-  const handlePrint = () => {
-      if (!selectedSupplier) {
-          alert("Selecione um fornecedor para imprimir.");
-          return;
-      }
-      window.print();
-  };
-
   const handleSave = async () => {
       if (!selectedSupplier) {
           alert("Fornecedor obrigatório.");
@@ -377,7 +368,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
   // Render modal
   const renderSimilarityModal = () => (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 print:hidden">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
                 {similarityStep === 'LIST' && (
                     <>
@@ -491,109 +482,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   );
 
   return (
-    <>
-    {/* PRINTABLE INVOICE VIEW - HIDDEN BY DEFAULT, VISIBLE ONLY ON PRINT */}
-    {selectedSupplier && (
-      <div className="hidden print:block print:w-full bg-white text-black p-8 font-sans">
-         {/* HEADER */}
-         <div className="flex justify-between items-start border-b-2 border-slate-800 pb-6 mb-8">
-             <div>
-                <h1 className="text-3xl font-bold tracking-tight text-slate-900">PEDIDO DE COMPRA</h1>
-                <p className="text-sm text-slate-500 mt-1">ID: #{displayId || "RASCUNHO"}</p>
-             </div>
-             <div className="text-right">
-                <p className="font-bold text-lg text-[#2c52ad]">Setling</p>
-                <p className="text-sm text-slate-500">Gestão de Pedidos</p>
-                <p className="text-sm text-slate-500">{new Date().toLocaleDateString()}</p>
-             </div>
-         </div>
-
-         {/* DETAILS */}
-         <div className="grid grid-cols-2 gap-8 mb-8">
-             <div className="bg-slate-50 p-4 rounded border border-slate-200">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-1">Fornecedor</p>
-                <p className="font-bold text-lg text-slate-800">{selectedSupplier.name}</p>
-                <p className="text-sm text-slate-600">{selectedSupplier.address}</p>
-                <p className="text-sm text-slate-600">Pagamento: {selectedSupplier.paymentTerms}</p>
-             </div>
-             <div className="bg-slate-50 p-4 rounded border border-slate-200">
-                <p className="text-xs font-bold text-slate-500 uppercase mb-1">Detalhes do Pedido</p>
-                <div className="grid grid-cols-2 gap-4">
-                    <div>
-                        <p className="text-xs text-slate-500">Data Pedido</p>
-                        <p className="font-medium">{orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString()}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-slate-500">PEP / Projeto</p>
-                        <p className="font-medium">{pep || "-"}</p>
-                    </div>
-                    <div>
-                        <p className="text-xs text-slate-500">Solicitante</p>
-                        <p className="font-medium">{currentUsername}</p>
-                    </div>
-                </div>
-             </div>
-         </div>
-
-         {/* TABLE */}
-         <table className="w-full text-left text-sm mb-8 border-collapse">
-             <thead>
-                 <tr className="bg-slate-800 text-white">
-                     <th className="p-3 border border-slate-800">Ref.</th>
-                     <th className="p-3 border border-slate-800">Descrição</th>
-                     <th className="p-3 border border-slate-800 text-right">Qtd</th>
-                     <th className="p-3 border border-slate-800">Unid.</th>
-                     <th className="p-3 border border-slate-800 text-right">Preço Unit.</th>
-                     <th className="p-3 border border-slate-800 text-right">Total</th>
-                 </tr>
-             </thead>
-             <tbody>
-                 {rows.map((row, idx) => (
-                     <tr key={idx} className="border-b border-slate-200">
-                         <td className="p-3 border-x border-slate-200 font-mono text-xs">{row.sku}</td>
-                         <td className="p-3 border-x border-slate-200">{row.description}</td>
-                         <td className="p-3 border-x border-slate-200 text-right">{row.quantity}</td>
-                         <td className="p-3 border-x border-slate-200 text-center">{row.unit}</td>
-                         <td className="p-3 border-x border-slate-200 text-right">{row.unitPrice.toFixed(2)} €</td>
-                         <td className="p-3 border-x border-slate-200 text-right font-medium">{(row.quantity * row.unitPrice).toFixed(2)} €</td>
-                     </tr>
-                 ))}
-             </tbody>
-             <tfoot>
-                 <tr className="bg-slate-50 font-bold">
-                     <td colSpan={4} className="border-t border-slate-800"></td>
-                     <td className="p-3 text-right border-t border-slate-800">Subtotal:</td>
-                     <td className="p-3 text-right border-t border-slate-800">{subTotal.toFixed(2)} €</td>
-                 </tr>
-                 <tr className="bg-slate-50 font-bold">
-                     <td colSpan={4}></td>
-                     <td className="p-3 text-right">IVA ({(VAT_RATE*100).toFixed(0)}%):</td>
-                     <td className="p-3 text-right">{vatTotal.toFixed(2)} €</td>
-                 </tr>
-                 <tr className="bg-slate-100 font-bold text-lg">
-                     <td colSpan={4}></td>
-                     <td className="p-3 text-right border-t border-slate-300">Total Final:</td>
-                     <td className="p-3 text-right border-t border-slate-300 text-[#2c52ad]">{grandTotal.toFixed(2)} €</td>
-                 </tr>
-             </tfoot>
-         </table>
-
-         {/* FOOTER SIGNATURES */}
-         <div className="mt-16 pt-8 border-t border-slate-200 flex justify-between">
-             <div className="text-center w-1/3">
-                 <div className="border-b border-black mb-2 h-8"></div>
-                 <p className="text-xs font-bold uppercase">Aprovado Por</p>
-             </div>
-             <div className="text-center w-1/3">
-                 <div className="border-b border-black mb-2 h-8"></div>
-                 <p className="text-xs font-bold uppercase">Recebido Por</p>
-             </div>
-         </div>
-      </div>
-    )}
-
-    {/* NORMAL APP VIEW - HIDDEN ON PRINT */}
-    <div className="space-y-6 animate-fade-in pb-20 print:hidden">
+    <div className="space-y-6 animate-fade-in pb-20">
       
       {similarityModalOpen && renderSimilarityModal()}
 
@@ -900,7 +789,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             </button>
 
             {/* FOOTER ACTIONS */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 shadow-lg z-30 lg:pl-64 print:hidden">
+            <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 shadow-lg z-30 lg:pl-64">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex gap-6 text-sm md:text-base">
                         <div className="flex flex-col">
@@ -924,12 +813,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                             <FileSpreadsheet className="w-4 h-4" /> Excel
                         </button>
                         <button 
-                            onClick={handlePrint}
-                            className="flex-1 md:flex-none px-4 py-2 border border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900/20 font-medium flex items-center justify-center gap-2"
-                        >
-                            <Printer className="w-4 h-4" /> Imprimir / PDF
-                        </button>
-                        <button 
                             onClick={handleSave}
                             className="flex-1 md:flex-none px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center justify-center gap-2 shadow-sm"
                         >
@@ -942,7 +825,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       )}
 
     </div>
-    </>
   );
 };
 
