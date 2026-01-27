@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
 import { EmailRecipient, Company, UnitOption, Supplier } from '../types';
 import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'xlsx';
+
+declare const XLSX: any;
 
 const Settings: React.FC = () => {
   const [recipients, setRecipients] = useState<EmailRecipient[]>([]);

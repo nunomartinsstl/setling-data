@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption } from '../types';
 import { StorageService, MATERIAL_CATEGORIES } from '../services/storageService';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag } from 'lucide-react';
-import * as XLSX from 'xlsx';
+
+declare const XLSX: any;
 
 interface OrderManagerProps {
   orders: Order[];

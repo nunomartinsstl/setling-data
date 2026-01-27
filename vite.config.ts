@@ -4,16 +4,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: 'dist',
-    rollupOptions: {
-      external: ['jspdf', 'jspdf-autotable', 'xlsx'],
-      output: {
-        globals: {
-          jspdf: 'jspdf',
-          'jspdf-autotable': 'jspdfAutotable',
-          xlsx: 'XLSX'
-        }
-      }
-    }
+    outDir: 'dist'
   }
 });

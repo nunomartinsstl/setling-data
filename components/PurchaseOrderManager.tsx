@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, FileText, Download, User, MapPin, CreditCard, Tag, ChevronDown, ChevronUp, X, FileSpreadsheet, Save, ArrowLeft, Clock, Calendar, Edit, List, Euro, CheckCircle, AlertCircle, HelpCircle, Check } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
+
+// Access global libraries
+declare const window: any;
+declare const XLSX: any;
 
 interface PurchaseOrderManagerProps {
   masterList: MasterMaterial[];
@@ -253,7 +254,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const grandTotal = subTotal + vatTotal;
 
   const generatePDF = (poData?: PurchaseOrder) => {
-    // ... (Existing PDF logic unchanged) ...
     const supplier = poData ? poData.supplier : selectedSupplier;
     const items = poData ? poData.items : rows;
     const currentPep = poData ? poData.pep : pep;
@@ -268,7 +268,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         return;
     }
 
-    const doc = new jsPDF();
+    // Use global jspdf from CDN (exposed as window.jspdf)
+    const doc = new window.jspdf.jsPDF();
 
     doc.setFontSize(22);
     doc.setTextColor(40, 40, 40);
@@ -306,7 +307,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         `${(row.quantity * row.unitPrice).toFixed(2)} €`
     ]);
 
-    autoTable(doc, {
+    // Use global autoTable via doc extension
+    doc.autoTable({
         startY: Math.max(60, nextY + 20),
         head: [['Ref.', 'Descrição', 'Qtd', 'Preço Unit.', 'Total']],
         body: tableBody,
@@ -359,7 +361,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   const generateExcel = () => {
-      // ... (Existing Excel logic unchanged) ...
       if (!selectedSupplier) {
           alert("Selecione um fornecedor para exportar.");
           return;
@@ -378,6 +379,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           "Total": r.quantity * r.unitPrice
       }));
 
+      // Use global XLSX
+      const XLSX = (window as any).XLSX;
       const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Dados");

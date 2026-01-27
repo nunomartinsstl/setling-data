@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react';
 import { StockItem, UserRole, MasterMaterial } from '../types';
 import { StorageService } from '../services/storageService';
 import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info } from 'lucide-react';
-import * as XLSX from 'xlsx';
+
+declare const XLSX: any;
 
 interface StockManagerProps {
   stock: StockItem[];
