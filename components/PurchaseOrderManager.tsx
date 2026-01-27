@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, FileText, Download, User, MapPin, CreditCard, Tag, ChevronDown, ChevronUp, X, FileSpreadsheet, Save, ArrowLeft, Clock, Calendar, Edit, List, Euro } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, FileText, Download, User, MapPin, CreditCard, Tag, ChevronDown, ChevronUp, X, FileSpreadsheet, Save, ArrowLeft, Clock, Calendar, Edit, List, Euro, CheckCircle, AlertCircle, HelpCircle, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -20,9 +20,42 @@ interface PORow {
   unitPrice: number;
   isCustom: boolean; 
   showSuggestions: boolean;
+  similarityChecked: boolean;
 }
 
 const VAT_RATE = 0.23;
+
+// Helper to normalize string (remove accents/diacritics)
+const normalizeText = (text: string): string => {
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+};
+
+// Helper for similarity scoring
+const calculateRelevance = (target: string, query: string): number => {
+    const t = normalizeText(target);
+    const q = normalizeText(query);
+    
+    // Exact match
+    if (t === q) return 100;
+    
+    const qWords = q.split(/\s+/).filter(w => w.length > 2);
+    const tWords = t.split(/\s+/).filter(w => w.length > 2);
+    
+    if (qWords.length === 0) return 0;
+
+    let score = 0;
+    let matches = 0;
+
+    qWords.forEach(qw => {
+        if (t.includes(qw)) {
+            matches++;
+            score += 10; // Base score for inclusion
+            if (tWords.includes(qw)) score += 5; // Bonus for exact word match
+        }
+    });
+
+    return matches > 0 ? score : 0;
+};
 
 const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList, currentUsername }) => {
   const [viewMode, setViewMode] = useState<'LIST' | 'CREATE'>('LIST');
@@ -39,22 +72,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const [orderDate, setOrderDate] = useState<string>('');
   
   // Grid State
-  const [rows, setRows] = useState<PORow[]>([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false }]);
+  const [rows, setRows] = useState<PORow[]>([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
   const [expandedRow, setExpandedRow] = useState<number>(0);
   const [loading, setLoading] = useState(false);
 
-  const currentUserRole = useMemo(() => {
-      // Need to fetch user role from elsewhere or assume passed prop. 
-      // For now, we will trust the auth context or just check username if needed.
-      // Ideally App.tsx passes role. We'll use a hack to get role if not passed.
-      return UserRole.MANAGEMENT; // Fallback, usually only Mgmt sees this component
-  }, []);
+  // Similarity Search State
+  const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
+  const [similarityTargetIdx, setSimilarityTargetIdx] = useState<number | null>(null);
+  const [similarityResults, setSimilarityResults] = useState<MasterMaterial[]>([]);
+  const [similarityStep, setSimilarityStep] = useState<'LIST' | 'CONFIRM_MATCH' | 'CONFIRM_NEW'>('LIST');
+  const [selectedCandidate, setSelectedCandidate] = useState<MasterMaterial | null>(null);
 
-  const auth = getAuth();
-  const isOwnerOrAdmin = (po: PurchaseOrder) => {
-      // Logic handled in UI display
-      return po.creator === currentUsername || true; // Allow all authorized roles to edit for now
-  };
+  const currentUserRole = useMemo(() => {
+      return UserRole.MANAGEMENT; 
+  }, []);
 
   // Load Data
   useEffect(() => {
@@ -73,7 +104,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           setLoading(false);
       };
       load();
-  }, [viewMode]); // Reload when switching views
+  }, [viewMode]); 
 
   // Filtered Suppliers
   const filteredSuppliers = useMemo(() => {
@@ -88,9 +119,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   // Master List Autocomplete Helper
   const getMaterialMatches = (query: string) => {
       if (!query || query.length < 3) return [];
-      const q = query.toLowerCase();
+      const q = normalizeText(query);
       return masterList
-        .filter(m => m.description.toLowerCase().includes(q) || m.sku.toLowerCase().includes(q))
+        .filter(m => normalizeText(m.description).includes(q) || normalizeText(m.sku).includes(q))
         .slice(0, 5);
   };
 
@@ -103,11 +134,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       const newRows = [...rows];
       newRows[index] = { ...newRows[index], [field]: value };
       
-      // Show suggestions if typing description
+      // If typing description
       if (field === 'description') {
           newRows[index].showSuggestions = true;
-          if (newRows[index].isCustom === false && value === '') {
-              newRows[index].sku = '';
+          // Reset verification when description changes
+          newRows[index].similarityChecked = false;
+          
+          // Only clear SKU if not custom. Custom items keep 'MATERIAIS' but need re-check.
+          if (!newRows[index].isCustom) {
+               newRows[index].sku = ''; 
           }
       }
 
@@ -115,8 +150,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       if (field === 'isCustom') {
           if (value === true) {
               newRows[index].sku = 'MATERIAIS';
+              newRows[index].similarityChecked = false; // Require check
           } else {
               newRows[index].sku = '';
+              newRows[index].similarityChecked = false; 
           }
       }
       
@@ -130,13 +167,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           sku: material.sku,
           description: material.description,
           isCustom: false,
-          showSuggestions: false // Hide suggestions
+          showSuggestions: false,
+          similarityChecked: true // Auto-checked via suggestion
       };
       setRows(newRows);
   };
 
   const addRow = () => {
-      setRows([...rows, { sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false }]);
+      setRows([...rows, { sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
       setExpandedRow(rows.length);
   };
 
@@ -147,12 +185,75 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setRows(newRows);
   };
 
+  // --- SIMILARITY LOGIC ---
+  const handleCheckSimilarity = (idx: number) => {
+    const row = rows[idx];
+    const query = row.description; 
+    
+    if (!query || query.trim().length < 3) {
+        alert("Digite ao menos 3 caracteres na descrição para verificar.");
+        return;
+    }
+
+    const candidates = masterList
+        .map(m => ({ ...m, score: calculateRelevance(m.description, query) }))
+        .filter(m => m.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 10);
+
+    setSimilarityResults(candidates);
+    setSimilarityTargetIdx(idx);
+    setSimilarityStep('LIST');
+    setSimilarityModalOpen(true);
+  };
+
+  const handleSelectCandidate = (candidate: MasterMaterial) => {
+      setSelectedCandidate(candidate);
+      setSimilarityStep('CONFIRM_MATCH');
+  };
+
+  const handleConfirmMatch = () => {
+      if (similarityTargetIdx === null || !selectedCandidate) return;
+      
+      const newRows = [...rows];
+      newRows[similarityTargetIdx] = {
+          ...newRows[similarityTargetIdx],
+          sku: selectedCandidate.sku,
+          description: selectedCandidate.description,
+          isCustom: false,
+          similarityChecked: true,
+          showSuggestions: false
+      };
+      setRows(newRows);
+      setSimilarityModalOpen(false);
+  };
+
+  const handleNotFound = () => {
+      setSimilarityStep('CONFIRM_NEW');
+  };
+
+  const handleConfirmNew = () => {
+      if (similarityTargetIdx === null) return;
+      
+      const newRows = [...rows];
+      newRows[similarityTargetIdx] = {
+          ...newRows[similarityTargetIdx],
+          sku: 'MATERIAIS',
+          isCustom: true,
+          similarityChecked: true,
+          showSuggestions: false
+      };
+      setRows(newRows);
+      setSimilarityModalOpen(false);
+  };
+  // ------------------------
+
   const subTotal = rows.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
 
   const generatePDF = (poData?: PurchaseOrder) => {
-    // If passed data (saving flow), use it. Otherwise assume current state (draft preview)
+    // ... (Existing PDF logic unchanged) ...
     const supplier = poData ? poData.supplier : selectedSupplier;
     const items = poData ? poData.items : rows;
     const currentPep = poData ? poData.pep : pep;
@@ -169,7 +270,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
     const doc = new jsPDF();
 
-    // -- Header --
     doc.setFontSize(22);
     doc.setTextColor(40, 40, 40);
     doc.text("NOTA DE ENCOMENDA", 14, 20);
@@ -184,7 +284,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
     doc.text(`PEP: ${currentPep || 'N/A'}`, 14, 41);
     doc.text(`Responsável: ${currentUsername}`, 14, 46);
 
-    // -- Supplier Info (Right Aligned Box effectively) --
     doc.setFontSize(11);
     doc.setTextColor(0);
     doc.text("FORNECEDOR:", 120, 20);
@@ -199,7 +298,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
     const nextY = 31 + (addressLines.length * 4);
     doc.text(`Pagamento: ${supplier.paymentTerms}`, 120, nextY + 5);
 
-    // -- Table --
     const tableBody = items.map(row => [
         row.sku,
         row.description,
@@ -212,7 +310,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         startY: Math.max(60, nextY + 20),
         head: [['Ref.', 'Descrição', 'Qtd', 'Preço Unit.', 'Total']],
         body: tableBody,
-        theme: 'plain', // Clean look
+        theme: 'plain', 
         headStyles: { 
             fillColor: [240, 240, 240], 
             textColor: [50, 50, 50],
@@ -231,11 +329,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             2: { cellWidth: 25, halign: 'right' },
             3: { cellWidth: 25, halign: 'right' },
             4: { cellWidth: 25, halign: 'right' }
-        },
-        // Remove default footer from table to do custom one
+        }
     });
 
-    // -- Footer Totals --
     const finalY = (doc as any).lastAutoTable.finalY + 10;
     
     doc.setFontSize(10);
@@ -252,7 +348,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
     doc.text("TOTAL:", 140, finalY + 12, { align: 'right' });
     doc.text(`${currentGrand.toFixed(2)} €`, 195, finalY + 12, { align: 'right' });
 
-    // -- Signature --
     const sigY = finalY + 30;
     doc.setDrawColor(150);
     doc.line(14, sigY, 80, sigY);
@@ -264,12 +359,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   const generateExcel = () => {
+      // ... (Existing Excel logic unchanged) ...
       if (!selectedSupplier) {
           alert("Selecione um fornecedor para exportar.");
           return;
       }
-
-      // Flat Data Structure (Table format)
       const data = rows.map(r => ({
           "ID Pedido": displayId ? `#${displayId}` : "RASCUNHO",
           "Data": orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString(),
@@ -301,8 +395,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           alert("Adicione itens válidos.");
           return;
       }
+      
+      // New Validation: All items must be verified (similarityChecked)
+      const unverified = rows.some(r => !r.similarityChecked);
+      if (unverified) {
+          alert("Existem itens não verificados. Por favor, clique em 'Confirmar Material' para todos os itens.");
+          return;
+      }
 
-      // VALIDATION: Check for zero price
       if (rows.some(r => !r.unitPrice || r.unitPrice <= 0)) {
           alert("Erro: Todos os itens devem ter um Preço Unitário maior que 0.");
           return;
@@ -312,7 +412,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
       const newPO: PurchaseOrder = {
           id: orderId || Math.random().toString(36).substr(2, 9),
-          displayId: displayId, // Service will handle if undefined
+          displayId: displayId,
           dateCreated: orderId ? orderDate : new Date().toISOString(),
           supplier: selectedSupplier,
           pep: pep,
@@ -355,7 +455,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           unit: i.unit,
           unitPrice: i.unitPrice,
           isCustom: !!i.isCustom,
-          showSuggestions: false
+          showSuggestions: false,
+          similarityChecked: true // Saved items are implicitly checked
       })));
       setViewMode('CREATE');
   };
@@ -366,9 +467,128 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setOrderDate('');
       setSelectedSupplier(null);
       setPep('');
-      setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false }]);
+      setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
       setViewMode('CREATE');
   };
+
+  // --------------------------------------------------------------------------------
+  // JSX RENDER
+  // --------------------------------------------------------------------------------
+
+  // Render modal
+  const renderSimilarityModal = () => (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
+                {similarityStep === 'LIST' && (
+                    <>
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                            <h3 className="font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                                <Search className="w-5 h-5 text-purple-600" /> Verificar Material
+                            </h3>
+                            <button onClick={() => setSimilarityModalOpen(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                                <X className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+                                Materiais semelhantes encontrados no catálogo. Selecione se for o que procura:
+                            </p>
+                            <div className="space-y-2">
+                                {similarityResults.length > 0 ? (
+                                    similarityResults.map((res, idx) => (
+                                        <button 
+                                            key={idx}
+                                            onClick={() => handleSelectCandidate(res)}
+                                            className="w-full text-left p-3 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-200 dark:hover:border-purple-800 transition-colors group"
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <span className="font-bold text-purple-700 dark:text-purple-400 text-sm block group-hover:underline">{res.sku}</span>
+                                                <span className="bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 text-[10px] px-2 py-0.5 rounded-full font-bold">Encontrado</span>
+                                            </div>
+                                            <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{res.description}</p>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-8 text-slate-500 bg-slate-50 dark:bg-slate-900 rounded-lg border border-dashed border-slate-300 dark:border-slate-700">
+                                        Nenhuma similaridade encontrada.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="p-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                            <button 
+                                onClick={handleNotFound}
+                                className="w-full py-3 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-medium rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                                <AlertCircle className="w-4 h-4" /> Material não consta na lista
+                            </button>
+                        </div>
+                    </>
+                )}
+
+                {similarityStep === 'CONFIRM_MATCH' && selectedCandidate && (
+                    <>
+                         <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-green-50 dark:bg-green-900/20">
+                            <h3 className="font-bold text-green-800 dark:text-green-300 flex items-center gap-2">
+                                <CheckCircle className="w-5 h-5" /> Confirmar Seleção
+                            </h3>
+                        </div>
+                        <div className="p-6 flex-1 text-center">
+                            <p className="text-slate-600 dark:text-slate-300 mb-4">Confirma que o material pretendido é:</p>
+                            <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 mb-6 text-left">
+                                <p className="text-xs text-slate-400 font-bold uppercase">Material</p>
+                                <p className="font-mono font-bold text-lg text-slate-800 dark:text-white">{selectedCandidate.sku}</p>
+                                <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">{selectedCandidate.description}</p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setSimilarityStep('LIST')}
+                                    className="flex-1 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                >
+                                    Voltar
+                                </button>
+                                <button 
+                                    onClick={handleConfirmMatch}
+                                    className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
+                                >
+                                    Sim, é este
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {similarityStep === 'CONFIRM_NEW' && (
+                    <>
+                         <div className="p-4 border-b border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20">
+                            <h3 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                <HelpCircle className="w-5 h-5" /> Criar Novo Material?
+                            </h3>
+                        </div>
+                        <div className="p-6 flex-1 text-center">
+                            <p className="text-slate-600 dark:text-slate-300 mb-6">
+                                Indicou que o material não está na lista. Deseja confirmar que é um <strong>Novo Material</strong>?
+                            </p>
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setSimilarityStep('LIST')}
+                                    className="flex-1 py-2 border border-slate-300 dark:border-slate-600 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
+                                >
+                                    Voltar
+                                </button>
+                                <button 
+                                    onClick={handleConfirmNew}
+                                    className="flex-1 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 font-medium"
+                                >
+                                    Confirmar Novo
+                                </button>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+      </div>
+  );
 
   if (viewMode === 'LIST') {
       return (
@@ -435,6 +655,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   // CREATE / EDIT MODE
   return (
     <div className="space-y-6 animate-fade-in pb-20">
+      
+      {similarityModalOpen && renderSimilarityModal()}
+
       <div className="flex items-center gap-4 mb-6">
           <button onClick={() => setViewMode('LIST')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-500">
               <ArrowLeft className="w-6 h-6"/>
@@ -565,10 +788,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                         value={row.description}
                                         onChange={(e) => updateRow(idx, 'description', e.target.value)}
                                         placeholder="Buscar material ou digitar..."
-                                        className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none dark:bg-slate-800 dark:text-white text-sm"
+                                        className={`w-full p-2 border rounded-md focus:ring-2 focus:ring-purple-500 outline-none dark:bg-slate-800 dark:text-white text-sm ${!row.similarityChecked ? 'border-amber-400 bg-amber-50 dark:bg-amber-900/20' : 'border-slate-300 dark:border-slate-600'}`}
                                         autoComplete="off"
                                      />
-                                     {/* Similarity Check Logic: Show matches even if isCustom is true (Point 3) */}
+                                     {/* Similarity Check Logic */}
                                      {row.showSuggestions && matches.length > 0 && (
                                          <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg mt-1">
                                              {matches.map(m => (
@@ -588,8 +811,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                      <span className="text-[10px] text-slate-400 font-mono">
                                         Código de Material: {row.isCustom ? <span className="text-purple-500 font-bold">MATERIAIS</span> : (row.sku || '-')}
                                      </span>
-                                     {/* Checkbox for New Material (Point 4) */}
-                                     <label className="flex items-center gap-2 cursor-pointer">
+                                     
+                                     {/* Checkbox for New Material (Re-added as requested) */}
+                                     <label className="flex items-center gap-2 cursor-pointer ml-4">
                                          <input 
                                             type="checkbox" 
                                             checked={row.isCustom}
@@ -599,6 +823,28 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                          <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Novo Material</span>
                                      </label>
                                  </div>
+
+                                 {/* Confirmation Button only if Custom AND Not Checked */}
+                                 {row.isCustom && !row.similarityChecked && (
+                                    <div className="mt-2">
+                                         <button 
+                                            onClick={() => handleCheckSimilarity(idx)}
+                                            className="w-full py-2 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded text-xs font-bold hover:bg-amber-200 transition-colors flex items-center justify-center gap-1"
+                                        >
+                                            <Search className="w-3 h-3" /> Confirmar Material
+                                        </button>
+                                    </div>
+                                 )}
+
+                                 {/* Status Badge if Checked */}
+                                 {row.similarityChecked && (
+                                    <div className="mt-2 text-right">
+                                        <div className={`inline-flex px-2 py-1 rounded text-[10px] font-bold items-center gap-1 ${row.isCustom ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'}`}>
+                                            <Check className="w-3 h-3" /> 
+                                            {row.isCustom ? 'Novo (Verificado)' : 'Existente'}
+                                        </div>
+                                    </div>
+                                 )}
                              </div>
 
                              {/* Quantity */}

@@ -26,10 +26,15 @@ interface ManualRow {
     similarityChecked: boolean;
 }
 
+// Helper to normalize string (remove accents/diacritics)
+const normalizeText = (text: string): string => {
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+};
+
 // Helper for similarity scoring
 const calculateRelevance = (target: string, query: string): number => {
-    const t = target.toLowerCase();
-    const q = query.toLowerCase();
+    const t = normalizeText(target);
+    const q = normalizeText(query);
     
     // Exact match
     if (t === q) return 100;
@@ -254,7 +259,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                   }
                   
                   // Check if description already exists in master list
-                  const exists = masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
+                  const exists = masterList.some(m => normalizeText(m.description) === normalizeText(row.customDesc));
                   if (exists) {
                       duplicateErrors.push(idx);
                   }
@@ -386,7 +391,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         const unchecked = manualRows.some(r => r.isCustom && !r.similarityChecked);
         const missingCat = manualRows.some((r) => r.isCustom && (!r.category || (r.category === '_OTHER_' && !r.customCategory)));
         const hasDuplicates = manualRows.some((row, idx) => {
-             return row.isCustom && row.customDesc && masterList.some(m => m.description.toLowerCase().trim() === row.customDesc.toLowerCase().trim());
+             return row.isCustom && row.customDesc && masterList.some(m => normalizeText(m.description) === normalizeText(row.customDesc));
         });
         const hasInvalidSkus = manualRows.some((row) => !row.isCustom && row.sku && !isKnownSku(row.sku));
 
