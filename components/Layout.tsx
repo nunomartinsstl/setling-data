@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -80,7 +80,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
         <div className="h-full flex flex-col">
           <div className="p-6 border-b border-slate-100 dark:border-slate-700">
             <h1 className="text-2xl font-bold text-[#2c52ad] dark:text-blue-400 tracking-tight">SETLING</h1>
-            <p className="text-xs text-slate-400 font-medium">Gestão Inteligente</p>
+            <p className="text-xs text-slate-400 font-medium">Gestão de Pedidos</p>
           </div>
 
           <div className="p-4">
@@ -102,13 +102,22 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               />
               
               {canCreate && (
-                <NavItem 
-                    view="CREATE_ORDER" 
-                    icon={PlusCircle} 
-                    label="Criar Pedido" 
-                    isActive={currentView === 'CREATE_ORDER'} 
-                    onClick={() => handleNavClick('CREATE_ORDER')} 
-                />
+                <>
+                    <NavItem 
+                        view="CREATE_ORDER" 
+                        icon={PlusCircle} 
+                        label="Criar Pedido" 
+                        isActive={currentView === 'CREATE_ORDER'} 
+                        onClick={() => handleNavClick('CREATE_ORDER')} 
+                    />
+                    <NavItem 
+                        view="PURCHASE_ORDERS" 
+                        icon={ShoppingBag} 
+                        label="Compras (PO)" 
+                        isActive={currentView === 'PURCHASE_ORDERS'} 
+                        onClick={() => handleNavClick('PURCHASE_ORDERS')} 
+                    />
+                </>
               )}
 
               <NavItem 

@@ -1,4 +1,4 @@
-import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem, Invite } from '../types';
+import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem, Invite, Supplier, PurchaseOrder } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot, remove, update } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
@@ -45,7 +45,9 @@ const KEYS = {
   MASTER: 'nexus_master',
   USERS: 'nexus_users',
   INVITES: 'nexus_invites',
-  SETTINGS: 'nexus_settings'
+  SETTINGS: 'nexus_settings',
+  SUPPLIERS: 'nexus_suppliers',
+  PURCHASE_ORDERS: 'nexus_purchase_orders' // New Key
 };
 
 // Helper: SHA-256 Hash
@@ -470,6 +472,15 @@ export const StorageService = {
       }
   },
 
+  updateUserCompany: async (uid: string, companyId: string) => {
+      if (!isFirebaseActive) throw new Error("Disponível apenas online.");
+      try {
+          await update(ref(db, `${KEYS.USERS}/${uid}`), { companyId: companyId });
+      } catch(e: any) {
+          throw new Error("Erro ao atualizar empresa: " + e.message);
+      }
+  },
+
   deleteUserProfile: async (uid: string) => {
       if (!isFirebaseActive) throw new Error("Disponível apenas online.");
       try {
@@ -510,6 +521,45 @@ export const StorageService = {
           console.error("Reset All Users Error:", e);
           throw new Error("Erro ao resetar utilizadores: " + e.message);
       }
+  },
+
+  // --- PURCHASE ORDERS ---
+  getPurchaseOrders: async (): Promise<PurchaseOrder[]> => {
+      let data: PurchaseOrder[] = [];
+      if (isFirebaseActive) {
+          try {
+              const snapshot = await get(child(ref(db), KEYS.PURCHASE_ORDERS));
+              if (snapshot.exists()) {
+                  data = toArray<PurchaseOrder>(snapshot.val());
+              }
+          } catch(e) { console.error("Error fetching POs", e); }
+      }
+      return data;
+  },
+
+  savePurchaseOrder: async (po: PurchaseOrder) => {
+      if (!isFirebaseActive) throw new Error("Disponível apenas online.");
+      try {
+          // If editing, merge
+          if (!po.id) throw new Error("ID obrigatório");
+          
+          // Get current to determine displayId if new
+          if (!po.displayId) {
+              const current = await StorageService.getPurchaseOrders();
+              const maxId = Math.max(...current.map(o => o.displayId || 0));
+              po.displayId = maxId + 1;
+          }
+
+          await set(ref(db, `${KEYS.PURCHASE_ORDERS}/${po.id}`), po);
+          return po;
+      } catch(e: any) {
+          throw new Error("Erro ao salvar pedido de compra: " + e.message);
+      }
+  },
+
+  deletePurchaseOrder: async (id: string) => {
+      if (!isFirebaseActive) throw new Error("Disponível apenas online.");
+      await remove(ref(db, `${KEYS.PURCHASE_ORDERS}/${id}`));
   },
 
   // --- DATA METHODS ---
@@ -915,6 +965,11 @@ export const StorageService = {
             { value: "RL", description: "Rolo" },
             { value: "PC", description: "Pack" }
         ];
+    }
+
+    // Default empty suppliers if not present
+    if (!settings.suppliers) {
+        settings.suppliers = [];
     }
 
     return settings;

@@ -8,6 +8,7 @@ import StockManager from './components/StockManager';
 import QueryAssistant from './components/QueryAssistant';
 import Settings from './components/Settings';
 import UsersManager from './components/UsersManager';
+import PurchaseOrderManager from './components/PurchaseOrderManager';
 import { StorageService } from './services/storageService';
 
 const App: React.FC = () => {
@@ -142,6 +143,13 @@ const App: React.FC = () => {
             currentUsername={user.username}
           />
         );
+      case 'PURCHASE_ORDERS':
+         return (
+             <PurchaseOrderManager 
+                masterList={masterList}
+                currentUsername={user.username}
+             />
+         );
       case 'STOCK':
         return (
           <StockManager 

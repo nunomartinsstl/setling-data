@@ -96,6 +96,39 @@ export interface UnitOption {
   description: string; // The full name (Unidade, Kilograma)
 }
 
+// New Supplier Interface
+export interface Supplier {
+  code: string; // 'Fornecedor' column
+  name: string; // 'Nome' column
+  paymentTerms: string; // 'Dias pagamento' column
+  address: string; // 'Morada' column
+}
+
+// New Purchase Order Interface
+export interface PurchaseOrderItem {
+  sku: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+  isCustom?: boolean;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  displayId?: number; // Incremental for POs
+  dateCreated: string;
+  supplier: Supplier;
+  pep: string;
+  items: PurchaseOrderItem[];
+  subTotal: number;
+  vatTotal: number;
+  grandTotal: number;
+  creator: string;
+  status: 'DRAFT' | 'SENT' | 'COMPLETED';
+}
+
 export interface AppSettings {
   // Legacy support optional
   notificationEmail?: string; 
@@ -103,9 +136,10 @@ export interface AppSettings {
   companies?: Company[];
   adminAccessCode?: string; // Dynamic admin password
   unitOptions?: UnitOption[]; // List of available units of measure with descriptions
+  suppliers?: Supplier[]; // List of imported suppliers
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS';
 
 // Backwards compatibility helper type if needed, though we are migrating fully
 export type OrderItem = Order;

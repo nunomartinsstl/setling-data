@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown } from 'lucide-react';
 import { getAuth } from 'firebase/auth';
 
 const UsersManager: React.FC = () => {
@@ -71,6 +71,19 @@ const UsersManager: React.FC = () => {
         }
     };
 
+    const handleChangeCompany = async (user: User, newCompanyId: string) => {
+        if (!user.uid) return;
+        setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
+        try {
+            await StorageService.updateUserCompany(user.uid, newCompanyId);
+            await fetchData(); // Reload list
+        } catch(err: any) {
+            alert(err.message);
+        } finally {
+            setProcessingUsers(prev => ({ ...prev, [user.uid!]: false }));
+        }
+    };
+
     const handleDeleteUser = async (user: User) => {
         if (!user.uid) return;
         if (!window.confirm(`Tem certeza que deseja EXCLUIR o acesso de ${user.username}? O histórico de login será perdido, mas os registros criados por ele permanecerão.`)) return;
@@ -103,12 +116,6 @@ const UsersManager: React.FC = () => {
         } finally {
             setIsResetting(false);
         }
-    };
-
-    const getCompanyName = (id?: string) => {
-        if (!id) return '-';
-        const company = companies.find(c => c.id === id);
-        return company ? company.name : 'Desconhecida';
     };
 
     return (
@@ -209,9 +216,22 @@ const UsersManager: React.FC = () => {
                                                 {user.role === UserRole.ADMIN ? (
                                                     <span className="text-purple-600 dark:text-purple-400 italic">Global</span>
                                                 ) : (
-                                                    <div className="flex items-center gap-1">
-                                                        <Building className="w-3 h-3"/>
-                                                        {getCompanyName(user.companyId)}
+                                                    <div className="relative group">
+                                                        <select
+                                                            value={user.companyId || ''}
+                                                            onChange={(e) => handleChangeCompany(user, e.target.value)}
+                                                            disabled={isProcessing}
+                                                            className="appearance-none bg-transparent py-1 pl-1 pr-6 cursor-pointer focus:outline-none hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-600 dark:text-slate-300 max-w-[150px] truncate"
+                                                            title="Clique para alterar a empresa"
+                                                        >
+                                                            <option value="" disabled>Selecione...</option>
+                                                            {companies.map(c => (
+                                                                <option key={c.id} value={c.id} className="dark:bg-slate-800 text-slate-900 dark:text-slate-200">{c.name}</option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-1 top-1.5 pointer-events-none text-slate-400">
+                                                            <Building className="w-3 h-3" />
+                                                        </div>
                                                     </div>
                                                 )}
                                             </td>

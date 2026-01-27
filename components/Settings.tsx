@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
-import { EmailRecipient, Company, UnitOption } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale } from 'lucide-react';
+import { EmailRecipient, Company, UnitOption, Supplier } from '../types';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const Settings: React.FC = () => {
   const [recipients, setRecipients] = useState<EmailRecipient[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [newCompany, setNewCompany] = useState('');
   const [adminAccessCode, setAdminAccessCode] = useState('');
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   
   // Unit Options
   const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
@@ -16,6 +18,8 @@ const Settings: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  
+  const supplierFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadSettings();
@@ -35,6 +39,7 @@ const Settings: React.FC = () => {
     if (settings.unitOptions) {
         setUnitOptions(settings.unitOptions);
     }
+    setSuppliers(settings.suppliers || []);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -45,8 +50,9 @@ const Settings: React.FC = () => {
           emailRecipients: recipients,
           notificationEmail: recipients.length > 0 ? recipients[0].email : '', // Legacy fallback
           companies: companies,
-          adminAccessCode: adminAccessCode, // Save the new admin code
-          unitOptions: unitOptions
+          adminAccessCode: adminAccessCode, 
+          unitOptions: unitOptions,
+          suppliers: suppliers
       });
       setMessage('Configurações salvas com sucesso.');
       setTimeout(() => setMessage(''), 3000);
@@ -103,6 +109,45 @@ const Settings: React.FC = () => {
       setUnitOptions(unitOptions.filter(u => u.value !== unitToRemove));
   };
 
+  const handleSupplierUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      if (supplierFileRef.current) supplierFileRef.current.value = '';
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+          try {
+              const data = evt.target?.result;
+              const wb = XLSX.read(data, { type: 'array' });
+              const ws = wb.Sheets[wb.SheetNames[0]];
+              const jsonData: any[] = XLSX.utils.sheet_to_json(ws);
+
+              if (jsonData.length === 0) throw new Error("Ficheiro vazio.");
+              
+              const required = ['Fornecedor', 'Nome', 'Dias pagamento', 'Morada'];
+              const missing = required.filter(col => !(col in jsonData[0]));
+              
+              if (missing.length > 0) throw new Error(`Colunas em falta: ${missing.join(', ')}`);
+
+              const newSuppliers: Supplier[] = jsonData.map(row => ({
+                  code: row['Fornecedor']?.toString() || '',
+                  name: row['Nome']?.toString() || '',
+                  paymentTerms: row['Dias pagamento']?.toString() || '',
+                  address: row['Morada']?.toString() || ''
+              })).filter(s => s.code && s.name);
+
+              if (newSuppliers.length === 0) throw new Error("Nenhum fornecedor válido encontrado.");
+
+              setSuppliers(newSuppliers);
+              alert(`${newSuppliers.length} fornecedores importados. Clique em "Salvar" para confirmar.`);
+          } catch(err: any) {
+              alert("Erro na importação: " + err.message);
+          }
+      };
+      reader.readAsArrayBuffer(file);
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-12">
       <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -131,6 +176,38 @@ const Settings: React.FC = () => {
                 Se deixar em branco, o sistema usará o código de recuperação padrão.
             </p>
         </div>
+      </div>
+
+      {/* SUPPLIER SETTINGS */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Truck className="w-5 h-5 text-slate-500"/> Fornecedores (Pedidos Autónomos)
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Importe a lista de fornecedores para usar na criação de Pedidos Autónomos.
+            <br/><span className="text-xs italic">Colunas: Fornecedor, Nome, Dias pagamento, Morada</span>
+        </p>
+
+        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer relative mb-4">
+            <input 
+                type="file" 
+                accept=".xlsx, .xls"
+                ref={supplierFileRef}
+                onChange={handleSupplierUpload}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+            <div className="flex flex-col items-center">
+                <FileSpreadsheet className="w-6 h-6 text-slate-400 mb-1" />
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Importar Excel de Fornecedores</span>
+            </div>
+        </div>
+
+        {suppliers.length > 0 && (
+            <div className="text-sm text-slate-600 dark:text-slate-400 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800 flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500"></div>
+                {suppliers.length} fornecedores carregados.
+            </div>
+        )}
       </div>
 
       {/* EMAIL SETTINGS */}
