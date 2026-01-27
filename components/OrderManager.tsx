@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption } from '../types';
 import { StorageService, MATERIAL_CATEGORIES } from '../services/storageService';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag } from 'lucide-react';
+import { ParserService } from '../services/parser';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -71,6 +72,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false}]);
   const [orderTitle, setOrderTitle] = useState('');
   
+  // Import State
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
   const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[], missingCategory?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
@@ -231,6 +236,41 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const isKnownSku = (sku: string) => {
      return materialOptions.some(opt => opt.sku === sku);
   };
+
+  // --- IMPORT LOGIC ---
+  const handleImportProcess = () => {
+      const parsedItems = ParserService.parseOrderImport(importText);
+      if (parsedItems.length === 0) {
+          alert("Não foi possível identificar itens no texto colado. Use o formato: 'Referência, Quantidade'.");
+          return;
+      }
+
+      const newRows: ManualRow[] = parsedItems.map(item => {
+          const isKnown = isKnownSku(item.sku);
+          return {
+              sku: isKnown ? item.sku : '',
+              qty: item.quantity,
+              unit: 'UN',
+              category: '',
+              customCategory: '',
+              isCustom: !isKnown,
+              customDesc: !isKnown ? (item.description || item.sku) : '',
+              similarityChecked: isKnown // Automatically valid if known
+          };
+      });
+
+      // Filter out the initial empty row if it hasn't been touched
+      let currentRows = [...manualRows];
+      if (currentRows.length === 1 && !currentRows[0].sku && !currentRows[0].customDesc) {
+          currentRows = [];
+      }
+
+      setManualRows([...currentRows, ...newRows]);
+      setImportModalOpen(false);
+      setImportText('');
+      setMessage({ type: 'success', text: `${newRows.length} itens importados com sucesso. Verifique se há itens novos (customizados).` });
+  };
+  // --------------------
 
   const validateForm = (): boolean => {
       const errors: number[] = [];
@@ -786,6 +826,43 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         ))}
       </datalist>
 
+      {/* Import Modal */}
+      {importModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 border border-slate-200 dark:border-slate-700 animate-fade-in">
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
+                      <FileText className="w-5 h-5 text-brand-600" /> Importar Lista
+                  </h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                      Cole sua lista abaixo no formato: <code>REFERENCIA, QUANTIDADE</code> (uma por linha).
+                  </p>
+                  <textarea
+                      value={importText}
+                      onChange={(e) => setImportText(e.target.value)}
+                      placeholder="Exemplo:
+1033221, 5
+2001002, 10
+TUBO 20MM, 2"
+                      className="w-full h-40 p-3 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none dark:bg-slate-900 dark:text-white font-mono text-sm"
+                  />
+                  <div className="flex justify-end gap-3 mt-4">
+                      <button 
+                          onClick={() => setImportModalOpen(false)}
+                          className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      >
+                          Cancelar
+                      </button>
+                      <button 
+                          onClick={handleImportProcess}
+                          className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
+                      >
+                          Processar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Similarity Search Modal */}
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1213,13 +1290,22 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         })}
                     </div>
 
-                    {/* Add Item Button */}
-                    <button
-                        onClick={addManualRow}
-                        className="w-full py-3 bg-brand-50 dark:bg-brand-900/20 border-2 border-dashed border-brand-200 dark:border-brand-800 rounded-lg text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors flex items-center justify-center gap-2"
-                    >
-                        <Plus className="w-5 h-5" /> Adicionar Outro Item
-                    </button>
+                    {/* Action Buttons: Add Item & Import */}
+                    <div className="flex gap-3">
+                        <button
+                            onClick={addManualRow}
+                            className="flex-1 py-3 bg-brand-50 dark:bg-brand-900/20 border-2 border-dashed border-brand-200 dark:border-brand-800 rounded-lg text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Plus className="w-5 h-5" /> Adicionar Outro Item
+                        </button>
+                        <button
+                            onClick={() => setImportModalOpen(true)}
+                            className="px-6 py-3 bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                            title="Importar de Texto (CSV)"
+                        >
+                            <FileText className="w-5 h-5" /> Importar
+                        </button>
+                    </div>
 
                     {/* Submit Button (Next Step) */}
                     <div className="pt-4 flex justify-end">
