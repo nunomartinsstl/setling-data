@@ -3,7 +3,7 @@ import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, UserRole } from '.
 import { StorageService } from '../services/storageService';
 import { ShoppingBag, Search, Plus, Trash2, FileText, Download, User, MapPin, CreditCard, Tag, ChevronDown, ChevronUp, X, FileSpreadsheet, Save, ArrowLeft, Clock, Calendar, Edit, List, Euro, CheckCircle, AlertCircle, HelpCircle, Check } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { getAuth } from 'firebase/auth';
 
