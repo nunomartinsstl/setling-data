@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
 import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
-import { getAuth } from 'firebase/auth';
 
 // Access global libraries
 declare const window: any;
@@ -83,10 +82,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const [similarityResults, setSimilarityResults] = useState<MasterMaterial[]>([]);
   const [similarityStep, setSimilarityStep] = useState<'LIST' | 'CONFIRM_MATCH' | 'CONFIRM_NEW'>('LIST');
   const [selectedCandidate, setSelectedCandidate] = useState<MasterMaterial | null>(null);
-
-  const currentUserRole = useMemo(() => {
-      return UserRole.MANAGEMENT; 
-  }, []);
 
   // Load Data
   useEffect(() => {
@@ -253,113 +248,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
 
-  const generatePDF = (poData?: PurchaseOrder) => {
-    const supplier = poData ? poData.supplier : selectedSupplier;
-    const items = poData ? poData.items : rows;
-    const currentPep = poData ? poData.pep : pep;
-    const currentTotal = poData ? poData.subTotal : subTotal;
-    const currentVat = poData ? poData.vatTotal : vatTotal;
-    const currentGrand = poData ? poData.grandTotal : grandTotal;
-    const date = poData ? poData.dateCreated : new Date().toISOString();
-    const idDisplay = poData?.displayId ? `PO #${poData.displayId}` : "RASCUNHO";
-
-    if (!supplier) {
-        alert("Selecione um fornecedor.");
-        return;
-    }
-
-    // Use global jspdf from CDN (exposed as window.jspdf)
-    const doc = new window.jspdf.jsPDF();
-
-    doc.setFontSize(22);
-    doc.setTextColor(40, 40, 40);
-    doc.text("NOTA DE ENCOMENDA", 14, 20);
-    doc.setFontSize(14);
-    doc.setTextColor(100);
-    doc.text(idDisplay, 14, 28);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100);
-    const dateStr = new Date(date).toLocaleDateString('pt-PT');
-    doc.text(`Data: ${dateStr}`, 14, 36);
-    doc.text(`PEP: ${currentPep || 'N/A'}`, 14, 41);
-    doc.text(`Responsável: ${currentUsername}`, 14, 46);
-
-    doc.setFontSize(11);
-    doc.setTextColor(0);
-    doc.text("FORNECEDOR:", 120, 20);
-    doc.setFontSize(10);
-    doc.text(supplier.name, 120, 26);
-    doc.setFontSize(9);
-    doc.setTextColor(80);
-    
-    const addressLines = doc.splitTextToSize(supplier.address, 80);
-    doc.text(addressLines, 120, 31);
-    
-    const nextY = 31 + (addressLines.length * 4);
-    doc.text(`Pagamento: ${supplier.paymentTerms}`, 120, nextY + 5);
-
-    const tableBody = items.map(row => [
-        row.sku,
-        row.description,
-        `${row.quantity} ${row.unit}`,
-        `${row.unitPrice.toFixed(2)} €`,
-        `${(row.quantity * row.unitPrice).toFixed(2)} €`
-    ]);
-
-    // Use global autoTable via doc extension
-    doc.autoTable({
-        startY: Math.max(60, nextY + 20),
-        head: [['Ref.', 'Descrição', 'Qtd', 'Preço Unit.', 'Total']],
-        body: tableBody,
-        theme: 'plain', 
-        headStyles: { 
-            fillColor: [240, 240, 240], 
-            textColor: [50, 50, 50],
-            fontStyle: 'bold',
-            lineWidth: 0.1,
-            lineColor: [200, 200, 200]
-        },
-        bodyStyles: {
-            textColor: [50, 50, 50],
-            lineWidth: 0.1,
-            lineColor: [230, 230, 230]
-        },
-        columnStyles: {
-            0: { cellWidth: 30 },
-            1: { cellWidth: 'auto' },
-            2: { cellWidth: 25, halign: 'right' },
-            3: { cellWidth: 25, halign: 'right' },
-            4: { cellWidth: 25, halign: 'right' }
-        }
-    });
-
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-    
-    doc.setFontSize(10);
-    doc.setTextColor(80);
-    doc.text("Subtotal:", 140, finalY, { align: 'right' });
-    doc.text(`${currentTotal.toFixed(2)} €`, 195, finalY, { align: 'right' });
-    
-    doc.text(`IVA (${(VAT_RATE * 100).toFixed(0)}%):`, 140, finalY + 5, { align: 'right' });
-    doc.text(`${currentVat.toFixed(2)} €`, 195, finalY + 5, { align: 'right' });
-    
-    doc.setFontSize(12);
-    doc.setTextColor(0);
-    doc.setFont("helvetica", "bold");
-    doc.text("TOTAL:", 140, finalY + 12, { align: 'right' });
-    doc.text(`${currentGrand.toFixed(2)} €`, 195, finalY + 12, { align: 'right' });
-
-    const sigY = finalY + 30;
-    doc.setDrawColor(150);
-    doc.line(14, sigY, 80, sigY);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text("Assinatura / Aprovação", 14, sigY + 5);
-
-    doc.save(`PO_${supplier.name.substring(0,10)}_${dateStr}.pdf`);
-  };
-
   const generateExcel = () => {
       if (!selectedSupplier) {
           alert("Selecione um fornecedor para exportar.");
@@ -389,7 +277,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       XLSX.writeFile(wb, fileName);
   };
 
-  const handleSaveAndGenerate = async () => {
+  const handleSave = async () => {
       if (!selectedSupplier) {
           alert("Fornecedor obrigatório.");
           return;
@@ -436,8 +324,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       };
 
       try {
-          const saved = await StorageService.savePurchaseOrder(newPO);
-          generatePDF(saved);
+          await StorageService.savePurchaseOrder(newPO);
+          alert("Pedido salvo com sucesso!");
           setViewMode('LIST');
           setOrderId(null);
       } catch (e: any) {
@@ -928,10 +816,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       <FileSpreadsheet className="w-4 h-4" /> Excel
                   </button>
                   <button 
-                    onClick={handleSaveAndGenerate}
+                    onClick={handleSave}
                     className="flex-1 md:flex-none px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium flex items-center justify-center gap-2 shadow-sm"
                   >
-                      <Save className="w-4 h-4" /> Guardar Pedido e Gerar PDF
+                      <Save className="w-4 h-4" /> Guardar Pedido
                   </button>
               </div>
           </div>
