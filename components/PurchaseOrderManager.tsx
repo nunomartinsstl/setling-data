@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, FileText } from 'lucide-react';
 
 // Access global libraries
 declare const window: any;
@@ -275,6 +275,84 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       
       const fileName = `PO_Dados_${selectedSupplier.name.substring(0,10).trim()}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
+  };
+
+  const generatePDF = () => {
+      if (!selectedSupplier) {
+          alert("Selecione um fornecedor para exportar.");
+          return;
+      }
+      
+      try {
+        // Access jsPDF from global window object to avoid build import errors
+        if (!(window as any).jspdf) {
+            alert("Biblioteca PDF ainda está carregando. Tente novamente em alguns segundos.");
+            return;
+        }
+
+        const { jsPDF } = (window as any).jspdf;
+        const doc = new jsPDF();
+        
+        // --- HEADER ---
+        doc.setFontSize(18);
+        doc.setTextColor(40, 40, 40);
+        doc.text("Pedido de Compra", 14, 20);
+        
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        
+        const dateStr = orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString();
+        const idStr = displayId ? `#${displayId}` : "RASCUNHO";
+        
+        doc.text(`Fornecedor:`, 14, 30);
+        doc.setTextColor(0, 0, 0);
+        doc.text(selectedSupplier.name, 40, 30);
+        
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Data:`, 14, 35);
+        doc.setTextColor(0, 0, 0);
+        doc.text(dateStr, 40, 35);
+
+        if(pep) {
+            doc.setTextColor(100, 100, 100);
+            doc.text(`PEP:`, 14, 40);
+            doc.setTextColor(0, 0, 0);
+            doc.text(pep, 40, 40);
+        }
+
+        doc.setFontSize(14);
+        doc.setTextColor(88, 28, 135); // Brand purple approx
+        doc.text(idStr, 160, 20, { align: 'right' });
+
+        // --- TABLE ---
+        const tableColumn = ["Ref.", "Descrição", "Qtd", "Unid.", "Preço", "Total"];
+        const tableRows = rows.map(r => [
+            r.sku,
+            r.description,
+            r.quantity,
+            r.unit,
+            `${r.unitPrice.toFixed(2)} €`,
+            `${(r.quantity * r.unitPrice).toFixed(2)} €`
+        ]);
+
+        doc.autoTable({
+            startY: 50,
+            head: [tableColumn],
+            body: tableRows,
+            theme: 'grid',
+            headStyles: { fillColor: [88, 28, 135], textColor: 255 },
+            foot: [['', '', '', '', 'Total Final:', `${grandTotal.toFixed(2)} €`]],
+            footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold' }
+        });
+
+        // Save
+        const fileName = `PO_${selectedSupplier.name.substring(0,10).trim()}_${new Date().toISOString().split('T')[0]}.pdf`;
+        doc.save(fileName);
+
+      } catch (e: any) {
+          console.error(e);
+          alert("Erro ao gerar PDF: " + e.message);
+      }
   };
 
   const handleSave = async () => {
@@ -814,6 +892,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                     className="flex-1 md:flex-none px-4 py-2 border border-green-600 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 font-medium flex items-center justify-center gap-2"
                   >
                       <FileSpreadsheet className="w-4 h-4" /> Excel
+                  </button>
+                  <button 
+                    onClick={generatePDF}
+                    className="flex-1 md:flex-none px-4 py-2 border border-red-600 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 font-medium flex items-center justify-center gap-2"
+                  >
+                      <FileText className="w-4 h-4" /> PDF
                   </button>
                   <button 
                     onClick={handleSave}
