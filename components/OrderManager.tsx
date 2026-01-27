@@ -909,7 +909,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
           {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
-          {mode === 'CREATE' ? 'Novo Pedido' : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos Finalizados')}
+          {mode === 'CREATE' ? 'Novo Pedido ao Armazém' : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos ao Armazém Finalizados')}
           {mode === 'LIST' && (
              <span className="text-sm font-normal text-slate-500 dark:text-slate-400 ml-2 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
                 {filteredOrders.length}

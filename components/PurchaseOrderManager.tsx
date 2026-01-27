@@ -110,6 +110,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               newRows[index].sku = '';
           }
       }
+
+      // If toggling custom checkbox
+      if (field === 'isCustom') {
+          if (value === true) {
+              newRows[index].sku = 'MATERIAIS';
+          } else {
+              newRows[index].sku = '';
+          }
+      }
       
       setRows(newRows);
   };
@@ -124,17 +133,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           showSuggestions: false // Hide suggestions
       };
       setRows(newRows);
-  };
-
-  const setCustomMaterial = (index: number) => {
-       const newRows = [...rows];
-       newRows[index] = {
-           ...newRows[index],
-           sku: 'MATERIAIS',
-           isCustom: true,
-           showSuggestions: false
-       };
-       setRows(newRows);
   };
 
   const addRow = () => {
@@ -271,58 +269,26 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           return;
       }
 
-      // Basic Info
-      const infoRows = [
-          ["NOTA DE ENCOMENDA"],
-          ["ID:", displayId ? `#${displayId}` : "RASCUNHO"],
-          ["Data:", orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString()],
-          ["Responsável:", currentUsername],
-          ["PEP:", pep || ''],
-          [],
-          ["FORNECEDOR"],
-          ["Nome:", selectedSupplier.name],
-          ["Morada:", selectedSupplier.address],
-          ["Condições:", selectedSupplier.paymentTerms],
-          []
-      ];
+      // Flat Data Structure (Table format)
+      const data = rows.map(r => ({
+          "ID Pedido": displayId ? `#${displayId}` : "RASCUNHO",
+          "Data": orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString(),
+          "Responsável": currentUsername,
+          "PEP": pep || '',
+          "Fornecedor": selectedSupplier.name,
+          "Referência": r.sku,
+          "Descrição": r.description,
+          "Quantidade": r.quantity,
+          "Unidade": r.unit,
+          "Preço Unit.": r.unitPrice,
+          "Total": r.quantity * r.unitPrice
+      }));
 
-      // Headers
-      const headers = ["Referência", "Descrição", "Quantidade", "Unidade", "Preço Unit.", "Total Líquido"];
-      
-      // Items
-      const itemRows = rows.map(r => [
-          r.sku,
-          r.description,
-          r.quantity,
-          r.unit,
-          r.unitPrice,
-          r.quantity * r.unitPrice
-      ]);
-
-      // Totals
-      const totalRows = [
-          [],
-          ["", "", "", "", "Subtotal:", subTotal],
-          ["", "", "", "", "IVA (23%):", vatTotal],
-          ["", "", "", "", "TOTAL:", grandTotal]
-      ];
-
-      const ws = XLSX.utils.aoa_to_sheet([...infoRows, headers, ...itemRows, ...totalRows]);
-      
-      // Adjust column widths
-      ws['!cols'] = [
-          { wch: 20 }, // Ref
-          { wch: 40 }, // Desc
-          { wch: 10 }, // Qty
-          { wch: 10 }, // Unit
-          { wch: 15 }, // Price
-          { wch: 15 }  // Total
-      ];
-
+      const ws = XLSX.utils.json_to_sheet(data);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Encomenda");
+      XLSX.utils.book_append_sheet(wb, ws, "Dados");
       
-      const fileName = `PO_${selectedSupplier.name.substring(0,10).trim()}_${new Date().toISOString().split('T')[0]}.xlsx`;
+      const fileName = `PO_Dados_${selectedSupplier.name.substring(0,10).trim()}_${new Date().toISOString().split('T')[0]}.xlsx`;
       XLSX.writeFile(wb, fileName);
   };
 
@@ -333,6 +299,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       }
       if (rows.length === 0 || rows.some(r => !r.description)) {
           alert("Adicione itens válidos.");
+          return;
+      }
+
+      // VALIDATION: Check for zero price
+      if (rows.some(r => !r.unitPrice || r.unitPrice <= 0)) {
+          alert("Erro: Todos os itens devem ter um Preço Unitário maior que 0.");
           return;
       }
 
@@ -404,7 +376,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               <div className="flex justify-between items-center mb-6">
                   <div className="flex items-center gap-2">
                       <ShoppingBag className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-                      <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Compras (Pedidos Autónomos)</h2>
+                      <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Pedidos de Compra (Autónomos)</h2>
                   </div>
                   <button 
                     onClick={handleNew}
@@ -596,7 +568,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                         className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none dark:bg-slate-800 dark:text-white text-sm"
                                         autoComplete="off"
                                      />
-                                     {row.showSuggestions && !row.isCustom && matches.length > 0 && (
+                                     {/* Similarity Check Logic: Show matches even if isCustom is true (Point 3) */}
+                                     {row.showSuggestions && matches.length > 0 && (
                                          <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg mt-1">
                                              {matches.map(m => (
                                                  <div 
@@ -611,13 +584,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                          </div>
                                      )}
                                  </div>
-                                 <div className="mt-1 flex items-center justify-between">
-                                     <span className="text-[10px] text-slate-400">SKU: {row.sku || '-'}</span>
-                                     {!row.isCustom && row.description.length > 3 && (
-                                         <button onClick={() => setCustomMaterial(idx)} className="text-[10px] text-blue-500 hover:underline">
-                                             Usar descrição personalizada
-                                         </button>
-                                     )}
+                                 <div className="mt-2 flex items-center justify-between">
+                                     <span className="text-[10px] text-slate-400 font-mono">
+                                        Código de Material: {row.isCustom ? <span className="text-purple-500 font-bold">MATERIAIS</span> : (row.sku || '-')}
+                                     </span>
+                                     {/* Checkbox for New Material (Point 4) */}
+                                     <label className="flex items-center gap-2 cursor-pointer">
+                                         <input 
+                                            type="checkbox" 
+                                            checked={row.isCustom}
+                                            onChange={(e) => updateRow(idx, 'isCustom', e.target.checked)}
+                                            className="w-3.5 h-3.5 text-purple-600 border-slate-300 rounded focus:ring-purple-500"
+                                         />
+                                         <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Novo Material</span>
+                                     </label>
                                  </div>
                              </div>
 

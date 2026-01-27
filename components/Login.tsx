@@ -456,7 +456,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                                 value={loginIdentifier}
                                 onChange={(e) => setLoginIdentifier(e.target.value)}
                                 className={`pl-10 ${inputClass(loginIdentifier)}`}
-                                placeholder="Email recomendado"
+                                placeholder="Email/Username (primeiro login com email)"
                             />
                         </div>
                     </div>
@@ -468,7 +468,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                                 value={loginPassword}
                                 onChange={(e) => setLoginPassword(e.target.value)}
                                 className={`${inputClass(loginPassword)} pr-10`}
-                                placeholder="Sua senha"
+                                placeholder="Password"
                             />
                             <button
                                 type="button"

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Order, StockItem, UserRole, ViewState } from '../types';
-import { ShoppingCart, CheckCircle, Activity, PlusCircle } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Activity, PlusCircle, ShoppingBag } from 'lucide-react';
 
 interface DashboardProps {
   orders: Order[];
@@ -50,15 +50,25 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
     <div className="space-y-6 animate-fade-in">
       <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Controlo de Pedidos</h2>
 
-      {/* Main Create Button */}
+      {/* Main Create Buttons */}
       {canCreate && (
-        <button
-          onClick={() => onNavigate('CREATE_ORDER')}
-          className="w-full bg-brand-600 hover:bg-brand-700 text-white p-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-3 text-lg font-semibold border border-brand-700"
-        >
-          <PlusCircle className="w-6 h-6" />
-          Criar Novo Pedido
-        </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => onNavigate('CREATE_ORDER')}
+              className="w-full bg-brand-600 hover:bg-brand-700 text-white p-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-3 text-lg font-semibold border border-brand-700"
+            >
+              <PlusCircle className="w-6 h-6" />
+              Criar Pedido ao Armazém
+            </button>
+            
+            <button
+              onClick={() => onNavigate('PURCHASE_ORDERS')}
+              className="w-full bg-purple-600 hover:bg-purple-700 text-white p-4 rounded-xl shadow-sm transition-all flex items-center justify-center gap-3 text-lg font-semibold border border-purple-700"
+            >
+              <ShoppingBag className="w-6 h-6" />
+              Criar Pedido de Compra
+            </button>
+        </div>
       )}
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
