@@ -66,15 +66,15 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   const canCreate = isAdmin || isManagement;
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden print:h-auto print:w-auto print:overflow-visible bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
+    <div className="flex h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
       {/* Mobile Menu Overlay */}
       {mobileMenuOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden print:hidden" onClick={() => setMobileMenuOpen(false)} />
+        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={() => setMobileMenuOpen(false)} />
       )}
 
-      {/* Sidebar - HIDDEN ON PRINT */}
+      {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out print:hidden
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="h-full flex flex-col">
@@ -191,8 +191,8 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden print:h-auto print:overflow-visible w-full relative">
-        <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 print:hidden">
+      <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+        <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200">
           <span className="font-bold text-[#2c52ad] dark:text-blue-400 text-xl">SETLING</span>
           <div className="flex items-center gap-2">
             <button 
@@ -215,8 +215,8 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
           </div>
         </header>
 
-        {/* Desktop Header Actions (Floating) - HIDDEN ON PRINT */}
-        <div className="hidden lg:flex absolute top-6 right-8 z-10 gap-3 print:hidden">
+        {/* Desktop Header Actions (Floating) */}
+        <div className="hidden lg:flex absolute top-6 right-8 z-10 gap-3">
              <button 
                 onClick={toggleTheme}
                 className="flex items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
@@ -233,7 +233,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto print:overflow-visible p-4 lg:p-8">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
           <div className="max-w-6xl mx-auto h-full">
             {children}
           </div>
