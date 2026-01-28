@@ -106,7 +106,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                     <NavItem 
                         view="CREATE_ORDER" 
                         icon={PlusCircle} 
-                        label="Criar Pedido ao Armazém" 
+                        label="Pedido ao Armazém" 
                         isActive={currentView === 'CREATE_ORDER'} 
                         onClick={() => handleNavClick('CREATE_ORDER')} 
                     />
