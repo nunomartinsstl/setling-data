@@ -206,9 +206,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const handleConfirmNew = () => {
       if (similarityTargetIdx === null) return;
       const newRows = [...rows];
+      const currentDesc = newRows[similarityTargetIdx].description || '';
       newRows[similarityTargetIdx] = {
           ...newRows[similarityTargetIdx],
           sku: 'MATERIAIS',
+          description: currentDesc.toUpperCase(),
           isCustom: true,
           similarityChecked: true,
           showSuggestions: false
@@ -221,17 +223,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const handlePrintOrder = () => {
     if (!selectedSupplier) return alert("Selecione um fornecedor.");
 
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return alert("Permita popups para imprimir.");
-
     const title = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO";
     const todayStr = orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString();
 
-    const html = `
+    // Use a simpler approach to prevent popup blocking/loading issues
+    const printContent = `
         <!DOCTYPE html>
         <html>
         <head>
-            <title>${title} - ${selectedSupplier.name}</title>
+            <title>${title}</title>
             <style>
                 body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #333; margin: 0; padding: 20px; }
                 .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #16a34a; }
@@ -368,21 +368,29 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             <div class="print-footer">
                 Documento gerado digitalmente pela plataforma Setling em ${new Date().toLocaleString()}.
             </div>
+            
+            <script>
+                window.onload = function() {
+                    setTimeout(function() {
+                        window.print();
+                    }, 500);
+                }
+            </script>
         </body>
         </html>
     `;
 
-    try {
-        printWindow.document.open();
-        printWindow.document.write(html);
-        printWindow.document.close();
-        printWindow.focus();
-        setTimeout(() => {
-            printWindow.print();
-        }, 500);
-    } catch (e) {
-        console.error("Print error:", e);
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+        alert("Pop-up bloqueado. Por favor permita pop-ups para este site para imprimir.");
+        return;
     }
+    
+    printWindow.document.open();
+    printWindow.document.write(printContent);
+    printWindow.document.close();
+    // Ensure focus for immediate printing
+    printWindow.focus();
   };
 
   const generateExcel = () => {

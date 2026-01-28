@@ -239,7 +239,8 @@ export const StorageService = {
     if (!db) return [];
     const snapshot = await get(child(ref(db), KEYS.PURCHASE_ORDERS));
     if (!snapshot.exists()) return [];
-    return Object.values(snapshot.val());
+    const val = snapshot.val();
+    return Array.isArray(val) ? val : Object.values(val);
   },
 
   savePurchaseOrder: async (po: PurchaseOrder) => {
@@ -249,8 +250,14 @@ export const StorageService = {
           
           if (!po.displayId) {
               const current = await StorageService.getPurchaseOrders();
-              const ids = current.map(o => o.displayId || 0);
-              const maxId = ids.length > 0 ? Math.max(...ids) : 0;
+              // Robust ID generation to prevent -Infinity errors with spread on empty arrays
+              let maxId = 0;
+              if (current && current.length > 0) {
+                  maxId = current.reduce((max, curr) => {
+                      const val = Number(curr.displayId);
+                      return !isNaN(val) && val > max ? val : max;
+                  }, 0);
+              }
               po.displayId = maxId + 1;
           }
 
