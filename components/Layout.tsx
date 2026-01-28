@@ -74,16 +74,17 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
       {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out flex flex-col
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
-        <div className="h-full flex flex-col">
-          <div className="p-6 border-b border-slate-100 dark:border-slate-700">
+        {/* Header - Fixed */}
+        <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
             <h1 className="text-2xl font-bold text-[#2c52ad] dark:text-blue-400 tracking-tight">SETLING</h1>
             <p className="text-xs text-slate-400 font-medium">Gestão de Pedidos</p>
-          </div>
+        </div>
 
-          <div className="p-4">
+        {/* Scrollable Content Area */}
+        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
             <div className="mb-6 px-4 py-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700">
               <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Logado como</p>
               <p className="font-medium text-slate-800 dark:text-slate-200 truncate">{user.username}</p>
@@ -171,9 +172,10 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 </>
               )}
             </nav>
-          </div>
+        </div>
 
-          <div className="mt-auto p-4 border-t border-slate-100 dark:border-slate-700 space-y-2">
+        {/* Footer - Fixed */}
+        <div className="p-4 border-t border-slate-100 dark:border-slate-700 space-y-2 flex-shrink-0 bg-white dark:bg-slate-800">
             <div className={`px-4 py-2 rounded-lg text-xs flex items-center gap-2 ${isConnected ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
                {isConnected ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
                <span className="font-semibold">{isConnected ? 'Online' : 'Offline'}</span>
@@ -186,13 +188,12 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               <LogOut className="w-5 h-5" />
               <span>Sair</span>
             </button>
-          </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
-        <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200">
+        <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 flex-shrink-0">
           <span className="font-bold text-[#2c52ad] dark:text-blue-400 text-xl">SETLING</span>
           <div className="flex items-center gap-2">
             <button 

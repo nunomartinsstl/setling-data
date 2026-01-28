@@ -19,6 +19,7 @@ const App: React.FC = () => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
   const [loading, setLoading] = useState(false);
+  const [authChecking, setAuthChecking] = useState(true);
 
   // Dark Mode State
   const [darkMode, setDarkMode] = useState(() => {
@@ -41,6 +42,21 @@ const App: React.FC = () => {
     }
   }, [darkMode]);
 
+  // Auth Subscription
+  useEffect(() => {
+      const unsubscribe = StorageService.subscribeToAuth((u) => {
+          if (u) {
+              setUser(u);
+              setView(prev => prev === 'LOGIN' ? 'DASHBOARD' : prev);
+          } else {
+              setUser(null);
+              setView('LOGIN');
+          }
+          setAuthChecking(false);
+      });
+      return () => unsubscribe();
+  }, []);
+
   const toggleTheme = () => setDarkMode(!darkMode);
 
   useEffect(() => {
@@ -50,7 +66,9 @@ const App: React.FC = () => {
   }, [user]);
 
   const refreshData = async () => {
-    setLoading(true);
+    // Prevent double loading indicator if we are just restoring session silently
+    // But helpful to show activity
+    // setLoading(true); 
     try {
       // 1. Fetch current data
       const [fetchedStock, fetchedMaster] = await Promise.all([
@@ -71,7 +89,7 @@ const App: React.FC = () => {
     } catch (error) {
       console.error("Failed to fetch data", error);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 
@@ -81,12 +99,21 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    StorageService.logout();
     setUser(null);
     setView('LOGIN');
     setOrders([]);
     setStock([]);
     setMasterList([]);
   };
+
+  if (authChecking) {
+      return (
+        <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-900">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
+        </div>
+      );
+  }
 
   if (!user || view === 'LOGIN') {
     return <Login onLogin={handleLogin} toggleTheme={toggleTheme} isDarkMode={darkMode} />;

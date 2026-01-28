@@ -1,7 +1,7 @@
 import { Order, StockItem, User, UserRole, AppSettings, MasterMaterial, OrderLineItem, Invite, Supplier, PurchaseOrder } from '../types';
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, set, child, DataSnapshot, remove, update } from 'firebase/database';
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser, onAuthStateChanged } from "firebase/auth";
 
 // --- CONFIGURAÇÃO DO FIREBASE ---
 const firebaseConfig = {
@@ -154,6 +154,43 @@ export const StorageService = {
   },
 
   // --- AUTHENTICATION & INVITES ---
+  subscribeToAuth: (callback: (user: User | null) => void) => {
+      // 1. Check if we are in Forced Offline mode (Admin Login) or if Firebase failed
+      if (!isFirebaseActive) {
+          const offlineUser = localStorage.getItem('offline_user');
+          if (offlineUser) {
+              try {
+                  callback(JSON.parse(offlineUser));
+              } catch(e) { callback(null); }
+          } else {
+              callback(null);
+          }
+          return () => {}; // No unsubscribe needed
+      }
+
+      // 2. Firebase Listener
+      return onAuthStateChanged(auth, async (firebaseUser) => {
+          if (firebaseUser) {
+              try {
+                  const userRef = ref(db, `${KEYS.USERS}/${firebaseUser.uid}`);
+                  const snapshot = await get(userRef);
+                  if (snapshot.exists()) {
+                      callback(snapshot.val() as User);
+                  } else {
+                      // Session exists but DB user doesn't? Logout.
+                      callback(null);
+                  }
+              } catch (e) {
+                  console.error("Session restore error:", e);
+                  callback(null);
+              }
+          } else {
+              // Check offline fallback if firebase user is null (edge case where firebase works but we used offline login?)
+              // Actually, if firebase is active, we should rely on it.
+              callback(null);
+          }
+      });
+  },
   
   createInvite: async (email: string, role: UserRole) => {
       if (!isFirebaseActive) throw new Error("Recurso disponível apenas online.");
@@ -162,7 +199,6 @@ export const StorageService = {
       const inviteRef = ref(db, `${KEYS.INVITES}/${cleanEmail}`);
       
       // Check if user exists in DB
-      // FIX: Changed from orderByChild query to client-side filter to avoid Index errors
       const usersRef = ref(db, KEYS.USERS);
       const userSnap = await get(usersRef);
       let emailExists = false;
@@ -374,7 +410,7 @@ export const StorageService = {
     if (!isFirebaseActive || identifier === 'admin') {
         if ((identifier === 'admin' && (password === 'admin' || password === 'admin97'))) {
              if (isFirebaseActive) activateOfflineMode();
-             return {
+             const adminUser: User = {
                  uid: 'offline_admin',
                  username: 'Admin Local',
                  email: 'admin@local',
@@ -382,6 +418,9 @@ export const StorageService = {
                  lastName: 'Local',
                  role: UserRole.ADMIN
              };
+             // Persistent offline session
+             localStorage.setItem('offline_user', JSON.stringify(adminUser));
+             return adminUser;
         }
         if (!isFirebaseActive) throw new Error("Offline. Use: admin / admin");
     }
@@ -444,6 +483,7 @@ export const StorageService = {
   },
 
   logout: async () => {
+      localStorage.removeItem('offline_user');
       if (isFirebaseActive) {
           await signOut(auth);
       }
@@ -796,7 +836,7 @@ export const StorageService = {
             return pickedList
                 .filter((p: any) => (p.material || '').trim().toLowerCase() === cleanSku)
                 .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
-        }
+    }
         return 0;
     };
 
