@@ -50,10 +50,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     // Fetch companies for registration form
     const loadCompanies = async () => {
         try {
-            const settings = await StorageService.getSettings();
-            setCompanies(settings.companies || []);
+            // Use specific method to allow granular permission handling
+            const companyList = await StorageService.getCompanies();
+            setCompanies(companyList || []);
         } catch (e) {
-            console.error("Failed to load companies", e);
+            console.warn("Could not load companies (permission denied or offline).");
         }
     };
     loadCompanies();
@@ -70,7 +71,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     setExistingUsernames(names);
                 }
             } catch (e) {
-                console.warn("Could not load usernames for preview (likely permission issue)", e);
+                // Warning expected if users list is private
+                console.warn("Could not load usernames for preview (likely permission issue)");
             }
         };
         loadUsernames();

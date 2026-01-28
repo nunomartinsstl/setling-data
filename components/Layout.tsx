@@ -216,8 +216,8 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
           </div>
         </header>
 
-        {/* Desktop Header Actions (Floating) */}
-        <div className="hidden lg:flex absolute top-6 right-8 z-10 gap-3">
+        {/* Desktop Header Actions (Non-Floating) */}
+        <div className="hidden lg:flex w-full justify-end items-center px-8 pt-6 pb-2 gap-3 flex-shrink-0">
              <button 
                 onClick={toggleTheme}
                 className="flex items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
@@ -234,7 +234,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8">
+        <div className="flex-1 overflow-y-auto p-4 lg:px-8 lg:pb-8 lg:pt-2">
           <div className="max-w-6xl mx-auto h-full">
             {children}
           </div>

@@ -133,8 +133,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   const addRow = () => {
+      const newIdx = rows.length;
       setRows([...rows, { sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
-      setExpandedRow(rows.length);
+      setExpandedRow(newIdx); // Automatically expand the new row
   };
 
   const removeRow = (index: number) => {
@@ -142,6 +143,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       const newRows = [...rows];
       newRows.splice(index, 1);
       setRows(newRows);
+      // Adjust expanded row index if needed
+      if (expandedRow >= index && expandedRow > 0) {
+          setExpandedRow(expandedRow - 1);
+      }
   };
 
   const getMaterialMatches = (query: string) => {
@@ -262,6 +267,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                 .signature-box { border-top: 1px solid #000; width: 200px; padding-top: 8px; font-size: 10px; text-align: center; }
                 
                 .print-footer { margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; font-size: 9px; color: #ccc; text-align: center; }
+                
+                @media print {
+                    @page { margin: 10mm; }
+                    body { -webkit-print-color-adjust: exact; }
+                }
             </style>
         </head>
         <body>
@@ -358,16 +368,21 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             <div class="print-footer">
                 Documento gerado digitalmente pela plataforma Setling em ${new Date().toLocaleString()}.
             </div>
-
-            <script>
-                window.onload = function() { window.print(); }
-            </script>
         </body>
         </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
+    try {
+        printWindow.document.open();
+        printWindow.document.write(html);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+            printWindow.print();
+        }, 500);
+    } catch (e) {
+        console.error("Print error:", e);
+    }
   };
 
   const generateExcel = () => {
@@ -449,6 +464,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           showSuggestions: false,
           similarityChecked: true
       })));
+      setExpandedRow(0);
       setViewMode('CREATE');
   };
 
@@ -459,6 +475,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setSelectedSupplier(null);
       setPep('');
       setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
+      setExpandedRow(0);
       setViewMode('CREATE');
   };
 
@@ -606,61 +623,86 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               <div className="space-y-3">
                   {rows.map((row, idx) => {
                       const matches = getMaterialMatches(row.description);
+                      const isExpanded = idx === expandedRow;
+
                       return (
-                          <div key={idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-4">
-                              <div className="flex justify-between items-start mb-2">
-                                  <span className="font-bold text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">Item {idx + 1}</span>
-                                  <button onClick={() => removeRow(idx)} className="text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                          <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'}`}>
+                              {/* Header Row (Summary) */}
+                              <div 
+                                onClick={() => setExpandedRow(isExpanded ? -1 : idx)}
+                                className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                              >
+                                <div className="flex items-center gap-3 overflow-hidden">
+                                    <span className="font-bold text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded whitespace-nowrap">Item {idx + 1}</span>
+                                    {!isExpanded && (
+                                        <div className="text-sm truncate flex items-center gap-2 text-slate-600 dark:text-slate-300">
+                                            <span className="font-bold">{row.quantity}x</span>
+                                            <span className="truncate">{row.description || '(Sem descrição)'}</span>
+                                            {row.isCustom && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">Novo</span>}
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    {isExpanded ? <ChevronUp className="w-4 h-4 text-purple-500"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
+                                    <button onClick={(e) => { e.stopPropagation(); removeRow(idx); }} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded">
+                                        <Trash2 className="w-4 h-4"/>
+                                    </button>
+                                </div>
                               </div>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                                  <div className="md:col-span-6 relative">
-                                      <label className="block text-[10px] font-bold uppercase text-slate-400">Descrição</label>
-                                      <input 
-                                        type="text" 
-                                        value={row.description} 
-                                        onChange={e => updateRow(idx, 'description', e.target.value)}
-                                        className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!row.similarityChecked ? 'border-amber-400' : 'border-slate-300 dark:border-slate-600'}`}
-                                      />
-                                      {row.showSuggestions && matches.length > 0 && (
-                                          <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border shadow-lg mt-1 rounded">
-                                              {matches.map(m => (
-                                                  <div key={m.sku} onClick={() => handleMaterialSelect(idx, m)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
-                                                      <div className="font-bold text-xs">{m.sku}</div>
-                                                      <div className="text-sm">{m.description}</div>
-                                                  </div>
-                                              ))}
-                                          </div>
-                                      )}
-                                      <div className="flex justify-between items-center mt-1">
-                                          <div className="text-xs text-slate-400 font-mono">{row.sku || '-'}</div>
-                                          {!row.similarityChecked ? (
-                                              <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded font-bold flex items-center gap-1">
-                                                  <Search className="w-3 h-3"/> Verificar
-                                              </button>
-                                          ) : (
-                                              <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1"><Check className="w-3 h-3"/> OK</span>
-                                          )}
-                                      </div>
-                                  </div>
-                                  
-                                  <div className="md:col-span-2">
-                                      <label className="block text-[10px] font-bold uppercase text-slate-400">Qtd</label>
-                                      <input type="number" value={row.quantity} onChange={e => updateRow(idx, 'quantity', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600" />
-                                  </div>
 
-                                  <div className="md:col-span-2">
-                                      <label className="block text-[10px] font-bold uppercase text-slate-400">Unid</label>
-                                      <select value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600">
-                                          {unitOptions.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
-                                      </select>
-                                  </div>
+                              {/* Form Body */}
+                              {isExpanded && (
+                                <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
+                                    <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                                        <div className="md:col-span-6 relative">
+                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Descrição</label>
+                                            <input 
+                                                type="text" 
+                                                value={row.description} 
+                                                onChange={e => updateRow(idx, 'description', e.target.value)}
+                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!row.similarityChecked ? 'border-amber-400' : 'border-slate-300 dark:border-slate-600'}`}
+                                            />
+                                            {row.showSuggestions && matches.length > 0 && (
+                                                <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border shadow-lg mt-1 rounded">
+                                                    {matches.map(m => (
+                                                        <div key={m.sku} onClick={() => handleMaterialSelect(idx, m)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
+                                                            <div className="font-bold text-xs">{m.sku}</div>
+                                                            <div className="text-sm">{m.description}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                            <div className="flex justify-between items-center mt-1">
+                                                <div className="text-xs text-slate-400 font-mono">{row.sku || '-'}</div>
+                                                {!row.similarityChecked ? (
+                                                    <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded font-bold flex items-center gap-1">
+                                                        <Search className="w-3 h-3"/> Verificar
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1"><Check className="w-3 h-3"/> OK</span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="md:col-span-2">
+                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Qtd</label>
+                                            <input type="number" value={row.quantity} onChange={e => updateRow(idx, 'quantity', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600" />
+                                        </div>
 
-                                  <div className="md:col-span-2">
-                                      <label className="block text-[10px] font-bold uppercase text-slate-400">Preço</label>
-                                      <input type="number" value={row.unitPrice} onChange={e => updateRow(idx, 'unitPrice', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600" />
-                                  </div>
-                              </div>
+                                        <div className="md:col-span-2">
+                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Unid</label>
+                                            <select value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600">
+                                                {unitOptions.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
+                                            </select>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Preço</label>
+                                            <input type="number" value={row.unitPrice} onChange={e => updateRow(idx, 'unitPrice', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600" />
+                                        </div>
+                                    </div>
+                                </div>
+                              )}
                           </div>
                       );
                   })}
