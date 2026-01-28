@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Explicitly declare global types to avoid TS errors without imports
 declare const window: any;
@@ -213,6 +215,129 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   // Action Handlers
+  const generatePDF = () => {
+    if (!selectedSupplier) return alert("Selecione um fornecedor.");
+
+    const doc = new jsPDF();
+
+    // -- COLORS --
+    const primaryColor = [22, 163, 74]; // Green-600
+
+    // -- HEADER --
+    // Logo Text (Left)
+    doc.setFontSize(24);
+    doc.setTextColor(22, 163, 74); // Brand Green
+    doc.text("SETLING", 14, 22);
+    
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Gestão de Pedidos", 14, 28);
+
+    // PO Number (Right)
+    doc.setFontSize(16);
+    doc.setTextColor(0, 0, 0);
+    const poTitle = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO DE PEDIDO";
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const titleWidth = doc.getTextWidth(poTitle);
+    doc.text(poTitle, pageWidth - 14 - titleWidth, 22);
+
+    doc.setDrawColor(200, 200, 200);
+    doc.line(14, 32, pageWidth - 14, 32);
+
+    // -- DETAILS SECTION --
+    const startY = 42;
+
+    // Supplier Box (Left)
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text("FORNECEDOR:", 14, startY);
+
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "bold");
+    doc.text(selectedSupplier.name, 14, startY + 6);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    if(selectedSupplier.address) {
+        // Handle multiline address
+        const splitAddress = doc.splitTextToSize(selectedSupplier.address, 90);
+        doc.text(splitAddress, 14, startY + 12);
+    }
+    
+    // Order Details Box (Right)
+    const rightColX = 120;
+    
+    doc.setFontSize(9);
+    doc.setTextColor(150, 150, 150);
+    doc.text("DETALHES:", rightColX, startY);
+
+    doc.setTextColor(0,0,0);
+    doc.setFontSize(10);
+    
+    const details = [
+        { label: "Data:", value: orderDate || new Date().toLocaleDateString() },
+        { label: "Responsável:", value: currentUsername },
+        { label: "PEP / Obra:", value: pep || "-" },
+        { label: "Pagamento:", value: selectedSupplier.paymentTerms || "-" }
+    ];
+
+    let currentY = startY + 6;
+    details.forEach(item => {
+        doc.setFont("helvetica", "bold");
+        doc.text(item.label, rightColX, currentY);
+        doc.setFont("helvetica", "normal");
+        doc.text(item.value, rightColX + 30, currentY);
+        currentY += 6;
+    });
+
+    // -- TABLE --
+    const tableStartY = Math.max(currentY, startY + 30) + 10;
+    
+    const tableBody = rows.map(r => [
+        r.sku,
+        r.description,
+        r.quantity.toString(),
+        r.unit,
+        `${r.unitPrice.toFixed(2)} €`,
+        `${(r.quantity * r.unitPrice).toFixed(2)} €`
+    ]);
+
+    autoTable(doc, {
+        startY: tableStartY,
+        head: [['Ref', 'Descrição', 'Qtd', 'Unid', 'Preço Unit.', 'Total']],
+        body: tableBody,
+        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' },
+        styles: { fontSize: 9, cellPadding: 3 },
+        columnStyles: {
+            0: { cellWidth: 30 }, // Ref
+            1: { cellWidth: 'auto' }, // Desc
+            2: { cellWidth: 20, halign: 'right' }, // Qty
+            3: { cellWidth: 20, halign: 'center' }, // Unit
+            4: { cellWidth: 25, halign: 'right' }, // Price
+            5: { cellWidth: 25, halign: 'right' }, // Total
+        },
+        foot: [
+            ['', '', '', '', 'Subtotal:', `${subTotal.toFixed(2)} €`],
+            ['', '', '', '', 'IVA (23%):', `${vatTotal.toFixed(2)} €`],
+            ['', '', '', '', 'TOTAL:', `${grandTotal.toFixed(2)} €`]
+        ],
+        footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold', halign: 'right' }
+    });
+
+    // -- FOOTER --
+    const finalY = (doc as any).lastAutoTable.finalY + 20;
+    
+    doc.setFontSize(10);
+    doc.setTextColor(0, 0, 0);
+    
+    // Approval Lines
+    doc.line(14, finalY + 15, 80, finalY + 15);
+    doc.text("Aprovado por", 14, finalY + 20);
+
+    doc.save(`PO_${selectedSupplier.name.substring(0,10).trim()}_${Date.now()}.pdf`);
+  };
+
   const generateExcel = () => {
       if (!selectedSupplier) return alert("Selecione um fornecedor.");
       
@@ -527,6 +652,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       </div>
                   </div>
                   <div className="flex gap-2 w-full md:w-auto">
+                      <button onClick={generatePDF} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> PDF</button>
                       <button onClick={generateExcel} className="flex-1 px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 flex items-center justify-center gap-2"><FileSpreadsheet className="w-4 h-4"/> Excel</button>
                       <button onClick={handleSave} className="flex-1 px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2"><Save className="w-4 h-4"/> Salvar</button>
                   </div>
