@@ -2,8 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder } from '../types';
 import { StorageService } from '../services/storageService';
 import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 
 // Explicitly declare global types to avoid TS errors without imports
 declare const window: any;
@@ -214,128 +212,162 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setSimilarityModalOpen(false);
   };
 
-  // Action Handlers
-  const generatePDF = () => {
+  // --- PRINT GENERATION ---
+  const handlePrintOrder = () => {
     if (!selectedSupplier) return alert("Selecione um fornecedor.");
 
-    const doc = new jsPDF();
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return alert("Permita popups para imprimir.");
 
-    // -- COLORS --
-    const primaryColor = [22, 163, 74]; // Green-600
+    const title = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO";
+    const todayStr = orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString();
 
-    // -- HEADER --
-    // Logo Text (Left)
-    doc.setFontSize(24);
-    doc.setTextColor(22, 163, 74); // Brand Green
-    doc.text("SETLING", 14, 22);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Gestão de Pedidos", 14, 28);
+    const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>${title} - ${selectedSupplier.name}</title>
+            <style>
+                body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #333; margin: 0; padding: 20px; }
+                .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #16a34a; }
+                .logo { font-size: 28px; font-weight: 900; color: #16a34a; letter-spacing: -1px; }
+                .sublogo { font-size: 11px; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+                .po-number { font-size: 20px; font-weight: bold; color: #000; }
+                .po-meta { font-size: 11px; color: #666; margin-top: 4px; }
+                
+                .grid { display: flex; gap: 40px; margin-bottom: 30px; }
+                .col { flex: 1; }
+                
+                .box-title { font-size: 10px; font-weight: bold; color: #999; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+                .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; }
+                .info-label { color: #666; }
+                .info-val { font-weight: 600; color: #000; }
+                
+                .supplier-name { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+                .address { color: #555; line-height: 1.4; }
 
-    // PO Number (Right)
-    doc.setFontSize(16);
-    doc.setTextColor(0, 0, 0);
-    const poTitle = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO DE PEDIDO";
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const titleWidth = doc.getTextWidth(poTitle);
-    doc.text(poTitle, pageWidth - 14 - titleWidth, 22);
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th { text-align: left; background: #f0fdf4; color: #15803d; padding: 12px 8px; border-bottom: 2px solid #16a34a; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+                td { padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+                .right { text-align: right; }
+                .center { text-align: center; }
+                .sku { font-family: monospace; font-weight: bold; color: #444; }
+                
+                .totals-area { display: flex; justify-content: flex-end; margin-top: 20px; }
+                .totals-box { width: 250px; }
+                .total-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #eee; }
+                .total-row.final { border-bottom: none; border-top: 2px solid #16a34a; margin-top: 5px; padding-top: 10px; font-size: 16px; font-weight: bold; color: #16a34a; }
+                
+                .footer-section { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; }
+                .signature-box { border-top: 1px solid #000; width: 200px; padding-top: 8px; font-size: 10px; text-align: center; }
+                
+                .print-footer { margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; font-size: 9px; color: #ccc; text-align: center; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div>
+                    <div class="logo">SETLING</div>
+                    <div class="sublogo">Gestão de Pedidos</div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="po-number">${title}</div>
+                    <div class="po-meta">Data de Emissão: ${todayStr}</div>
+                </div>
+            </div>
 
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, 32, pageWidth - 14, 32);
+            <div class="grid">
+                <div class="col">
+                    <div class="box-title">Fornecedor</div>
+                    <div class="supplier-name">${selectedSupplier.name}</div>
+                    <div class="address">
+                        ${selectedSupplier.address ? selectedSupplier.address.replace(/\n/g, '<br>') : 'Endereço não registado'}
+                        <br>
+                        ${selectedSupplier.code ? `Ref: ${selectedSupplier.code}` : ''}
+                    </div>
+                </div>
+                <div class="col">
+                    <div class="box-title">Dados do Pedido</div>
+                    <div class="info-row">
+                        <span class="info-label">Responsável:</span>
+                        <span class="info-val">${currentUsername}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">PEP / Obra:</span>
+                        <span class="info-val">${pep || '-'}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Condição Pagamento:</span>
+                        <span class="info-val">${selectedSupplier.paymentTerms || 'A Definir'}</span>
+                    </div>
+                </div>
+            </div>
 
-    // -- DETAILS SECTION --
-    const startY = 42;
+            <table>
+                <thead>
+                    <tr>
+                        <th width="15%">Referência</th>
+                        <th width="45%">Descrição</th>
+                        <th width="10%" class="right">Qtd</th>
+                        <th width="10%" class="center">Unid</th>
+                        <th width="10%" class="right">Preço Unit.</th>
+                        <th width="10%" class="right">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rows.map(r => `
+                        <tr>
+                            <td class="sku">${r.sku || '-'}</td>
+                            <td>${r.description}</td>
+                            <td class="right">${r.quantity}</td>
+                            <td class="center" style="font-size: 10px; color: #666;">${r.unit}</td>
+                            <td class="right">${r.unitPrice.toFixed(2)} €</td>
+                            <td class="right" style="font-weight: bold;">${(r.quantity * r.unitPrice).toFixed(2)} €</td>
+                        </tr>
+                    `).join('')}
+                </tbody>
+            </table>
 
-    // Supplier Box (Left)
-    doc.setFontSize(9);
-    doc.setTextColor(150, 150, 150);
-    doc.text("FORNECEDOR:", 14, startY);
+            <div class="totals-area">
+                <div class="totals-box">
+                    <div class="total-row">
+                        <span>Subtotal (Liq):</span>
+                        <span>${subTotal.toFixed(2)} €</span>
+                    </div>
+                    <div class="total-row">
+                        <span>IVA (${(VAT_RATE * 100).toFixed(0)}%):</span>
+                        <span>${vatTotal.toFixed(2)} €</span>
+                    </div>
+                    <div class="total-row final">
+                        <span>Total Geral:</span>
+                        <span>${grandTotal.toFixed(2)} €</span>
+                    </div>
+                </div>
+            </div>
 
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0);
-    doc.setFont("helvetica", "bold");
-    doc.text(selectedSupplier.name, 14, startY + 6);
-    
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    if(selectedSupplier.address) {
-        // Handle multiline address
-        const splitAddress = doc.splitTextToSize(selectedSupplier.address, 90);
-        doc.text(splitAddress, 14, startY + 12);
-    }
-    
-    // Order Details Box (Right)
-    const rightColX = 120;
-    
-    doc.setFontSize(9);
-    doc.setTextColor(150, 150, 150);
-    doc.text("DETALHES:", rightColX, startY);
+            <div class="footer-section">
+                <div style="font-size: 10px; color: #888;">
+                    <p>Observações:</p>
+                    <p>Entrega prevista conforme acordado.</p>
+                </div>
+                <div class="signature-box">
+                    Aprovado por
+                </div>
+            </div>
 
-    doc.setTextColor(0,0,0);
-    doc.setFontSize(10);
-    
-    const details = [
-        { label: "Data:", value: orderDate || new Date().toLocaleDateString() },
-        { label: "Responsável:", value: currentUsername },
-        { label: "PEP / Obra:", value: pep || "-" },
-        { label: "Pagamento:", value: selectedSupplier.paymentTerms || "-" }
-    ];
+            <div class="print-footer">
+                Documento gerado digitalmente pela plataforma Setling em ${new Date().toLocaleString()}.
+            </div>
 
-    let currentY = startY + 6;
-    details.forEach(item => {
-        doc.setFont("helvetica", "bold");
-        doc.text(item.label, rightColX, currentY);
-        doc.setFont("helvetica", "normal");
-        doc.text(item.value, rightColX + 30, currentY);
-        currentY += 6;
-    });
+            <script>
+                window.onload = function() { window.print(); }
+            </script>
+        </body>
+        </html>
+    `;
 
-    // -- TABLE --
-    const tableStartY = Math.max(currentY, startY + 30) + 10;
-    
-    const tableBody = rows.map(r => [
-        r.sku,
-        r.description,
-        r.quantity.toString(),
-        r.unit,
-        `${r.unitPrice.toFixed(2)} €`,
-        `${(r.quantity * r.unitPrice).toFixed(2)} €`
-    ]);
-
-    autoTable(doc, {
-        startY: tableStartY,
-        head: [['Ref', 'Descrição', 'Qtd', 'Unid', 'Preço Unit.', 'Total']],
-        body: tableBody,
-        headStyles: { fillColor: [22, 163, 74], textColor: 255, fontStyle: 'bold' },
-        styles: { fontSize: 9, cellPadding: 3 },
-        columnStyles: {
-            0: { cellWidth: 30 }, // Ref
-            1: { cellWidth: 'auto' }, // Desc
-            2: { cellWidth: 20, halign: 'right' }, // Qty
-            3: { cellWidth: 20, halign: 'center' }, // Unit
-            4: { cellWidth: 25, halign: 'right' }, // Price
-            5: { cellWidth: 25, halign: 'right' }, // Total
-        },
-        foot: [
-            ['', '', '', '', 'Subtotal:', `${subTotal.toFixed(2)} €`],
-            ['', '', '', '', 'IVA (23%):', `${vatTotal.toFixed(2)} €`],
-            ['', '', '', '', 'TOTAL:', `${grandTotal.toFixed(2)} €`]
-        ],
-        footStyles: { fillColor: [240, 240, 240], textColor: 0, fontStyle: 'bold', halign: 'right' }
-    });
-
-    // -- FOOTER --
-    const finalY = (doc as any).lastAutoTable.finalY + 20;
-    
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    
-    // Approval Lines
-    doc.line(14, finalY + 15, 80, finalY + 15);
-    doc.text("Aprovado por", 14, finalY + 20);
-
-    doc.save(`PO_${selectedSupplier.name.substring(0,10).trim()}_${Date.now()}.pdf`);
+    printWindow.document.write(html);
+    printWindow.document.close();
   };
 
   const generateExcel = () => {
@@ -652,7 +684,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       </div>
                   </div>
                   <div className="flex gap-2 w-full md:w-auto">
-                      <button onClick={generatePDF} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> PDF</button>
+                      <button onClick={handlePrintOrder} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> Imprimir/PDF</button>
                       <button onClick={generateExcel} className="flex-1 px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 flex items-center justify-center gap-2"><FileSpreadsheet className="w-4 h-4"/> Excel</button>
                       <button onClick={handleSave} className="flex-1 px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2"><Save className="w-4 h-4"/> Salvar</button>
                   </div>
