@@ -6,8 +6,9 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     rollupOptions: {
-      // This forces Vite/Rollup to ignore 'jspdf' if it finds it, preventing the build error
-      external: ['jspdf']
+      // This forces Vite/Rollup to ignore these libraries during the build.
+      // The application will load them from the CDN defined in index.html (importmap).
+      external: ['jspdf', 'jspdf-autotable']
     }
   }
 });
