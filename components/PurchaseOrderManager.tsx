@@ -306,7 +306,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   return (
-    <div className="pb-20">
+    <div className="pb-48 md:pb-24">
       {/* Modal */}
       {similarityModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
