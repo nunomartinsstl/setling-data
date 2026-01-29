@@ -207,6 +207,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       if (similarityTargetIdx === null) return;
       const newRows = [...rows];
       const currentDesc = newRows[similarityTargetIdx].description || '';
+      
       newRows[similarityTargetIdx] = {
           ...newRows[similarityTargetIdx],
           sku: 'MATERIAIS',
@@ -226,7 +227,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
     const title = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO";
     const todayStr = orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString();
 
-    // Use a simpler approach to prevent popup blocking/loading issues
     const printContent = `
         <!DOCTYPE html>
         <html>
@@ -370,27 +370,23 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             </div>
             
             <script>
+                // Auto-print when loaded
                 window.onload = function() {
-                    setTimeout(function() {
-                        window.print();
-                    }, 500);
+                    window.print();
                 }
             </script>
         </body>
         </html>
     `;
 
-    const printWindow = window.open('', '_blank');
+    // Use Blob URL to prevent about:blank issues
+    const blob = new Blob([printContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const printWindow = window.open(url, '_blank');
+    
     if (!printWindow) {
         alert("Pop-up bloqueado. Por favor permita pop-ups para este site para imprimir.");
-        return;
     }
-    
-    printWindow.document.open();
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    // Ensure focus for immediate printing
-    printWindow.focus();
   };
 
   const generateExcel = () => {
@@ -734,7 +730,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       </div>
                   </div>
                   <div className="flex gap-2 w-full md:w-auto">
-                      <button onClick={handlePrintOrder} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> Imprimir/PDF</button>
+                      <button onClick={handlePrintOrder} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> PDF</button>
                       <button onClick={generateExcel} className="flex-1 px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 flex items-center justify-center gap-2"><FileSpreadsheet className="w-4 h-4"/> Excel</button>
                       <button onClick={handleSave} className="flex-1 px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2"><Save className="w-4 h-4"/> Salvar</button>
                   </div>

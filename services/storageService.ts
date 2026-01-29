@@ -4,7 +4,7 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company } from '../types';
 
 // Safely access environment variables
-const env = (import.meta.env || {}) as any;
+const env = ((import.meta as any).env || {}) as any;
 
 // Configuration with fallbacks to your specific project credentials
 const firebaseConfig = {
@@ -250,15 +250,23 @@ export const StorageService = {
           
           if (!po.displayId) {
               const current = await StorageService.getPurchaseOrders();
-              // Robust ID generation to prevent -Infinity errors with spread on empty arrays
               let maxId = 0;
-              if (current && current.length > 0) {
-                  maxId = current.reduce((max, curr) => {
-                      const val = Number(curr.displayId);
-                      return !isNaN(val) && val > max ? val : max;
-                  }, 0);
+              // Safe iterative approach to find max ID, ensuring no -Infinity errors
+              if (Array.isArray(current) && current.length > 0) {
+                  for (const order of current) {
+                      const val = Number(order.displayId);
+                      if (!isNaN(val) && val > maxId) {
+                          maxId = val;
+                      }
+                  }
               }
               po.displayId = maxId + 1;
+          }
+
+          // Absolute safety check: ensure we never send Infinity/NaN to Firebase
+          if (!Number.isFinite(po.displayId)) {
+               console.warn("Invalid ID generated, falling back to timestamp");
+               po.displayId = Math.floor(Date.now() / 1000); 
           }
 
           await set(ref(db, `${KEYS.PURCHASE_ORDERS}/${po.id}`), po);
