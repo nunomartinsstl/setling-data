@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2 } from 'lucide-react';
 
 // Explicitly declare global types to avoid TS errors without imports
 declare const window: any;
@@ -74,29 +74,30 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
   // Initial Load
   useEffect(() => {
-      const init = async () => {
-          setLoading(true);
-          try {
-              const [settings, orders] = await Promise.all([
-                  StorageService.getSettings(),
-                  StorageService.getPurchaseOrders()
-              ]);
-              setSuppliers(settings.suppliers || []);
-              setUnitOptions(settings.unitOptions || [{ value: 'UN', description: 'Unidade' }]);
-              setSavedOrders(orders.sort((a,b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()));
-              
-              // Initialize empty row if needed
-              if (rows.length === 0) {
-                  setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
-              }
-          } catch (e) {
-              console.error(e);
-          } finally {
-              setLoading(false);
-          }
-      };
-      init();
+      loadData();
   }, [viewMode]);
+
+  const loadData = async () => {
+      setLoading(true);
+      try {
+          const [settings, orders] = await Promise.all([
+              StorageService.getSettings(),
+              StorageService.getPurchaseOrders()
+          ]);
+          setSuppliers(settings.suppliers || []);
+          setUnitOptions(settings.unitOptions || [{ value: 'UN', description: 'Unidade' }]);
+          setSavedOrders(orders.sort((a,b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()));
+          
+          // Initialize empty row if needed
+          if (rows.length === 0) {
+              setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
+          }
+      } catch (e) {
+          console.error(e);
+      } finally {
+          setLoading(false);
+      }
+  };
 
   // Computeds
   const filteredSuppliers = useMemo(() => {
@@ -220,9 +221,31 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setSimilarityModalOpen(false);
   };
 
+  const handleDelete = async (id: string) => {
+      if (window.confirm("Tem certeza que deseja excluir este pedido?")) {
+          setLoading(true);
+          try {
+              await StorageService.deletePurchaseOrder(id);
+              await loadData();
+          } catch(e) {
+              alert("Erro ao excluir.");
+          } finally {
+              setLoading(false);
+          }
+      }
+  };
+
   // --- PRINT GENERATION ---
   const handlePrintOrder = () => {
     if (!selectedSupplier) return alert("Selecione um fornecedor.");
+    
+    // Check validation BEFORE exporting
+    if (rows.some(r => !r.description || !r.similarityChecked)) {
+        return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
+    }
+    if (rows.some(r => Number(r.quantity) <= 0)) {
+        return alert("Quantidade deve ser maior que 0.");
+    }
 
     const title = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO";
     const todayStr = orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString();
@@ -231,6 +254,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         <!DOCTYPE html>
         <html>
         <head>
+            <meta charset="UTF-8">
             <title>${title}</title>
             <style>
                 body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #333; margin: 0; padding: 20px; }
@@ -379,8 +403,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         </html>
     `;
 
-    // Use Blob URL to prevent about:blank issues
-    const blob = new Blob([printContent], { type: 'text/html' });
+    // Use specific UTF-8 blob type for correct character encoding
+    const blob = new Blob([printContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const printWindow = window.open(url, '_blank');
     
@@ -391,6 +415,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
   const generateExcel = () => {
       if (!selectedSupplier) return alert("Selecione um fornecedor.");
+      
+      // Check validation BEFORE exporting
+      if (rows.some(r => !r.description || !r.similarityChecked)) {
+        return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
+      }
       
       const data = rows.map(r => ({
           "ID": displayId ? `#${displayId}` : "RASCUNHO",
@@ -447,6 +476,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           alert("Sucesso!");
           setViewMode('LIST');
           setOrderId(null);
+          loadData();
       } catch (e: any) {
           alert("Erro: " + e.message);
       }
@@ -548,6 +578,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                               <th className="p-4">ID</th>
                               <th className="p-4">Data</th>
                               <th className="p-4">Fornecedor</th>
+                              <th className="p-4">Responsável</th>
                               <th className="p-4 text-right">Total</th>
                               <th className="p-4 text-right">Ação</th>
                           </tr>
@@ -558,13 +589,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                   <td className="p-4 font-mono">#{po.displayId}</td>
                                   <td className="p-4">{new Date(po.dateCreated).toLocaleDateString()}</td>
                                   <td className="p-4 font-bold">{po.supplier.name}</td>
+                                  <td className="p-4">{po.creator}</td>
                                   <td className="p-4 text-right">{po.grandTotal.toFixed(2)} €</td>
-                                  <td className="p-4 text-right">
-                                      <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800"><Edit className="w-4 h-4"/></button>
+                                  <td className="p-4 text-right flex justify-end gap-2">
+                                      <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 rounded"><Edit className="w-4 h-4"/></button>
+                                      <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button>
                                   </td>
                               </tr>
                           ))}
-                          {savedOrders.length === 0 && <tr><td colSpan={5} className="p-8 text-center">Sem pedidos.</td></tr>}
+                          {savedOrders.length === 0 && <tr><td colSpan={6} className="p-8 text-center">Sem pedidos.</td></tr>}
                       </tbody>
                   </table>
               </div>

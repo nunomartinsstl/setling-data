@@ -288,4 +288,9 @@ export const StorageService = {
           throw new Error("Erro ao salvar pedido de compra: " + e.message);
       }
   },
+
+  deletePurchaseOrder: async (id: string) => {
+      if (!db) return;
+      await remove(ref(db, `${KEYS.PURCHASE_ORDERS}/${id}`));
+  },
 };
