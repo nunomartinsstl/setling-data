@@ -79,8 +79,13 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
       `}>
         {/* Header - Fixed */}
         <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
-            <h1 className="text-2xl font-bold text-[#2c52ad] dark:text-blue-400 tracking-tight">SETLING</h1>
-            <p className="text-xs text-slate-400 font-medium">Gestão de Pedidos</p>
+            <button 
+              onClick={() => { onNavigate('DASHBOARD'); setMobileMenuOpen(false); }}
+              className="text-left focus:outline-none w-full group"
+            >
+                <h1 className="text-2xl font-bold text-[#2c52ad] dark:text-blue-400 tracking-tight group-hover:opacity-80 transition-opacity">SETLING</h1>
+                <p className="text-xs text-slate-400 font-medium group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors">Gestão de Pedidos</p>
+            </button>
         </div>
 
         {/* Scrollable Content Area */}
@@ -188,13 +193,22 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               <LogOut className="w-5 h-5" />
               <span>Sair</span>
             </button>
+            
+            <div className="text-center pt-1">
+                <span className="text-[10px] text-slate-300 dark:text-slate-600 font-mono">v1.1.0</span>
+            </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
         <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 flex-shrink-0">
-          <span className="font-bold text-[#2c52ad] dark:text-blue-400 text-xl">SETLING</span>
+          <button 
+            onClick={() => onNavigate('DASHBOARD')}
+            className="focus:outline-none"
+          >
+            <span className="font-bold text-[#2c52ad] dark:text-blue-400 text-xl">SETLING</span>
+          </button>
           <div className="flex items-center gap-2">
             <button 
                 onClick={toggleTheme}
