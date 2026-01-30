@@ -12,6 +12,7 @@ interface LayoutProps {
   onRefresh?: () => void;
   toggleTheme: () => void;
   isDarkMode: boolean;
+  logoUrl: string;
 }
 
 const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void }) => {
@@ -30,7 +31,7 @@ const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewSta
   );
 };
 
-const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh, toggleTheme, isDarkMode }) => {
+const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh, toggleTheme, isDarkMode, logoUrl }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
 
@@ -38,6 +39,18 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   const isAdmin = user.role === UserRole.ADMIN;
   const isManagement = user.role === UserRole.MANAGEMENT;
   
+  // Logic to determine logo styling
+  // If it's the generic white logo (Admin), it needs to be inverted in Light mode (to be black) and kept normal in Dark mode (White).
+  // If it's a standard colored logo, it needs to be White in Dark mode.
+  const isGenericLogo = logoUrl.includes('setling-logo-white');
+  const logoClasses = isGenericLogo 
+    ? "h-12 object-contain mb-2 transition-all invert dark:invert-0" 
+    : "h-12 object-contain mb-2 transition-all dark:brightness-0 dark:invert";
+
+  const mobileLogoClasses = isGenericLogo 
+    ? "h-8 object-contain transition-all invert dark:invert-0" 
+    : "h-8 object-contain transition-all dark:brightness-0 dark:invert";
+
   const handleNavClick = (view: ViewState) => {
     onNavigate(view);
     setMobileMenuOpen(false);
@@ -83,8 +96,12 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               onClick={() => { onNavigate('DASHBOARD'); setMobileMenuOpen(false); }}
               className="text-left focus:outline-none w-full group"
             >
-                <h1 className="text-2xl font-bold text-[#2c52ad] dark:text-blue-400 tracking-tight group-hover:opacity-80 transition-opacity">SETLING</h1>
-                <p className="text-xs text-slate-400 font-medium group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors">Gestão de Pedidos</p>
+                <img 
+                    src={logoUrl} 
+                    alt="Setling" 
+                    className={logoClasses}
+                />
+                <p className="text-xs text-slate-400 font-medium group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors pl-1">Gestão de Pedidos</p>
             </button>
         </div>
 
@@ -195,7 +212,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </button>
             
             <div className="text-center pt-1">
-                <span className="text-[10px] text-slate-300 dark:text-slate-600 font-mono">v1.1.0</span>
+                <span className="text-[10px] text-slate-300 dark:text-slate-600 font-mono">v1.1.1</span>
             </div>
         </div>
       </aside>
@@ -207,7 +224,11 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             onClick={() => onNavigate('DASHBOARD')}
             className="focus:outline-none"
           >
-            <span className="font-bold text-[#2c52ad] dark:text-blue-400 text-xl">SETLING</span>
+            <img 
+                src={logoUrl} 
+                alt="Setling" 
+                className={mobileLogoClasses}
+            />
           </button>
           <div className="flex items-center gap-2">
             <button 

@@ -10,6 +10,7 @@ declare const XLSX: any;
 interface PurchaseOrderManagerProps {
   masterList: MasterMaterial[];
   currentUsername: string;
+  logoUrl: string;
 }
 
 interface PORow {
@@ -46,7 +47,7 @@ const calculateRelevance = (target: string, query: string): number => {
     return matches > 0 ? score : 0;
 };
 
-const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList, currentUsername }) => {
+const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList, currentUsername, logoUrl }) => {
   // State
   const [viewMode, setViewMode] = useState<'LIST' | 'CREATE'>('LIST');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -64,6 +65,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   
   const [rows, setRows] = useState<PORow[]>([]);
   const [expandedRow, setExpandedRow] = useState<number>(0);
+  
+  // List View Expansion State
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   // Similarity Modal State
   const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
@@ -235,20 +239,46 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       }
   };
 
+  const toggleExpandListOrder = (id: string) => {
+    setExpandedOrderId(prev => prev === id ? null : id);
+  };
+
   // --- PRINT GENERATION ---
-  const handlePrintOrder = () => {
-    if (!selectedSupplier) return alert("Selecione um fornecedor.");
+  const handlePrintOrder = (orderToPrint?: PurchaseOrder) => {
+    // If orderToPrint is passed, use its data. Otherwise use current form state.
+    const printSupplier = orderToPrint ? orderToPrint.supplier : selectedSupplier;
+    const printRows = orderToPrint ? orderToPrint.items : rows;
+    const printId = orderToPrint ? orderToPrint.displayId : displayId;
+    const printDate = orderToPrint ? orderToPrint.dateCreated : orderDate;
+    const printPep = orderToPrint ? orderToPrint.pep : pep;
+
+    if (!printSupplier) return alert("Selecione um fornecedor.");
     
-    // Check validation BEFORE exporting
-    if (rows.some(r => !r.description || !r.similarityChecked)) {
-        return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
-    }
-    if (rows.some(r => Number(r.quantity) <= 0)) {
-        return alert("Quantidade deve ser maior que 0.");
+    // Check validation BEFORE exporting if manually triggering from form
+    if (!orderToPrint) {
+        if (rows.some(r => !r.description || !r.similarityChecked)) {
+            return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
+        }
+        if (rows.some(r => Number(r.quantity) <= 0)) {
+            return alert("Quantidade deve ser maior que 0.");
+        }
     }
 
-    const title = displayId ? `PEDIDO DE COMPRA #${displayId}` : "RASCUNHO";
-    const todayStr = orderDate ? new Date(orderDate).toLocaleDateString() : new Date().toLocaleDateString();
+    const title = printId ? `PEDIDO DE COMPRA #${printId}` : "RASCUNHO";
+    const todayStr = printDate ? new Date(printDate).toLocaleDateString() : new Date().toLocaleDateString();
+
+    // Calculate totals for print (re-calculate to be safe)
+    const pSubTotal = printRows.reduce((acc, row) => acc + (Number(row.quantity) * Number(row.unitPrice)), 0);
+    const pVatTotal = pSubTotal * VAT_RATE;
+    const pGrandTotal = pSubTotal + pVatTotal;
+
+    // Payment Logic
+    const paymentTerms = printSupplier.paymentTerms;
+    const paymentDisplay = (String(paymentTerms) === '0') ? 'Pronto pagamento' : (paymentTerms || 'A Definir');
+
+    // Detect if we need to invert logo (for white logo on white paper)
+    const isGenericLogo = logoUrl.includes('setling-logo-white');
+    const logoStyle = isGenericLogo ? 'filter: invert(1);' : '';
 
     const printContent = `
         <!DOCTYPE html>
@@ -257,40 +287,40 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             <meta charset="UTF-8">
             <title>${title}</title>
             <style>
-                body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #333; margin: 0; padding: 20px; }
-                .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #16a34a; }
-                .logo { font-size: 28px; font-weight: 900; color: #16a34a; letter-spacing: -1px; }
-                .sublogo { font-size: 11px; color: #666; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+                body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 12px; color: #000; margin: 0; padding: 20px; background: #fff; }
+                .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #000; }
+                .logo-img { max-height: 80px; max-width: 250px; object-fit: contain; ${logoStyle} }
+                
                 .po-number { font-size: 20px; font-weight: bold; color: #000; }
-                .po-meta { font-size: 11px; color: #666; margin-top: 4px; }
+                .po-meta { font-size: 11px; color: #333; margin-top: 4px; }
                 
                 .grid { display: flex; gap: 40px; margin-bottom: 30px; }
                 .col { flex: 1; }
                 
-                .box-title { font-size: 10px; font-weight: bold; color: #999; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+                .box-title { font-size: 10px; font-weight: bold; color: #666; text-transform: uppercase; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 2px; }
                 .info-row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 11px; }
-                .info-label { color: #666; }
+                .info-label { color: #444; }
                 .info-val { font-weight: 600; color: #000; }
                 
                 .supplier-name { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
-                .address { color: #555; line-height: 1.4; }
+                .address { color: #000; line-height: 1.4; }
 
                 table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th { text-align: left; background: #f0fdf4; color: #15803d; padding: 12px 8px; border-bottom: 2px solid #16a34a; font-size: 10px; text-transform: uppercase; font-weight: bold; }
-                td { padding: 10px 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+                th { text-align: left; background: #eee; color: #000; padding: 12px 8px; border-bottom: 2px solid #000; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+                td { padding: 10px 8px; border-bottom: 1px solid #ccc; vertical-align: middle; color: #000; }
                 .right { text-align: right; }
                 .center { text-align: center; }
-                .sku { font-family: monospace; font-weight: bold; color: #444; }
+                .sku { font-family: monospace; font-weight: bold; color: #000; }
                 
                 .totals-area { display: flex; justify-content: flex-end; margin-top: 20px; }
                 .totals-box { width: 250px; }
-                .total-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #eee; }
-                .total-row.final { border-bottom: none; border-top: 2px solid #16a34a; margin-top: 5px; padding-top: 10px; font-size: 16px; font-weight: bold; color: #16a34a; }
+                .total-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed #ccc; }
+                .total-row.final { border-bottom: none; border-top: 2px solid #000; margin-top: 5px; padding-top: 10px; font-size: 16px; font-weight: bold; color: #000; }
                 
                 .footer-section { margin-top: 60px; display: flex; justify-content: space-between; align-items: flex-end; }
-                .signature-box { border-top: 1px solid #000; width: 200px; padding-top: 8px; font-size: 10px; text-align: center; }
+                .signature-box { border-top: 1px solid #000; width: 200px; padding-top: 8px; font-size: 10px; text-align: center; color: #000; }
                 
-                .print-footer { margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; font-size: 9px; color: #ccc; text-align: center; }
+                .print-footer { margin-top: 40px; border-top: 1px solid #eee; padding-top: 10px; font-size: 9px; color: #888; text-align: center; }
                 
                 @media print {
                     @page { margin: 10mm; }
@@ -301,8 +331,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         <body>
             <div class="header">
                 <div>
-                    <div class="logo">SETLING</div>
-                    <div class="sublogo">Gestão de Pedidos</div>
+                    <img src="${logoUrl}" alt="Logo" class="logo-img" />
                 </div>
                 <div style="text-align: right;">
                     <div class="po-number">${title}</div>
@@ -313,26 +342,22 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             <div class="grid">
                 <div class="col">
                     <div class="box-title">Fornecedor</div>
-                    <div class="supplier-name">${selectedSupplier.name}</div>
+                    <div class="supplier-name">${printSupplier.name}</div>
                     <div class="address">
-                        ${selectedSupplier.address ? selectedSupplier.address.replace(/\n/g, '<br>') : 'Endereço não registado'}
+                        ${printSupplier.address ? printSupplier.address.replace(/\n/g, '<br>') : 'Endereço não registado'}
                         <br>
-                        ${selectedSupplier.code ? `Ref: ${selectedSupplier.code}` : ''}
+                        ${printSupplier.code ? `Ref: ${printSupplier.code}` : ''}
                     </div>
                 </div>
                 <div class="col">
                     <div class="box-title">Dados do Pedido</div>
                     <div class="info-row">
-                        <span class="info-label">Responsável:</span>
-                        <span class="info-val">${currentUsername}</span>
-                    </div>
-                    <div class="info-row">
                         <span class="info-label">PEP / Obra:</span>
-                        <span class="info-val">${pep || '-'}</span>
+                        <span class="info-val">${printPep || '-'}</span>
                     </div>
                     <div class="info-row">
                         <span class="info-label">Condição Pagamento:</span>
-                        <span class="info-val">${selectedSupplier.paymentTerms || 'A Definir'}</span>
+                        <span class="info-val">${paymentDisplay}</span>
                     </div>
                 </div>
             </div>
@@ -349,12 +374,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                     </tr>
                 </thead>
                 <tbody>
-                    ${rows.map(r => `
+                    ${printRows.map((r: any) => `
                         <tr>
                             <td class="sku">${r.sku || '-'}</td>
                             <td>${r.description}</td>
                             <td class="right">${r.quantity}</td>
-                            <td class="center" style="font-size: 10px; color: #666;">${r.unit}</td>
+                            <td class="center" style="font-size: 10px; color: #000;">${r.unit}</td>
                             <td class="right">${Number(r.unitPrice).toFixed(2)} €</td>
                             <td class="right" style="font-weight: bold;">${(Number(r.quantity) * Number(r.unitPrice)).toFixed(2)} €</td>
                         </tr>
@@ -366,21 +391,21 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                 <div class="totals-box">
                     <div class="total-row">
                         <span>Subtotal (Liq):</span>
-                        <span>${subTotal.toFixed(2)} €</span>
+                        <span>${pSubTotal.toFixed(2)} €</span>
                     </div>
                     <div class="total-row">
                         <span>IVA (${(VAT_RATE * 100).toFixed(0)}%):</span>
-                        <span>${vatTotal.toFixed(2)} €</span>
+                        <span>${pVatTotal.toFixed(2)} €</span>
                     </div>
                     <div class="total-row final">
                         <span>Total Geral:</span>
-                        <span>${grandTotal.toFixed(2)} €</span>
+                        <span>${pGrandTotal.toFixed(2)} €</span>
                     </div>
                 </div>
             </div>
 
             <div class="footer-section">
-                <div style="font-size: 10px; color: #888;">
+                <div style="font-size: 10px; color: #000;">
                     <p>Observações:</p>
                     <p>Entrega prevista conforme acordado.</p>
                 </div>
@@ -584,19 +609,73 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                          {savedOrders.map(po => (
-                              <tr key={po.id}>
-                                  <td className="p-4 font-mono">#{po.displayId}</td>
-                                  <td className="p-4">{new Date(po.dateCreated).toLocaleDateString()}</td>
-                                  <td className="p-4 font-bold">{po.supplier.name}</td>
-                                  <td className="p-4">{po.creator}</td>
-                                  <td className="p-4 text-right">{po.grandTotal.toFixed(2)} €</td>
-                                  <td className="p-4 text-right flex justify-end gap-2">
-                                      <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 rounded"><Edit className="w-4 h-4"/></button>
-                                      <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 rounded"><Trash2 className="w-4 h-4"/></button>
-                                  </td>
-                              </tr>
-                          ))}
+                          {savedOrders.map(po => {
+                              const isExpanded = expandedOrderId === po.id;
+                              return (
+                                  <React.Fragment key={po.id}>
+                                      <tr 
+                                        onClick={() => toggleExpandListOrder(po.id)}
+                                        className={`transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 ${isExpanded ? 'bg-slate-50 dark:bg-slate-700/50' : ''}`}
+                                      >
+                                          <td className="p-4">
+                                            <div className="flex items-center gap-2">
+                                                {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
+                                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300">#{po.displayId}</span>
+                                            </div>
+                                          </td>
+                                          <td className="p-4">{new Date(po.dateCreated).toLocaleDateString()}</td>
+                                          <td className="p-4 font-bold">{po.supplier.name}</td>
+                                          <td className="p-4">{po.creator}</td>
+                                          <td className="p-4 text-right">{po.grandTotal.toFixed(2)} €</td>
+                                          <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
+                                              <div className="flex justify-end gap-2">
+                                                  <button onClick={() => handlePrintOrder(po)} className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 dark:bg-blue-900/30 rounded" title="Imprimir PDF"><FileText className="w-4 h-4"/></button>
+                                                  <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                  <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 dark:bg-red-900/30 rounded" title="Excluir"><Trash2 className="w-4 h-4"/></button>
+                                              </div>
+                                          </td>
+                                      </tr>
+                                      {isExpanded && (
+                                          <tr className="bg-slate-50 dark:bg-slate-800/50">
+                                              <td colSpan={6} className="p-0">
+                                                  <div className="p-4 border-t border-slate-100 dark:border-slate-700 animate-fade-in pl-12">
+                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-xs text-slate-500 dark:text-slate-400">
+                                                          <div>
+                                                              <span className="font-bold">PEP/Obra:</span> {po.pep || '-'}
+                                                          </div>
+                                                          <div>
+                                                              <span className="font-bold">Condição Pagamento:</span> {String(po.supplier.paymentTerms) === '0' ? 'Pronto Pagamento' : (po.supplier.paymentTerms || 'A Definir')}
+                                                          </div>
+                                                      </div>
+                                                      <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
+                                                          <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                                              <tr>
+                                                                  <th className="px-4 py-2">Ref</th>
+                                                                  <th className="px-4 py-2">Descrição</th>
+                                                                  <th className="px-4 py-2 text-right">Qtd</th>
+                                                                  <th className="px-4 py-2 text-right">Preço</th>
+                                                                  <th className="px-4 py-2 text-right">Total</th>
+                                                              </tr>
+                                                          </thead>
+                                                          <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-700 dark:text-slate-300">
+                                                              {po.items.map((item, idx) => (
+                                                                  <tr key={idx}>
+                                                                      <td className="px-4 py-2 font-mono text-xs">{item.sku}</td>
+                                                                      <td className="px-4 py-2">{item.description}</td>
+                                                                      <td className="px-4 py-2 text-right">{item.quantity} {item.unit}</td>
+                                                                      <td className="px-4 py-2 text-right">{Number(item.unitPrice).toFixed(2)} €</td>
+                                                                      <td className="px-4 py-2 text-right font-medium">{(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)} €</td>
+                                                                  </tr>
+                                                              ))}
+                                                          </tbody>
+                                                      </table>
+                                                  </div>
+                                              </td>
+                                          </tr>
+                                      )}
+                                  </React.Fragment>
+                              );
+                          })}
                           {savedOrders.length === 0 && <tr><td colSpan={6} className="p-8 text-center">Sem pedidos.</td></tr>}
                       </tbody>
                   </table>
@@ -763,7 +842,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       </div>
                   </div>
                   <div className="flex gap-2 w-full md:w-auto">
-                      <button onClick={handlePrintOrder} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> PDF</button>
+                      <button onClick={() => handlePrintOrder()} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> PDF</button>
                       <button onClick={generateExcel} className="flex-1 px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 flex items-center justify-center gap-2"><FileSpreadsheet className="w-4 h-4"/> Excel</button>
                       <button onClick={handleSave} className="flex-1 px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2"><Save className="w-4 h-4"/> Salvar</button>
                   </div>

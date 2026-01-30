@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, Order, StockItem, MasterMaterial } from './types';
+import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -11,6 +11,10 @@ import UsersManager from './components/UsersManager';
 import PurchaseOrderManager from './components/PurchaseOrderManager';
 import { StorageService } from './services/storageService';
 
+const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
+const LOGO_HOTELARIA = "https://setlinghotelaria.pt/wp-content/uploads/2024/12/setling-hotelaria-logo-big.svg";
+const LOGO_GENERIC = "https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg";
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [view, setView] = useState<ViewState>('LOGIN');
@@ -18,8 +22,12 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stock, setStock] = useState<StockItem[]>([]);
   const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]); // Store companies
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
+  
+  // Dynamic Logo based on Company/Role
+  const [logoUrl, setLogoUrl] = useState(LOGO_AVAC);
 
   // Dark Mode State
   const [darkMode, setDarkMode] = useState(() => {
@@ -66,18 +74,38 @@ const App: React.FC = () => {
   }, [user]);
 
   const refreshData = async () => {
-    // Prevent double loading indicator if we are just restoring session silently
-    // But helpful to show activity
-    // setLoading(true); 
     try {
       // 1. Fetch current data
-      const [fetchedStock, fetchedMaster] = await Promise.all([
+      const [fetchedStock, fetchedMaster, fetchedCompanies] = await Promise.all([
         StorageService.getStock(),
-        StorageService.getMasterMaterials()
+        StorageService.getMasterMaterials(),
+        StorageService.getCompanies()
       ]);
       
+      setCompanies(fetchedCompanies);
+
+      // Determine Company for Logo
+      if (user?.role === UserRole.ADMIN) {
+          setLogoUrl(LOGO_GENERIC);
+      } else {
+          try {
+              if (user?.companyId && fetchedCompanies.length > 0) {
+                  const userCompany = fetchedCompanies.find(c => c.id === user.companyId);
+                  if (userCompany && userCompany.name.toLowerCase().includes('hotelaria')) {
+                      setLogoUrl(LOGO_HOTELARIA);
+                  } else {
+                      setLogoUrl(LOGO_AVAC);
+                  }
+              } else {
+                   setLogoUrl(LOGO_AVAC);
+              }
+          } catch (e) {
+              console.warn("Could not determine company logo, using default.");
+              setLogoUrl(LOGO_AVAC);
+          }
+      }
+      
       // 2. Sync Custom Items (Requires master list)
-      // This will update orders in DB if matches are found
       await StorageService.syncCustomMaterials(fetchedMaster);
 
       // 3. Fetch Orders (now updated)
@@ -88,10 +116,15 @@ const App: React.FC = () => {
       setMasterList(fetchedMaster);
     } catch (error) {
       console.error("Failed to fetch data", error);
-    } finally {
-      // setLoading(false);
     }
   };
+
+  // --- FILTERED ORDERS LOGIC ---
+  // Admins see all. Users see only their company's orders or legacy orders (undefined companyId).
+  const visibleOrders = orders.filter(o => {
+      if (user?.role === UserRole.ADMIN) return true;
+      return !o.companyId || o.companyId === user?.companyId;
+  });
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
@@ -105,6 +138,7 @@ const App: React.FC = () => {
     setOrders([]);
     setStock([]);
     setMasterList([]);
+    setLogoUrl(LOGO_AVAC); // Reset
   };
 
   if (authChecking) {
@@ -130,37 +164,41 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'DASHBOARD':
-        return <Dashboard orders={orders} stock={stock} userRole={user.role} onNavigate={setView} />;
+        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} onNavigate={setView} />;
       case 'CREATE_ORDER':
         return (
             <OrderManager 
-              orders={orders} 
+              orders={visibleOrders} 
               stock={stock}
               masterList={masterList}
               type="OPEN"
-              mode="CREATE" // New Prop
+              mode="CREATE"
               userRole={user.role} 
               refreshData={refreshData} 
               currentUsername={user.username}
+              userCompanyId={user.companyId}
+              companies={companies}
             />
           );
       case 'OPEN_ORDERS':
         return (
           <OrderManager 
-            orders={orders} 
+            orders={visibleOrders} 
             stock={stock}
             masterList={masterList}
             type="OPEN" 
-            mode="LIST" // New Prop
+            mode="LIST"
             userRole={user.role} 
             refreshData={refreshData} 
             currentUsername={user.username}
+            userCompanyId={user.companyId}
+            companies={companies}
           />
         );
       case 'FINISHED_ORDERS':
         return (
           <OrderManager 
-            orders={orders} 
+            orders={visibleOrders} 
             stock={stock}
             masterList={masterList}
             type="FINISHED" 
@@ -168,6 +206,8 @@ const App: React.FC = () => {
             userRole={user.role} 
             refreshData={refreshData}
             currentUsername={user.username}
+            userCompanyId={user.companyId}
+            companies={companies}
           />
         );
       case 'PURCHASE_ORDERS':
@@ -175,6 +215,7 @@ const App: React.FC = () => {
              <PurchaseOrderManager 
                 masterList={masterList}
                 currentUsername={user.username}
+                logoUrl={logoUrl}
              />
          );
       case 'STOCK':
@@ -187,13 +228,13 @@ const App: React.FC = () => {
           />
         );
       case 'QUERY':
-        return <QueryAssistant orders={orders} stock={stock} />;
+        return <QueryAssistant orders={visibleOrders} stock={stock} />;
       case 'SETTINGS':
         return <Settings />;
       case 'USERS':
         return <UsersManager />;
       default:
-        return <Dashboard orders={orders} stock={stock} userRole={user.role} onNavigate={setView} />;
+        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} onNavigate={setView} />;
     }
   };
 
@@ -207,6 +248,7 @@ const App: React.FC = () => {
       onRefresh={refreshData}
       toggleTheme={toggleTheme}
       isDarkMode={darkMode}
+      logoUrl={logoUrl}
     >
       {renderContent()}
     </Layout>

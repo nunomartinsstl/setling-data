@@ -236,19 +236,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white dark:bg-slate-800 py-8 px-4 shadow-xl rounded-lg sm:px-10 border border-slate-200 dark:border-slate-700 relative transition-all duration-200">
             <div className="flex justify-center mb-6">
-            <img 
-                src="https://mainpage.pt/wp-content/uploads/2024/11/logo-mainpage-vertical.svg" 
-                alt="Mainpage Logo"
-                className="h-20 mb-2 object-contain dark:brightness-0 dark:invert transition-all duration-200"
-            />
+                <img 
+                    src="https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg" 
+                    alt="Setling Logo"
+                    className="h-20 mb-2 object-contain transition-all duration-200 invert dark:invert-0"
+                />
             </div>
-            <h2 className="text-2xl font-bold text-center text-slate-800 dark:text-white mb-2">
-                {isRegistering ? 'Criar Conta' : 'Login Setling'}
-            </h2>
-            <p className="text-center text-slate-500 dark:text-slate-400 mb-6">Gestão de Pedidos</p>
-
+            
             {/* Toggle */}
-            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg mb-6">
+            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg mb-6 mt-4">
                 <button 
                     type="button"
                     onClick={() => { setIsRegistering(false); setError(''); setTouched(false); }}

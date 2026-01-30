@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption } from '../types';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company } from '../types';
 import { StorageService, MATERIAL_CATEGORIES } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -15,6 +15,8 @@ interface OrderManagerProps {
   userRole: UserRole;
   refreshData: () => void;
   currentUsername: string;
+  userCompanyId?: string;
+  companies: Company[];
 }
 
 interface ManualRow {
@@ -60,7 +62,7 @@ const calculateRelevance = (target: string, query: string): number => {
     return matches > 0 ? score : 0;
 };
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -71,6 +73,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   // Manual Entry Buffer (Drafts)
   const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false}]);
   const [orderTitle, setOrderTitle] = useState('');
+  // Company Selection for Admins
+  const [targetCompanyId, setTargetCompanyId] = useState<string>('');
   
   // Import State
   const [importModalOpen, setImportModalOpen] = useState(false);
@@ -78,7 +82,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
-  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[], missingCategory?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
+  const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, company?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[], missingCategory?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
 
   // Similarity Search State
   const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
@@ -150,6 +154,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       loadOpts();
   }, []);
 
+  // Initialize company for non-admins
+  useEffect(() => {
+      if (!isAdmin && userCompanyId) {
+          setTargetCompanyId(userCompanyId);
+      }
+  }, [isAdmin, userCompanyId]);
+
   useEffect(() => {
     if (editingOrderId) return; 
     const savedRows = localStorage.getItem('draft_rows');
@@ -185,6 +196,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setEditingOrderId(null);
       setExpandedRowIndex(0);
       setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
+      // Reset company if admin
+      if (isAdmin) setTargetCompanyId('');
   };
 
   const getMinDate = () => {
@@ -279,6 +292,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const uncheckedErrors: number[] = [];
       const missingCategoryErrors: number[] = [];
       let isTitleValid = orderTitle.trim().length > 0;
+      let isCompanyValid = !!targetCompanyId;
       
       manualRows.forEach((row, idx) => {
           const qty = Number(row.qty);
@@ -318,6 +332,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
       setFormErrors({
           title: !isTitleValid,
+          company: !isCompanyValid,
           rows: errors,
           duplicateCustom: duplicateErrors,
           invalidSkus: invalidSkus,
@@ -325,7 +340,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           missingCategory: missingCategoryErrors
       });
 
-      return isTitleValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0 && missingCategoryErrors.length === 0;
+      return isTitleValid && isCompanyValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0 && missingCategoryErrors.length === 0;
   };
 
   const addManualRow = () => {
@@ -435,8 +450,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
              return row.isCustom && row.customDesc && masterList.some(m => normalizeText(m.description) === normalizeText(row.customDesc));
         });
         const hasInvalidSkus = manualRows.some((row) => !row.isCustom && row.sku && !isKnownSku(row.sku));
+        const missingCompany = !targetCompanyId;
 
-        if (unchecked) {
+        if (missingCompany) {
+             setMessage({ type: 'error', text: "Selecione a empresa para este pedido." });
+        } else if (unchecked) {
              setMessage({ type: 'error', text: "Você possui itens novos que não foram verificados. Clique em 'Confirmar Material' para validar." });
         } else if (missingCat) {
              setMessage({ type: 'error', text: "Selecione uma categoria para os novos materiais." });
@@ -500,6 +518,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setOrderTitle(order.title);
       setDueDate(order.dueDate);
       setEditingOrderId(order.id);
+      // Ensure we keep existing company or user's company
+      setTargetCompanyId(order.companyId || (isAdmin ? '' : (userCompanyId || '')));
       setCreationStep('INITIAL');
       setExpandedRowIndex(0);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -535,6 +555,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         return;
     }
 
+    if (!targetCompanyId) {
+        setMessage({ type: 'error', text: "Empresa não identificada. Se você é admin, selecione a empresa." });
+        return;
+    }
+
     setIsProcessing(true);
     try {
         if (editingOrderId) {
@@ -548,6 +573,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 title: orderTitle,
                 dueDate: dueDate,
                 items: pendingItems, 
+                companyId: targetCompanyId, // Ensure company persists or updates
                 changeLog: [...(existingOrder.changeLog || []), logEntry]
             };
 
@@ -566,7 +592,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 status: 'OPEN',
                 dateCreated: new Date().toISOString(),
                 dueDate: dueDate,
-                items: pendingItems.map(i => ({...i, quantityPicked: 0}))
+                items: pendingItems.map(i => ({...i, quantityPicked: 0})),
+                companyId: targetCompanyId // Save the company ID
             };
 
             await StorageService.addOrders([newOrder]);
@@ -766,6 +793,17 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 disabled
             />
         </div>
+
+        {/* Company Confirmation (Read-only here) */}
+        {targetCompanyId && (
+            <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
+                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <Building className="w-4 h-4"/>
+                    {companies.find(c => c.id === targetCompanyId)?.name || "Empresa Desconhecida"}
+                </div>
+            </div>
+        )}
 
         <div>
             <label className={`block text-sm font-medium mb-1 ${formErrors.date ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>
@@ -1031,6 +1069,28 @@ TUBO 20MM, 2"
           ) : (
             <div>
                 <div className="space-y-3 animate-fade-in">
+                    {/* Admin Company Selector */}
+                    {isAdmin && (
+                        <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800">
+                            <label className={`block text-xs font-bold uppercase mb-1 flex items-center gap-1 ${formErrors.company ? 'text-red-600' : 'text-purple-800 dark:text-purple-300'}`}>
+                                <Building className="w-3 h-3" /> Selecionar Empresa (Admin) {formErrors.company && '*'}
+                            </label>
+                            <select 
+                                value={targetCompanyId}
+                                onChange={(e) => {
+                                    setTargetCompanyId(e.target.value);
+                                    if(formErrors.company) setFormErrors({...formErrors, company: false});
+                                }}
+                                className={`w-full p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${formErrors.company ? 'border-red-500' : 'border-purple-200 dark:border-purple-700'}`}
+                            >
+                                <option value="">Selecione a empresa...</option>
+                                {companies.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
+
                     <div className="mb-4">
                         <label className={`block text-xs font-semibold mb-1 ${formErrors.title ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>
                             Título do Pedido {formErrors.title && '*'}

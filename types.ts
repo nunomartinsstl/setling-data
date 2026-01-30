@@ -69,6 +69,7 @@ export interface Order {
   originalOrderId?: string; // Links back to parent if reopened
   pickedItems?: PickedItem[]; // Items actually picked in the warehouse
   exportData?: any[]; // Legacy or extra data for exports
+  companyId?: string; // Links order to a specific company
 }
 
 export interface StockItem {
