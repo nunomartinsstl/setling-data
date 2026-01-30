@@ -422,7 +422,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
       const newPO: PurchaseOrder = {
           id: orderId || Math.random().toString(36).substr(2, 9),
-          displayId: displayId,
+          displayId: displayId ?? 0,
           dateCreated: orderId ? orderDate : new Date().toISOString(),
           supplier: selectedSupplier,
           pep,
