@@ -39,14 +39,15 @@ if (hasConfig) {
     console.warn("Firebase configuration missing. App running in offline mode.");
 }
 
+// UPDATED KEYS TO MATCH YOUR DATABASE STRUCTURE (nexus_ prefix)
 const KEYS = {
-  USERS: 'users',
-  ORDERS: 'orders',
-  STOCK: 'stock',
-  MASTER_MATERIALS: 'master_materials',
-  SETTINGS: 'settings',
-  PURCHASE_ORDERS: 'purchase_orders',
-  INVITES: 'invites'
+  USERS: 'nexus_users',
+  ORDERS: 'nexus_orders',
+  STOCK: 'nexus_stock',
+  MASTER_MATERIALS: 'nexus_master',
+  SETTINGS: 'nexus_settings',
+  PURCHASE_ORDERS: 'nexus_purchase_orders', // Separate nexus for purchase orders
+  INVITES: 'nexus_invites'
 };
 
 export const MATERIAL_CATEGORIES = [
@@ -237,38 +238,50 @@ export const StorageService = {
   // PURCHASE ORDERS
   getPurchaseOrders: async (): Promise<PurchaseOrder[]> => {
     if (!db) return [];
-    const snapshot = await get(child(ref(db), KEYS.PURCHASE_ORDERS));
-    if (!snapshot.exists()) return [];
-    const val = snapshot.val();
-    return Array.isArray(val) ? val : Object.values(val);
+    try {
+        const snapshot = await get(child(ref(db), KEYS.PURCHASE_ORDERS));
+        if (!snapshot.exists()) return [];
+        const val = snapshot.val();
+        // Handle Firebase object-as-array behavior
+        return Array.isArray(val) ? val : Object.values(val);
+    } catch (e) {
+        console.error("Error fetching purchase orders", e);
+        return [];
+    }
   },
 
   savePurchaseOrder: async (po: PurchaseOrder) => {
       if (!isFirebaseActive || !db) throw new Error("Disponível apenas online.");
+      
       try {
-          if (!po.id) throw new Error("ID obrigatório");
+          if (!po.id) throw new Error("ID interno obrigatório");
           
+          // Generate Incremental ID if not present (New Order)
           if (!po.displayId) {
-              const current = await StorageService.getPurchaseOrders();
+              const currentOrders = await StorageService.getPurchaseOrders();
               let maxId = 0;
-              // Safe iterative approach to find max ID, ensuring no -Infinity errors
-              if (Array.isArray(current) && current.length > 0) {
-                  for (const order of current) {
+              
+              if (currentOrders && currentOrders.length > 0) {
+                  // Safely iterate to find max ID
+                  for (const order of currentOrders) {
                       const val = Number(order.displayId);
-                      if (!isNaN(val) && val > maxId) {
+                      if (Number.isFinite(val) && val > maxId) {
                           maxId = val;
                       }
                   }
               }
+              // Start at 1
               po.displayId = maxId + 1;
           }
 
-          // Absolute safety check: ensure we never send Infinity/NaN to Firebase
+          // Safety check against -Infinity or NaN before saving
           if (!Number.isFinite(po.displayId)) {
-               console.warn("Invalid ID generated, falling back to timestamp");
-               po.displayId = Math.floor(Date.now() / 1000); 
+              // Fallback to timestamp based ID if calculation failed completely
+              console.warn("Generating fallback ID for purchase order");
+              po.displayId = Math.floor(Date.now() / 1000); 
           }
 
+          // Save to nexus_purchase_orders/{id}
           await set(ref(db, `${KEYS.PURCHASE_ORDERS}/${po.id}`), po);
           return po;
       } catch(e: any) {

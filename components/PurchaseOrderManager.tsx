@@ -15,9 +15,9 @@ interface PurchaseOrderManagerProps {
 interface PORow {
   sku: string;
   description: string;
-  quantity: number;
+  quantity: number | string;
   unit: string;
-  unitPrice: number;
+  unitPrice: number | string;
   isCustom: boolean; 
   showSuggestions: boolean;
   similarityChecked: boolean;
@@ -105,7 +105,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       return suppliers.filter(s => s.name.toLowerCase().includes(lower) || s.code.toLowerCase().includes(lower));
   }, [suppliers, supplierSearch]);
 
-  const subTotal = rows.reduce((acc, row) => acc + (row.quantity * row.unitPrice), 0);
+  const subTotal = rows.reduce((acc, row) => acc + (Number(row.quantity) * Number(row.unitPrice)), 0);
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
 
@@ -331,8 +331,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                             <td>${r.description}</td>
                             <td class="right">${r.quantity}</td>
                             <td class="center" style="font-size: 10px; color: #666;">${r.unit}</td>
-                            <td class="right">${r.unitPrice.toFixed(2)} €</td>
-                            <td class="right" style="font-weight: bold;">${(r.quantity * r.unitPrice).toFixed(2)} €</td>
+                            <td class="right">${Number(r.unitPrice).toFixed(2)} €</td>
+                            <td class="right" style="font-weight: bold;">${(Number(r.quantity) * Number(r.unitPrice)).toFixed(2)} €</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -400,10 +400,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           "Fornecedor": selectedSupplier.name,
           "Ref": r.sku,
           "Desc": r.description,
-          "Qtd": r.quantity,
+          "Qtd": Number(r.quantity),
           "Unid": r.unit,
-          "Preco": r.unitPrice,
-          "Total": r.quantity * r.unitPrice
+          "Preco": Number(r.unitPrice),
+          "Total": Number(r.quantity) * Number(r.unitPrice)
       }));
 
       const ws = XLSX.utils.json_to_sheet(data);
@@ -416,13 +416,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const handleSave = async () => {
       if (!selectedSupplier) return alert("Selecione fornecedor.");
       if (rows.some(r => !r.description || !r.similarityChecked)) return alert("Verifique todos os itens.");
-      if (rows.some(r => r.unitPrice <= 0)) return alert("Preços devem ser maior que 0.");
+      if (rows.some(r => Number(r.unitPrice) <= 0)) return alert("Preços devem ser maior que 0.");
 
       if (!window.confirm("Salvar pedido?")) return;
 
       const newPO: PurchaseOrder = {
           id: orderId || Math.random().toString(36).substr(2, 9),
-          displayId: displayId ?? 0,
+          displayId: displayId,
           dateCreated: orderId ? orderDate : new Date().toISOString(),
           supplier: selectedSupplier,
           pep,
@@ -432,7 +432,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               quantity: Number(r.quantity),
               unit: r.unit,
               unitPrice: Number(r.unitPrice),
-              total: r.quantity * r.unitPrice,
+              total: Number(r.quantity) * Number(r.unitPrice),
               isCustom: r.isCustom
           })),
           subTotal,
