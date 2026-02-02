@@ -497,6 +497,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
             )}
         </div>
       </div>
+      
+      <div className="absolute bottom-4 left-0 right-0 text-center">
+        <span className="text-[10px] text-slate-400 dark:text-slate-600 font-mono">v1.1.1</span>
+      </div>
     </div>
   );
 };

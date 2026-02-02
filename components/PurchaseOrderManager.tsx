@@ -597,88 +597,92 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               </div>
               
               <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                  <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
-                      <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold">
-                          <tr>
-                              <th className="p-4">ID</th>
-                              <th className="p-4">Data</th>
-                              <th className="p-4">Fornecedor</th>
-                              <th className="p-4">Responsável</th>
-                              <th className="p-4 text-right">Total</th>
-                              <th className="p-4 text-right">Ação</th>
-                          </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                          {savedOrders.map(po => {
-                              const isExpanded = expandedOrderId === po.id;
-                              return (
-                                  <React.Fragment key={po.id}>
-                                      <tr 
-                                        onClick={() => toggleExpandListOrder(po.id)}
-                                        className={`transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 ${isExpanded ? 'bg-slate-50 dark:bg-slate-700/50' : ''}`}
-                                      >
-                                          <td className="p-4">
-                                            <div className="flex items-center gap-2">
-                                                {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
-                                                <span className="font-mono font-bold text-slate-600 dark:text-slate-300">#{po.displayId}</span>
-                                            </div>
-                                          </td>
-                                          <td className="p-4">{new Date(po.dateCreated).toLocaleDateString()}</td>
-                                          <td className="p-4 font-bold">{po.supplier.name}</td>
-                                          <td className="p-4">{po.creator}</td>
-                                          <td className="p-4 text-right">{po.grandTotal.toFixed(2)} €</td>
-                                          <td className="p-4 text-right" onClick={(e) => e.stopPropagation()}>
-                                              <div className="flex justify-end gap-2">
-                                                  <button onClick={() => handlePrintOrder(po)} className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 dark:bg-blue-900/30 rounded" title="Imprimir PDF"><FileText className="w-4 h-4"/></button>
-                                                  <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded" title="Editar"><Edit className="w-4 h-4"/></button>
-                                                  <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 dark:bg-red-900/30 rounded" title="Excluir"><Trash2 className="w-4 h-4"/></button>
-                                              </div>
-                                          </td>
-                                      </tr>
-                                      {isExpanded && (
-                                          <tr className="bg-slate-50 dark:bg-slate-800/50">
-                                              <td colSpan={6} className="p-0">
-                                                  <div className="p-4 border-t border-slate-100 dark:border-slate-700 animate-fade-in pl-12">
-                                                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-xs text-slate-500 dark:text-slate-400">
-                                                          <div>
-                                                              <span className="font-bold">PEP/Obra:</span> {po.pep || '-'}
-                                                          </div>
-                                                          <div>
-                                                              <span className="font-bold">Condição Pagamento:</span> {String(po.supplier.paymentTerms) === '0' ? 'Pronto Pagamento' : (po.supplier.paymentTerms || 'A Definir')}
-                                                          </div>
-                                                      </div>
-                                                      <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
-                                                          <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
-                                                              <tr>
-                                                                  <th className="px-4 py-2">Ref</th>
-                                                                  <th className="px-4 py-2">Descrição</th>
-                                                                  <th className="px-4 py-2 text-right">Qtd</th>
-                                                                  <th className="px-4 py-2 text-right">Preço</th>
-                                                                  <th className="px-4 py-2 text-right">Total</th>
-                                                              </tr>
-                                                          </thead>
-                                                          <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-700 dark:text-slate-300">
-                                                              {po.items.map((item, idx) => (
-                                                                  <tr key={idx}>
-                                                                      <td className="px-4 py-2 font-mono text-xs">{item.sku}</td>
-                                                                      <td className="px-4 py-2">{item.description}</td>
-                                                                      <td className="px-4 py-2 text-right">{item.quantity} {item.unit}</td>
-                                                                      <td className="px-4 py-2 text-right">{Number(item.unitPrice).toFixed(2)} €</td>
-                                                                      <td className="px-4 py-2 text-right font-medium">{(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)} €</td>
-                                                                  </tr>
-                                                              ))}
-                                                          </tbody>
-                                                      </table>
-                                                  </div>
-                                              </td>
-                                          </tr>
-                                      )}
-                                  </React.Fragment>
-                              );
-                          })}
-                          {savedOrders.length === 0 && <tr><td colSpan={6} className="p-8 text-center">Sem pedidos.</td></tr>}
-                      </tbody>
-                  </table>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                        <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold">
+                            <tr>
+                                <th className="p-4 whitespace-nowrap">ID</th>
+                                <th className="p-4 whitespace-nowrap">Data</th>
+                                <th className="p-4 whitespace-nowrap">Fornecedor</th>
+                                <th className="p-4 whitespace-nowrap">Responsável</th>
+                                <th className="p-4 text-right whitespace-nowrap">Total</th>
+                                <th className="p-4 text-right whitespace-nowrap">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                            {savedOrders.map(po => {
+                                const isExpanded = expandedOrderId === po.id;
+                                return (
+                                    <React.Fragment key={po.id}>
+                                        <tr 
+                                            onClick={() => toggleExpandListOrder(po.id)}
+                                            className={`transition-colors cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 ${isExpanded ? 'bg-slate-50 dark:bg-slate-700/50' : ''}`}
+                                        >
+                                            <td className="p-4">
+                                                <div className="flex items-center gap-2">
+                                                    {isExpanded ? <ChevronUp className="w-4 h-4 text-slate-400"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
+                                                    <span className="font-mono font-bold text-slate-600 dark:text-slate-300">#{po.displayId}</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-4 whitespace-nowrap">{new Date(po.dateCreated).toLocaleDateString()}</td>
+                                            <td className="p-4 font-bold whitespace-nowrap">{po.supplier.name}</td>
+                                            <td className="p-4 whitespace-nowrap">{po.creator}</td>
+                                            <td className="p-4 text-right whitespace-nowrap">{po.grandTotal.toFixed(2)} €</td>
+                                            <td className="p-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => handlePrintOrder(po)} className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 dark:bg-blue-900/30 rounded" title="Imprimir PDF"><FileText className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 dark:bg-red-900/30 rounded" title="Excluir"><Trash2 className="w-4 h-4"/></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        {isExpanded && (
+                                            <tr className="bg-slate-50 dark:bg-slate-800/50">
+                                                <td colSpan={6} className="p-0">
+                                                    <div className="p-4 border-t border-slate-100 dark:border-slate-700 animate-fade-in pl-12">
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-xs text-slate-500 dark:text-slate-400">
+                                                            <div>
+                                                                <span className="font-bold">PEP/Obra:</span> {po.pep || '-'}
+                                                            </div>
+                                                            <div>
+                                                                <span className="font-bold">Condição Pagamento:</span> {String(po.supplier.paymentTerms) === '0' ? 'Pronto Pagamento' : (po.supplier.paymentTerms || 'A Definir')}
+                                                            </div>
+                                                        </div>
+                                                        <div className="overflow-x-auto">
+                                                            <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
+                                                                <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                                                    <tr>
+                                                                        <th className="px-4 py-2">Ref</th>
+                                                                        <th className="px-4 py-2">Descrição</th>
+                                                                        <th className="px-4 py-2 text-right">Qtd</th>
+                                                                        <th className="px-4 py-2 text-right">Preço</th>
+                                                                        <th className="px-4 py-2 text-right">Total</th>
+                                                                    </tr>
+                                                                </thead>
+                                                                <tbody className="divide-y divide-slate-200 dark:divide-slate-700 text-slate-700 dark:text-slate-300">
+                                                                    {po.items.map((item, idx) => (
+                                                                        <tr key={idx}>
+                                                                            <td className="px-4 py-2 font-mono text-xs">{item.sku}</td>
+                                                                            <td className="px-4 py-2">{item.description}</td>
+                                                                            <td className="px-4 py-2 text-right">{item.quantity} {item.unit}</td>
+                                                                            <td className="px-4 py-2 text-right">{Number(item.unitPrice).toFixed(2)} €</td>
+                                                                            <td className="px-4 py-2 text-right font-medium">{(Number(item.quantity) * Number(item.unitPrice)).toFixed(2)} €</td>
+                                                                        </tr>
+                                                                    ))}
+                                                                </tbody>
+                                                            </table>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </React.Fragment>
+                                );
+                            })}
+                            {savedOrders.length === 0 && <tr><td colSpan={6} className="p-8 text-center">Sem pedidos.</td></tr>}
+                        </tbody>
+                    </table>
+                  </div>
               </div>
           </div>
       ) : (
