@@ -241,7 +241,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     alt="Setling Logo"
                     className="h-20 mb-2 object-contain transition-all duration-200 invert dark:invert-0"
                 />
-                <h2 className="text-blue-500 font-bold text-lg -mt-2">Gestão de Pedidos</h2>
+                <h2 className="text-blue-500 font-bold text-lg -mt-2 tracking-widest opacity-80">GESTÃO DE PEDIDOS</h2>
             </div>
             
             {/* Toggle */}
