@@ -235,12 +235,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white dark:bg-slate-800 py-8 px-4 shadow-xl rounded-lg sm:px-10 border border-slate-200 dark:border-slate-700 relative transition-all duration-200">
-            <div className="flex justify-center mb-6">
+            <div className="flex flex-col items-center justify-center mb-6">
                 <img 
                     src="https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg" 
                     alt="Setling Logo"
                     className="h-20 mb-2 object-contain transition-all duration-200 invert dark:invert-0"
                 />
+                <h2 className="text-blue-500 font-bold text-lg -mt-2">Gestão de Pedidos</h2>
             </div>
             
             {/* Toggle */}
