@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -34,14 +34,22 @@ const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewSta
 const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh, toggleTheme, isDarkMode, logoUrl }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
+  
+  // State for collapsible warehouse menu
+  const [isWarehouseGroupOpen, setIsWarehouseGroupOpen] = React.useState(false);
 
   // Helper booleans
   const isAdmin = user.role === UserRole.ADMIN;
   const isManagement = user.role === UserRole.MANAGEMENT;
   
+  // Auto-expand if active view is a child
+  React.useEffect(() => {
+    if (['CREATE_ORDER', 'OPEN_ORDERS', 'FINISHED_ORDERS'].includes(currentView)) {
+        setIsWarehouseGroupOpen(true);
+    }
+  }, [currentView]);
+
   // Logic to determine logo styling
-  // If it's the generic white logo (Admin), it needs to be inverted in Light mode (to be black) and kept normal in Dark mode (White).
-  // If it's a standard colored logo, it needs to be White in Dark mode.
   const isGenericLogo = logoUrl.includes('setling-logo-white');
   const logoClasses = isGenericLogo 
     ? "h-12 object-contain mb-2 transition-all invert dark:invert-0" 
@@ -124,40 +132,57 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 onClick={() => handleNavClick('DASHBOARD')} 
               />
               
-              {canCreate && (
-                <>
-                    <NavItem 
-                        view="CREATE_ORDER" 
-                        icon={PlusCircle} 
-                        label="Pedido ao Armazém" 
-                        isActive={currentView === 'CREATE_ORDER'} 
-                        onClick={() => handleNavClick('CREATE_ORDER')} 
-                    />
-                    <NavItem 
-                        view="PURCHASE_ORDERS" 
-                        icon={ShoppingBag} 
-                        label="Pedidos de Compra" 
-                        isActive={currentView === 'PURCHASE_ORDERS'} 
-                        onClick={() => handleNavClick('PURCHASE_ORDERS')} 
-                    />
-                </>
-              )}
+              {/* Nested Warehouse Group */}
+              <div className="space-y-1">
+                  <button
+                    onClick={() => setIsWarehouseGroupOpen(!isWarehouseGroupOpen)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <Package className="w-5 h-5 text-slate-400" />
+                      <span>Pedidos ao Armazém</span>
+                    </div>
+                    {isWarehouseGroupOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                  </button>
 
-              <NavItem 
-                view="OPEN_ORDERS" 
-                icon={ShoppingCart} 
-                label="Pedidos Abertos" 
-                isActive={currentView === 'OPEN_ORDERS'} 
-                onClick={() => handleNavClick('OPEN_ORDERS')} 
-              />
-              
-              <NavItem 
-                view="FINISHED_ORDERS" 
-                icon={CheckCircle} 
-                label="Pedidos Finalizados" 
-                isActive={currentView === 'FINISHED_ORDERS'} 
-                onClick={() => handleNavClick('FINISHED_ORDERS')} 
-              />
+                  {isWarehouseGroupOpen && (
+                    <div className="pl-4 space-y-1 animate-fade-in">
+                         {canCreate && (
+                            <NavItem 
+                                view="CREATE_ORDER" 
+                                icon={PlusCircle} 
+                                label="Criar Pedido" 
+                                isActive={currentView === 'CREATE_ORDER'} 
+                                onClick={() => handleNavClick('CREATE_ORDER')} 
+                            />
+                        )}
+                        <NavItem 
+                            view="OPEN_ORDERS" 
+                            icon={ShoppingCart} 
+                            label="Pedidos Abertos" 
+                            isActive={currentView === 'OPEN_ORDERS'} 
+                            onClick={() => handleNavClick('OPEN_ORDERS')} 
+                        />
+                        <NavItem 
+                            view="FINISHED_ORDERS" 
+                            icon={CheckCircle} 
+                            label="Pedidos Finalizados" 
+                            isActive={currentView === 'FINISHED_ORDERS'} 
+                            onClick={() => handleNavClick('FINISHED_ORDERS')} 
+                        />
+                    </div>
+                  )}
+              </div>
+
+              {canCreate && (
+                 <NavItem 
+                    view="PURCHASE_ORDERS" 
+                    icon={ShoppingBag} 
+                    label="Pedidos de Compra" 
+                    isActive={currentView === 'PURCHASE_ORDERS'} 
+                    onClick={() => handleNavClick('PURCHASE_ORDERS')} 
+                />
+              )}
               
               <NavItem 
                 view="STOCK" 

@@ -250,6 +250,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
      return materialOptions.some(opt => opt.sku === sku);
   };
 
+  const getSuggestions = (input: string) => {
+    if (!input || input.length < 2) return [];
+    const normalizedInput = normalizeText(input);
+    return materialOptions.filter(opt => 
+        normalizeText(opt.sku).includes(normalizedInput) || 
+        normalizeText(opt.desc).includes(normalizedInput)
+    ).slice(0, 50); // Limit to 50 for performance
+  };
+
   // --- IMPORT LOGIC ---
   const handleImportProcess = () => {
       const parsedItems = ParserService.parseOrderImport(importText);
@@ -476,7 +485,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             if (row.category === '_OTHER_') {
                 finalCategory = row.customCategory;
             } else {
-                // Find full name
+                // Keep the Code but we know the name from MATERIAL_CATEGORIES
+                // Just storing code for logic, or display name? 
+                // Currently system expects category string.
+                // Let's store "CODE - Name" to be safe and compatible with old logic
                 const catObj = MATERIAL_CATEGORIES.find(c => c.code === row.category);
                 if (catObj) finalCategory = `${catObj.code} - ${catObj.name}`;
             }
@@ -507,7 +519,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           sku: item.isCustom ? '' : item.sku,
           qty: item.quantity,
           unit: item.unit || 'UN',
-          category: item.category || '', 
+          category: item.category ? item.category.split(' - ')[0] : '', 
           customCategory: '', // We don't restore custom text perfectly, user has to re-select if editing
           isCustom: !!item.isCustom,
           customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : '',
@@ -546,6 +558,33 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           actor: currentUsername,
           details: changes.length > 0 ? changes.join('; ') : 'Edição sem alterações visíveis.'
       };
+  };
+
+  // Logic to find the next available code for a category
+  const getSuggestedCode = (categoryCode: string) => {
+       const prefix = categoryCode.toUpperCase();
+       // Find all items matching Format AAA0000 (Prefix + 4 digits)
+       const regex = new RegExp(`^${prefix}\\d{4}$`);
+       
+       let max = 0;
+       
+       // Scan Master List
+       masterList.forEach(m => {
+           if(regex.test(m.sku)) {
+               const num = parseInt(m.sku.substring(3), 10);
+               if(num > max) max = num;
+           }
+       });
+
+       // Scan Stock as well just in case items are only in stock but not master
+       stock.forEach(s => {
+           if(regex.test(s.sku)) {
+               const num = parseInt(s.sku.substring(3), 10);
+               if(num > max) max = num;
+           }
+       });
+
+       return `${prefix}${String(max + 1).padStart(4, '0')}`;
   };
 
   const submitOrder = async () => {
@@ -646,7 +685,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             const uom = unitOptions.find(u => u.value === item.unit);
                             const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
 
-                            body += `Referência: A Definir\n`;
+                            // Calculate suggested code
+                            let suggestedCode = "A Definir";
+                            if (item.category) {
+                                // Extract the code from "CODE - Name" or just use it if it's "CODE"
+                                const catParts = item.category.split(' - ');
+                                const catCode = catParts[0];
+                                // Only suggest for standard categories, not "Other"
+                                const isStandard = MATERIAL_CATEGORIES.some(c => c.code === catCode);
+                                if (isStandard) {
+                                    suggestedCode = getSuggestedCode(catCode);
+                                }
+                            }
+
+                            body += `Referência Sugerida: ${suggestedCode}\n`;
                             body += `Descrição: ${item.description}\n`;
                             // Add Category
                             if (item.category) {
@@ -1121,10 +1173,9 @@ TUBO 20MM, 2"
                             const isUnchecked = formErrors.unchecked && formErrors.unchecked.includes(idx);
                             const isMissingCat = formErrors.missingCategory && formErrors.missingCategory.includes(idx);
                             const stockQty = getStockCount(row.sku);
-
-                            // Determine if we should show the "Confirm Material" button
-                            // Show if: (Not Custom AND Unknown SKU) OR (Custom Item)
-                            const showConfirmButton = (!row.isCustom && row.sku.length > 0 && !isKnownSku(row.sku)) || row.isCustom;
+                            
+                            // Get Custom Suggestions for current input
+                            const suggestions = !row.isCustom && row.sku ? getSuggestions(row.sku) : [];
 
                             return (
                                 <div 
@@ -1167,9 +1218,49 @@ TUBO 20MM, 2"
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
+                                            
+                                            {/* Button to toggle New Material mode */}
+                                            <div className="flex justify-end mb-2">
+                                                {!row.isCustom ? (
+                                                    <button 
+                                                        onClick={() => {
+                                                            const newRows = [...manualRows];
+                                                            newRows[idx] = {
+                                                                ...newRows[idx],
+                                                                isCustom: true,
+                                                                sku: '', // Clear SKU
+                                                                similarityChecked: false
+                                                            };
+                                                            setManualRows(newRows);
+                                                        }}
+                                                        className="text-xs bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 hover:bg-brand-200 dark:hover:bg-brand-900/50 transition-colors"
+                                                    >
+                                                        <Plus className="w-3 h-3" /> Criar Material
+                                                    </button>
+                                                ) : (
+                                                    <button 
+                                                        onClick={() => {
+                                                            const newRows = [...manualRows];
+                                                            newRows[idx] = {
+                                                                ...newRows[idx],
+                                                                isCustom: false,
+                                                                customDesc: '',
+                                                                category: '',
+                                                                similarityChecked: false
+                                                            };
+                                                            setManualRows(newRows);
+                                                        }}
+                                                        className="text-xs bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                                                    >
+                                                        <Search className="w-3 h-3" /> Buscar Existente
+                                                    </button>
+                                                )}
+                                            </div>
+
                                             <div className="mb-3">
                                                 {row.isCustom ? (
                                                     <div>
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Descrição do Novo Material</label>
                                                         <div className="relative flex items-center gap-2">
                                                             <input 
                                                                 type="text"
@@ -1181,7 +1272,7 @@ TUBO 20MM, 2"
                                                                     newRows[idx].similarityChecked = false; // Reset check on edit
                                                                     setManualRows(newRows);
                                                                 }}
-                                                                placeholder="Descrição do novo material..."
+                                                                placeholder="Descreva o material..."
                                                                 className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${
                                                                     (isError && !row.customDesc) || isDuplicate || isUnchecked
                                                                     ? 'border-red-500 bg-white ring-1 ring-red-200' 
@@ -1194,7 +1285,7 @@ TUBO 20MM, 2"
                                                                     onClick={() => handleCheckSimilarity(idx)}
                                                                     className="flex-none px-4 py-3 bg-blue-600 text-white rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
                                                                 >
-                                                                    <Search className="w-4 h-4" /> Confirmar Material
+                                                                    <Search className="w-4 h-4" /> Verificar
                                                                 </button>
                                                             ) : (
                                                                 <div className="flex-none px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-md font-bold text-sm flex items-center gap-1 border border-green-200 dark:border-green-800">
@@ -1203,7 +1294,7 @@ TUBO 20MM, 2"
                                                             )}
                                                         </div>
                                                         <div className="text-right text-[10px] text-slate-400 mt-1">
-                                                            {row.customDesc.length}/40
+                                                            {row.customDesc.length}/40 caracteres
                                                         </div>
                                                         
                                                         {/* Category Select for Custom Items */}
@@ -1222,7 +1313,7 @@ TUBO 20MM, 2"
                                                                     <option value="">Selecione uma categoria...</option>
                                                                     {MATERIAL_CATEGORIES.map(cat => (
                                                                         <option key={cat.code} value={cat.code}>
-                                                                            {cat.code} - {cat.name}
+                                                                            {cat.name}
                                                                         </option>
                                                                     ))}
                                                                     <option value="_OTHER_">Outra (Digitar)</option>
@@ -1253,44 +1344,59 @@ TUBO 20MM, 2"
                                                         )}
                                                         {isUnchecked && (
                                                              <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                                                                <AlertCircle className="w-3 h-3"/> Validação obrigatória. Clique em "Confirmar Material".
+                                                                <AlertCircle className="w-3 h-3"/> Validação obrigatória. Clique em "Verificar".
                                                             </p>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <div className="relative flex items-center gap-2">
-                                                        <input 
-                                                            list="stock-options"
-                                                            type="text" 
-                                                            value={row.sku}
-                                                            onChange={(e) => {
-                                                                const newRows = [...manualRows];
-                                                                newRows[idx].sku = e.target.value;
-                                                                newRows[idx].similarityChecked = false; // Reset check
-                                                                // Reset invalid error when typing
-                                                                if (isInvalidSku) {
-                                                                    const newErrors = {...formErrors};
-                                                                    newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
-                                                                    setFormErrors(newErrors);
-                                                                }
-                                                                setManualRows(newRows);
-                                                            }}
-                                                            placeholder="Código ou nome do material..."
-                                                            className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
-                                                        />
-                                                        {showConfirmButton && !row.similarityChecked && (
-                                                            <button 
-                                                                onClick={() => handleCheckSimilarity(idx)}
-                                                                className="flex-none px-4 py-3 bg-blue-100 text-blue-700 rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-200 transition-colors flex items-center gap-2"
-                                                            >
-                                                                <Search className="w-4 h-4" /> Confirmar Material
-                                                            </button>
+                                                    <div className="relative">
+                                                        <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Buscar Material Existente</label>
+                                                        <div className="relative">
+                                                            <input 
+                                                                type="text" 
+                                                                value={row.sku}
+                                                                onChange={(e) => {
+                                                                    const newRows = [...manualRows];
+                                                                    newRows[idx].sku = e.target.value;
+                                                                    newRows[idx].similarityChecked = false; // Reset check
+                                                                    // Reset invalid error when typing
+                                                                    if (isInvalidSku) {
+                                                                        const newErrors = {...formErrors};
+                                                                        newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
+                                                                        setFormErrors(newErrors);
+                                                                    }
+                                                                    setManualRows(newRows);
+                                                                }}
+                                                                placeholder="Código ou nome do material..."
+                                                                className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                                            />
+                                                        </div>
+                                                        
+                                                        {/* Custom Autocomplete List */}
+                                                        {row.sku && !isKnownSku(row.sku) && suggestions.length > 0 && (
+                                                            <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                                                                {suggestions.map((opt) => (
+                                                                    <div 
+                                                                        key={opt.sku}
+                                                                        onClick={() => {
+                                                                            const newRows = [...manualRows];
+                                                                            newRows[idx].sku = opt.sku;
+                                                                            newRows[idx].similarityChecked = false;
+                                                                            setManualRows(newRows);
+                                                                        }}
+                                                                        className="p-3 hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer border-b border-slate-100 dark:border-slate-700 last:border-0"
+                                                                    >
+                                                                        <div className="font-bold text-brand-600 dark:text-brand-400 text-xs">{opt.sku}</div>
+                                                                        <div className="text-sm text-slate-700 dark:text-slate-300">{opt.desc}</div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 )}
                                                 {isInvalidSku && !row.isCustom && (
                                                     <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                                                        <AlertCircle className="w-3 h-3"/> Material não encontrado. Use o botão "Confirmar Material" para verificar.
+                                                        <AlertCircle className="w-3 h-3"/> Material não encontrado. Tente buscar pelo nome ou crie um novo.
                                                     </p>
                                                 )}
                                             </div>
@@ -1444,45 +1550,47 @@ TUBO 20MM, 2"
                            {isExpanded && (
                                <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 animate-fade-in">
                                    <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
-                                       <table className="w-full text-sm text-left">
-                                           <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
-                                               <tr>
-                                                   <th className="p-3">Material</th>
-                                                   <th className="p-3">Descrição</th>
-                                                   <th className="p-3 text-right">Qtd</th>
-                                                   {type === 'FINISHED' && <th className="p-3 text-right">Processado</th>}
-                                                   {type === 'FINISHED' && <th className="p-3">Status</th>}
-                                               </tr>
-                                           </thead>
-                                           <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                                               {order.items.map((item, idx) => {
-                                                   const picked = type === 'FINISHED' ? getTotalPickedQuantity(order, orders, item.sku) : 0;
-                                                   const isFullyPicked = picked >= item.quantity;
-                                                   return (
-                                                       <tr key={idx}>
-                                                           <td className="p-3 font-mono text-xs">{item.sku}</td>
-                                                           <td className="p-3">
-                                                               {item.description}
-                                                               {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
-                                                           </td>
-                                                           <td className="p-3 text-right font-bold">{item.quantity}</td>
-                                                           {type === 'FINISHED' && (
-                                                               <>
-                                                                 <td className="p-3 text-right font-bold">{picked}</td>
-                                                                 <td className="p-3">
-                                                                     {isFullyPicked ? (
-                                                                         <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
-                                                                     ) : (
-                                                                         <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
-                                                                     )}
-                                                                 </td>
-                                                               </>
-                                                           )}
-                                                       </tr>
-                                                   );
-                                               })}
-                                           </tbody>
-                                       </table>
+                                       <div className="overflow-x-auto">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
+                                                    <tr>
+                                                        <th className="p-3 whitespace-nowrap">Material</th>
+                                                        <th className="p-3 whitespace-nowrap">Descrição</th>
+                                                        <th className="p-3 text-right whitespace-nowrap">Qtd</th>
+                                                        {type === 'FINISHED' && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
+                                                        {type === 'FINISHED' && <th className="p-3 whitespace-nowrap">Status</th>}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                                                    {order.items.map((item, idx) => {
+                                                        const picked = type === 'FINISHED' ? getTotalPickedQuantity(order, orders, item.sku) : 0;
+                                                        const isFullyPicked = picked >= item.quantity;
+                                                        return (
+                                                            <tr key={idx}>
+                                                                <td className="p-3 font-mono text-xs whitespace-nowrap">{item.sku}</td>
+                                                                <td className="p-3 min-w-[200px]">
+                                                                    {item.description}
+                                                                    {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
+                                                                </td>
+                                                                <td className="p-3 text-right font-bold whitespace-nowrap">{item.quantity}</td>
+                                                                {type === 'FINISHED' && (
+                                                                    <>
+                                                                    <td className="p-3 text-right font-bold whitespace-nowrap">{picked}</td>
+                                                                    <td className="p-3 whitespace-nowrap">
+                                                                        {isFullyPicked ? (
+                                                                            <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
+                                                                        ) : (
+                                                                            <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
+                                                                        )}
+                                                                    </td>
+                                                                    </>
+                                                                )}
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                       </div>
                                    </div>
 
                                    {/* Change Log */}

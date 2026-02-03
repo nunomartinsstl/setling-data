@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { StockItem, UserRole, MasterMaterial } from '../types';
+import { StockItem, UserRole, MasterMaterial, Order, OrderLineItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info } from 'lucide-react';
 
@@ -21,6 +21,106 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
   // Permissions
   const canEditStock = userRole === UserRole.WAREHOUSE || userRole === UserRole.ADMIN;
   const isAdmin = userRole === UserRole.ADMIN;
+
+  const processBackorders = async (newStockList: StockItem[]) => {
+      try {
+          // 1. Get all orders
+          const allOrders = await StorageService.getOrders();
+          
+          // 2. Map new stock for fast lookup
+          const stockMap = new Map<string, number>();
+          newStockList.forEach(s => stockMap.set(s.sku, s.quantity));
+
+          const newBackorders: Order[] = [];
+          const updatedParents: Order[] = [];
+
+          // 3. Filter for COMPLETED orders that might have missing items
+          const completedOrders = allOrders.filter(o => o.status === 'COMPLETED');
+
+          for (const order of completedOrders) {
+              const itemsToReopen: OrderLineItem[] = [];
+              let parentUpdated = false;
+              
+              // We need to clone items to avoid mutating the state directly before saving
+              const newItems = order.items.map(i => ({...i}));
+
+              for (let i = 0; i < newItems.length; i++) {
+                  const item = newItems[i];
+                  
+                  // Calculate missing quantity (Requested - Picked)
+                  // Use 0 if quantityPicked is undefined (legacy safety)
+                  const qtyMissing = item.quantity - (item.quantityPicked || 0);
+
+                  // Conditions to trigger backorder:
+                  // 1. Item is missing quantity
+                  // 2. We haven't already created a backorder for this specific shortage
+                  // 3. It's not a custom item (needs explicit SKU to match stock)
+                  if (qtyMissing > 0 && !item.backorderCreated && !item.isCustom && item.sku) {
+                      
+                      // Check if the NEW stock has this item available
+                      const availableQty = stockMap.get(item.sku) || 0;
+                      
+                      if (availableQty > 0) {
+                          // We have stock! Create a backorder requirement.
+                          itemsToReopen.push({
+                              ...item,
+                              quantity: qtyMissing, // Request only what's missing
+                              quantityPicked: 0,    // Reset picked for new order
+                              backorderCreated: false, // Reset flag for new order
+                              fulfilledInOrderId: undefined
+                          });
+
+                          // Mark parent item as having a backorder created so we don't duplicate next time
+                          item.backorderCreated = true;
+                          parentUpdated = true;
+                      }
+                  }
+              }
+
+              // If we found items that are now in stock, create the backorder
+              if (itemsToReopen.length > 0) {
+                  const nextReopenCount = (order.reopenCount || 0) + 1;
+                  
+                  const backorder: Order = {
+                      ...order, // Inherit metadata (creator, company, etc)
+                      id: Math.random().toString(36).substr(2, 9),
+                      displayId: 0, // Will ideally be handled by backend or remain 0 until list generation
+                      status: 'OPEN', // New order starts as OPEN
+                      dateCreated: new Date().toISOString(),
+                      dueDate: order.dueDate, // Keep original due date or logic to update? Keeping original emphasizes urgency.
+                      items: itemsToReopen,
+                      originalOrderId: order.id,
+                      reopenCount: nextReopenCount,
+                      title: `${order.title} (Reabertura ${nextReopenCount})`,
+                      changeLog: [{
+                          date: new Date().toISOString(),
+                          actor: 'SYSTEM',
+                          details: `Reabertura automática detectada após entrada de stock.`
+                      }],
+                      pickedItems: [] // Clear warehouse logs
+                  };
+                  
+                  newBackorders.push(backorder);
+              }
+
+              if (parentUpdated) {
+                  updatedParents.push({ ...order, items: newItems });
+              }
+          }
+
+          // 4. Save Changes
+          if (newBackorders.length > 0) {
+              await StorageService.addOrders(newBackorders);
+              await StorageService.addOrders(updatedParents); // Save the flags on parents
+              return newBackorders.length;
+          }
+          return 0;
+
+      } catch (err) {
+          console.error("Error processing backorders:", err);
+          return 0;
+      }
+  };
 
   const handleStockUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -59,7 +159,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
             throw new Error(`Colunas em falta: ${missingColumns.join(', ')}`);
         }
 
-        const newStock: StockItem[] = [];
+        let newStock: StockItem[] = [];
         
         jsonData.forEach((row) => {
             const sku = row['Material']?.toString().trim();
@@ -85,10 +185,25 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
 
         if (newStock.length === 0) throw new Error("Nenhum item válido encontrado no Excel.");
 
+        // Sort ascending by SKU
+        newStock.sort((a, b) => a.sku.localeCompare(b.sku, undefined, { numeric: true, sensitivity: 'base' }));
+
         setLoadingState('UPLOADING');
+        
+        // 1. Replace Stock
         await StorageService.replaceStock(newStock);
+        
+        // 2. Process Backorders
+        const createdCount = await processBackorders(newStock);
+
         refreshData();
-        setMessage({ type: 'success', text: `Stock atualizado com sucesso (${newStock.length} itens).` });
+        
+        let successMsg = `Stock atualizado com sucesso (${newStock.length} itens).`;
+        if (createdCount > 0) {
+            successMsg += ` ${createdCount} novos pedidos de reabertura foram gerados automaticamente.`;
+        }
+        
+        setMessage({ type: 'success', text: successMsg });
 
       } catch (err: any) {
         console.error("Upload Error:", err);
