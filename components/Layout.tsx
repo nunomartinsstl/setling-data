@@ -15,17 +15,19 @@ interface LayoutProps {
   logoUrl: string;
 }
 
-const NavItem = ({ view, icon: Icon, label, isActive, onClick }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void }) => {
+const NavItem = ({ view, icon: Icon, label, isActive, onClick, isChild = false }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void, isChild?: boolean }) => {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+      className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
         isActive 
-          ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-semibold' 
+          ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-semibold shadow-sm' 
           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
-      }`}
+      } ${isChild ? 'text-sm' : ''}`}
     >
-      <Icon className={`w-5 h-5 ${isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400'}`} />
+      <Icon className={`flex-shrink-0 transition-colors ${isChild ? 'w-4 h-4' : 'w-5 h-5'} ${
+        isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'
+      }`} />
       <span>{label}</span>
     </button>
   );
@@ -85,6 +87,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   };
 
   const canCreate = isAdmin || isManagement;
+  const isWarehouseActive = ['CREATE_ORDER', 'OPEN_ORDERS', 'FINISHED_ORDERS'].includes(currentView);
 
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors duration-200">
@@ -136,24 +139,31 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               <div className="space-y-1">
                   <button
                     onClick={() => setIsWarehouseGroupOpen(!isWarehouseGroupOpen)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-colors text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200`}
+                    className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors group ${
+                        isWarehouseActive && !isWarehouseGroupOpen 
+                            ? 'bg-brand-50/50 dark:bg-slate-800 text-brand-700 dark:text-brand-400 font-medium' 
+                            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                    }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <Package className="w-5 h-5 text-slate-400" />
+                      <Package className={`w-5 h-5 transition-colors ${isWarehouseActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'}`} />
                       <span>Pedidos ao Armazém</span>
                     </div>
-                    {isWarehouseGroupOpen ? <ChevronDown className="w-4 h-4 text-slate-400" /> : <ChevronRight className="w-4 h-4 text-slate-400" />}
+                    <div className={`transition-transform duration-200 ${isWarehouseGroupOpen ? 'rotate-180' : ''}`}>
+                         <ChevronDown className="w-4 h-4 text-slate-400" />
+                    </div>
                   </button>
 
                   {isWarehouseGroupOpen && (
-                    <div className="pl-4 space-y-1 animate-fade-in">
+                    <div className="relative ml-5 pl-2 space-y-1 border-l-2 border-slate-100 dark:border-slate-700 animate-slide-down">
                          {canCreate && (
                             <NavItem 
                                 view="CREATE_ORDER" 
                                 icon={PlusCircle} 
                                 label="Criar Pedido" 
                                 isActive={currentView === 'CREATE_ORDER'} 
-                                onClick={() => handleNavClick('CREATE_ORDER')} 
+                                onClick={() => handleNavClick('CREATE_ORDER')}
+                                isChild={true}
                             />
                         )}
                         <NavItem 
@@ -161,14 +171,16 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                             icon={ShoppingCart} 
                             label="Pedidos Abertos" 
                             isActive={currentView === 'OPEN_ORDERS'} 
-                            onClick={() => handleNavClick('OPEN_ORDERS')} 
+                            onClick={() => handleNavClick('OPEN_ORDERS')}
+                            isChild={true}
                         />
                         <NavItem 
                             view="FINISHED_ORDERS" 
                             icon={CheckCircle} 
                             label="Pedidos Finalizados" 
                             isActive={currentView === 'FINISHED_ORDERS'} 
-                            onClick={() => handleNavClick('FINISHED_ORDERS')} 
+                            onClick={() => handleNavClick('FINISHED_ORDERS')}
+                            isChild={true}
                         />
                     </div>
                   )}
@@ -237,7 +249,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </button>
             
             <div className="text-center pt-1">
-                <span className="text-[10px] text-slate-300 dark:text-slate-600 font-mono">v1.1.1</span>
+                <span className="text-[10px] text-slate-300 dark:text-slate-600 font-mono">v1.1.2</span>
             </div>
         </div>
       </aside>
