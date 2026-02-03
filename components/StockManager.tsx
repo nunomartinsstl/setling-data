@@ -40,12 +40,12 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
           // 1. Get all orders
           const allOrders = await StorageService.getOrders();
           
-          // 2. Map new stock for fast lookup
+          // 2. Map new stock for fast lookup (Case Insensitive for SKU)
           const stockSkuMap = new Map<string, StockItem>();
           const stockDescMap = new Map<string, StockItem>();
           
           newStockList.forEach(s => {
-              if(s.sku) stockSkuMap.set(s.sku.toString().trim(), s);
+              if(s.sku) stockSkuMap.set(s.sku.toString().trim().toUpperCase(), s);
               if(s.description) stockDescMap.set(normalizeText(s.description), s);
           });
 
@@ -59,8 +59,9 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
               const itemsToReopen: OrderLineItem[] = [];
               let parentUpdated = false;
               
-              // Clone items to modify flags without affecting local state immediately
-              const newItems = order.items.map(i => ({...i}));
+              // Ensure items is an array (Firebase safety)
+              const safeItems = toArray(order.items);
+              const newItems = safeItems.map(i => ({...i}));
               
               // Track usage of picked items to handle multiple lines of same SKU
               const skuPickedUsage = new Map<string, number>();
@@ -82,10 +83,11 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                       qtyMissing = item.quantity;
                   } else {
                       // Standard Item: Calculate what was actually picked vs requested
-                      const currentSku = (item.sku || '').toString().trim();
+                      // Use UpperCase for matching
+                      const currentSku = (item.sku || '').toString().trim().toUpperCase();
                       
                       const totalPickedForSku = pickedLogs
-                          .filter((p: any) => (p.material || '').toString().trim() === currentSku)
+                          .filter((p: any) => (p.material || '').toString().trim().toUpperCase() === currentSku)
                           .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
 
                       // Calculate how much of that picked amount is already "used" by previous lines in this loop
@@ -109,8 +111,8 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                           const descKey = normalizeText(item.description);
                           stockItemFound = stockDescMap.get(descKey);
                       } else {
-                          // Match by SKU
-                          stockItemFound = stockSkuMap.get((item.sku || '').toString().trim());
+                          // Match by SKU (Case Insensitive)
+                          stockItemFound = stockSkuMap.get((item.sku || '').toString().trim().toUpperCase());
                       }
 
                       // Check if we found stock and it has quantity > 0
