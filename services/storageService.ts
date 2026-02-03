@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, child, update, remove, Database } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, Auth } from 'firebase/auth';
-import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company } from '../types';
+import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem } from '../types';
 
 // Safely access environment variables
 const env = ((import.meta as any).env || {}) as any;
@@ -96,6 +96,19 @@ export const MATERIAL_CATEGORIES = [
     { code: 'VDE', name: 'VASO DE EXPANSÃO' },
     { code: 'VEN', name: 'VENTILADORES' }
 ];
+
+// Helper to normalize string for matching
+const normalizeText = (text: string): string => {
+    if (!text) return '';
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+};
+
+// Safe array helper for Firebase data
+const toArray = (data: any) => {
+  if (!data) return [];
+  if (Array.isArray(data)) return data;
+  return Object.values(data);
+};
 
 export const StorageService = {
   isConnected: () => isFirebaseActive,
@@ -333,4 +346,168 @@ export const StorageService = {
       if (!db) return;
       await remove(ref(db, `${KEYS.PURCHASE_ORDERS}/${id}`));
   },
+
+  processBackorders: async (newStockList: StockItem[]) => {
+    try {
+        // 1. Get all orders
+        const allOrders = await StorageService.getOrders();
+        
+        // 2. Map new stock for fast lookup (Case Insensitive for SKU)
+        const stockSkuMap = new Map<string, StockItem>();
+        const stockDescMap = new Map<string, StockItem>();
+        
+        newStockList.forEach(s => {
+            if(s.sku) stockSkuMap.set(s.sku.toString().trim().toUpperCase(), s);
+            if(s.description) stockDescMap.set(normalizeText(s.description), s);
+        });
+
+        const newBackorders: Order[] = [];
+        const updatedParents: Order[] = [];
+
+        // 3. Filter for COMPLETED orders
+        const completedOrders = allOrders.filter(o => o.status === 'COMPLETED');
+
+        for (const order of completedOrders) {
+            const itemsToReopen: OrderLineItem[] = [];
+            let parentUpdated = false;
+            
+            // Ensure items is an array (Firebase safety)
+            const safeItems = toArray(order.items);
+            const newItems = safeItems.map((i: OrderLineItem) => ({...i}));
+            
+            // Track usage of picked items to handle multiple lines of same SKU
+            const skuPickedUsage = new Map<string, number>();
+
+            // Parse picked logs once
+            const pickedLogs = toArray(order.pickedItems);
+
+            for (let i = 0; i < newItems.length; i++) {
+                const item = newItems[i];
+                
+                // Skip if this line was already backordered
+                if (item.backorderCreated) continue;
+
+                let qtyMissing = 0;
+                
+                if (item.isCustom) {
+                    // Custom items logic: usually not in pickedLogs by SKU unless converted.
+                    // If not marked backordered, assume fully missing.
+                    qtyMissing = item.quantity;
+                } else {
+                    // Standard Item: Calculate what was actually picked vs requested
+                    // Use UpperCase for matching
+                    const currentSku = (item.sku || '').toString().trim().toUpperCase();
+                    
+                    const totalPickedForSku = pickedLogs
+                        .filter((p: any) => (p.material || '').toString().trim().toUpperCase() === currentSku)
+                        .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
+
+                    // Calculate how much of that picked amount is already "used" by previous lines in this loop
+                    const usedPicked = skuPickedUsage.get(currentSku) || 0;
+                    const availablePicked = Math.max(0, totalPickedForSku - usedPicked);
+                    
+                    // The amount picked for THIS line specifically
+                    const linePicked = Math.min(item.quantity, availablePicked);
+                    
+                    // Update usage
+                    skuPickedUsage.set(currentSku, usedPicked + linePicked);
+
+                    qtyMissing = Math.max(0, item.quantity - linePicked);
+                }
+
+                if (qtyMissing > 0) {
+                    let stockItemFound: StockItem | undefined;
+
+                    if (item.isCustom) {
+                        // Try match by description
+                        const descKey = normalizeText(item.description);
+                        stockItemFound = stockDescMap.get(descKey);
+                    } else {
+                        // Match by SKU (Case Insensitive)
+                        stockItemFound = stockSkuMap.get((item.sku || '').toString().trim().toUpperCase());
+                    }
+
+                    // Check if we found stock and it has quantity > 0
+                    if (stockItemFound && stockItemFound.quantity > 0) {
+                        
+                        // Prepare the new item
+                        // If it was custom but we found a match, convert to standard
+                        const isNowStandard = item.isCustom && !!stockItemFound.sku;
+                        
+                        const reopenItem: OrderLineItem = {
+                            ...item,
+                            sku: isNowStandard ? stockItemFound.sku : item.sku,
+                            description: isNowStandard ? stockItemFound.description : item.description,
+                            isCustom: isNowStandard ? false : item.isCustom,
+                            
+                            quantity: qtyMissing, // Only request missing amount
+                            quantityPicked: 0,
+                            backorderCreated: false, // Reset flag for new order
+                        };
+
+                        // Fix: Firebase does not support 'undefined'. Delete property explicitly.
+                        delete reopenItem.fulfilledInOrderId;
+
+                        itemsToReopen.push(reopenItem);
+                        
+                        // Mark parent as handled
+                        item.backorderCreated = true;
+                        parentUpdated = true;
+                    }
+                }
+            }
+
+            // If we generated items for this order, create the backorder
+            if (itemsToReopen.length > 0) {
+                // Determine Title: [Original Title]_re_[Incremental]
+                const currentReopenCount = order.reopenCount || 0;
+                const nextReopenCount = currentReopenCount + 1;
+                
+                // Strip existing suffix to get base title
+                let cleanTitle = order.title.replace(/_re_\d+$/, "").replace(/ \(Reabertura \d+\)$/, "").trim();
+                const newTitle = `${cleanTitle}_re_${nextReopenCount}`;
+                
+                const backorder: Order = {
+                    ...order, // Inherit metadata
+                    id: Math.random().toString(36).substr(2, 9),
+                    displayId: 0, // System will assign if needed
+                    status: 'OPEN', 
+                    dateCreated: new Date().toISOString(),
+                    dueDate: order.dueDate, // Keep priority
+                    items: itemsToReopen,
+                    originalOrderId: order.originalOrderId || order.id,
+                    reopenCount: nextReopenCount, // Set count for this iteration
+                    title: newTitle,
+                    changeLog: [{
+                        date: new Date().toISOString(),
+                        actor: 'SYSTEM',
+                        details: `Gerado automaticamente por entrada de stock.`
+                    }],
+                    pickedItems: [] // Clear warehouse logs
+                };
+                
+                newBackorders.push(backorder);
+                
+                // Update parent's count so next time we know it's _re_2, etc
+                order.reopenCount = nextReopenCount;
+            }
+
+            if (parentUpdated) {
+                updatedParents.push({ ...order, items: newItems });
+            }
+        }
+
+        // 4. Save Changes
+        if (newBackorders.length > 0 || updatedParents.length > 0) {
+            const allUpdates = [...newBackorders, ...updatedParents];
+            await StorageService.addOrders(allUpdates);
+            return newBackorders.length;
+        }
+        return 0;
+
+    } catch (err) {
+        console.error("Error processing backorders:", err);
+        return 0;
+    }
+  }
 };

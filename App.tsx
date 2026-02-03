@@ -105,10 +105,16 @@ const App: React.FC = () => {
           }
       }
       
-      // 2. Sync Custom Items (Requires master list)
+      // 2. Process Backorders (Force check on refresh)
+      // Only execute for roles that can potentially affect stock or manage orders, though technically safe for all
+      if (user && (user.role === UserRole.ADMIN || user.role === UserRole.WAREHOUSE || user.role === UserRole.MANAGEMENT)) {
+        await StorageService.processBackorders(fetchedStock);
+      }
+
+      // 3. Sync Custom Materials (Requires master list)
       await StorageService.syncCustomMaterials(fetchedMaster);
 
-      // 3. Fetch Orders (now updated)
+      // 4. Fetch Orders (now updated)
       const fetchedOrders = await StorageService.getOrders();
 
       setOrders(fetchedOrders);
