@@ -1506,13 +1506,31 @@ TUBO 20MM, 2"
                    const hasBackorder = order.reopenCount && order.reopenCount > 0;
                    const isReopen = !!order.originalOrderId;
 
+                   // Logic for Finished Orders Visual Status
+                   // Check if ALL items are fully picked
+                   const isOrderFullyFulfilled = type === 'FINISHED' 
+                        ? order.items.every(item => {
+                             const picked = getTotalPickedQuantity(order, orders, item.sku);
+                             return picked >= item.quantity;
+                        })
+                        : false; 
+
                    return (
                        <div key={order.id} className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'}`}>
                            <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                    <div className="flex items-start gap-4">
-                                       <div className={`p-3 rounded-full hidden md:block ${type === 'OPEN' ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'}`}>
-                                           {type === 'OPEN' ? <Clock className="w-6 h-6" /> : <CheckCircle className="w-6 h-6" />}
+                                       <div className={`p-3 rounded-full hidden md:block ${
+                                            type === 'OPEN' 
+                                                ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') 
+                                                : (isOrderFullyFulfilled 
+                                                    ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                                                    : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')
+                                       }`}>
+                                           {type === 'OPEN' 
+                                                ? <Clock className="w-6 h-6" /> 
+                                                : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)
+                                           }
                                        </div>
                                        <div>
                                            <div className="flex items-center gap-2">
@@ -1580,7 +1598,11 @@ TUBO 20MM, 2"
                                                                         {isFullyPicked ? (
                                                                             <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
                                                                         ) : (
-                                                                            <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
+                                                                            picked === 0 ? (
+                                                                                 <span className="text-red-500 dark:text-red-400 flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span>
+                                                                            ) : (
+                                                                                 <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
+                                                                            )
                                                                         )}
                                                                     </td>
                                                                     </>
