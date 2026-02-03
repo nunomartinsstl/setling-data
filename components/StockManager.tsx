@@ -45,25 +45,28 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
           const stockDescMap = new Map<string, StockItem>();
           
           newStockList.forEach(s => {
-              if(s.sku) stockSkuMap.set(s.sku, s);
+              if(s.sku) stockSkuMap.set(s.sku.toString().trim(), s);
               if(s.description) stockDescMap.set(normalizeText(s.description), s);
           });
 
           const newBackorders: Order[] = [];
           const updatedParents: Order[] = [];
 
-          // 3. Filter for COMPLETED orders that might have missing items
+          // 3. Filter for COMPLETED orders
           const completedOrders = allOrders.filter(o => o.status === 'COMPLETED');
 
           for (const order of completedOrders) {
               const itemsToReopen: OrderLineItem[] = [];
               let parentUpdated = false;
               
-              // Clone items to modify flags
+              // Clone items to modify flags without affecting local state immediately
               const newItems = order.items.map(i => ({...i}));
               
-              // Track usage of picked items to handle multiple lines of same SKU in the order items list
+              // Track usage of picked items to handle multiple lines of same SKU
               const skuPickedUsage = new Map<string, number>();
+
+              // Parse picked logs once
+              const pickedLogs = toArray(order.pickedItems);
 
               for (let i = 0; i < newItems.length; i++) {
                   const item = newItems[i];
@@ -74,65 +77,62 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                   let qtyMissing = 0;
                   
                   if (item.isCustom) {
-                      // For custom items, assume 0 picked unless explicitly logged (rare for custom items in this flow)
-                      // If it's custom and not marked as done/backordered, we check if it now exists in stock
+                      // Custom items logic: usually not in pickedLogs by SKU unless converted.
+                      // If not marked backordered, assume fully missing.
                       qtyMissing = item.quantity;
                   } else {
-                      // Calculate Total Picked for this SKU in the warehouse logs (pickedItems)
-                      const pickedItems = toArray(order.pickedItems);
+                      // Standard Item: Calculate what was actually picked vs requested
+                      const currentSku = (item.sku || '').toString().trim();
                       
-                      const totalPickedForSku = pickedItems
-                          .filter((p: any) => (p.material || '').trim() === (item.sku || '').trim())
+                      const totalPickedForSku = pickedLogs
+                          .filter((p: any) => (p.material || '').toString().trim() === currentSku)
                           .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
 
                       // Calculate how much of that picked amount is already "used" by previous lines in this loop
-                      const usedPicked = skuPickedUsage.get(item.sku || '') || 0;
+                      const usedPicked = skuPickedUsage.get(currentSku) || 0;
                       const availablePicked = Math.max(0, totalPickedForSku - usedPicked);
                       
                       // The amount picked for THIS line specifically
                       const linePicked = Math.min(item.quantity, availablePicked);
                       
                       // Update usage
-                      skuPickedUsage.set(item.sku || '', usedPicked + linePicked);
+                      skuPickedUsage.set(currentSku, usedPicked + linePicked);
 
-                      qtyMissing = item.quantity - linePicked;
+                      qtyMissing = Math.max(0, item.quantity - linePicked);
                   }
 
                   if (qtyMissing > 0) {
                       let stockItemFound: StockItem | undefined;
 
                       if (item.isCustom) {
-                          // Try to find by Exact Description (Normalized)
+                          // Try match by description
                           const descKey = normalizeText(item.description);
                           stockItemFound = stockDescMap.get(descKey);
-                      } else if (item.sku) {
-                          // Try to find by SKU
-                          stockItemFound = stockSkuMap.get(item.sku);
+                      } else {
+                          // Match by SKU
+                          stockItemFound = stockSkuMap.get((item.sku || '').toString().trim());
                       }
 
                       // Check if we found stock and it has quantity > 0
-                      // The condition is: "trigger a new order... with the material/materials that have stock"
                       if (stockItemFound && stockItemFound.quantity > 0) {
                           
-                          // Prepare the new item for the backorder
-                          const newItem: OrderLineItem = {
-                              ...item,
-                              quantity: qtyMissing, // Request what was missing
-                              quantityPicked: 0,
-                              backorderCreated: false,
-                              fulfilledInOrderId: undefined
-                          };
-
-                          // If it was custom but we found a match in stock, convert to standard item!
-                          if (item.isCustom && stockItemFound.sku) {
-                              newItem.sku = stockItemFound.sku;
-                              newItem.description = stockItemFound.description; // Use official description
-                              newItem.isCustom = false;
-                          }
-
-                          itemsToReopen.push(newItem);
+                          // Prepare the new item
+                          // If it was custom but we found a match, convert to standard
+                          const isNowStandard = item.isCustom && !!stockItemFound.sku;
                           
-                          // Mark parent as handled so we don't duplicate it in future uploads
+                          itemsToReopen.push({
+                              ...item,
+                              sku: isNowStandard ? stockItemFound.sku : item.sku,
+                              description: isNowStandard ? stockItemFound.description : item.description,
+                              isCustom: isNowStandard ? false : item.isCustom,
+                              
+                              quantity: qtyMissing, // Only request missing amount
+                              quantityPicked: 0,
+                              backorderCreated: false, // Reset flag for new order
+                              fulfilledInOrderId: undefined
+                          });
+                          
+                          // Mark parent as handled
                           item.backorderCreated = true;
                           parentUpdated = true;
                       }
@@ -142,43 +142,36 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
               // If we generated items for this order, create the backorder
               if (itemsToReopen.length > 0) {
                   // Determine Title: [Original Title]_re_[Incremental]
-                  let baseTitle = order.title;
-                  let nextCount = 1;
-
-                  // Check if title already has _re_X pattern
-                  const reMatch = baseTitle.match(/_re_(\d+)$/);
-                  if (reMatch) {
-                      // It's already a backorder (e.g. "Order A_re_1")
-                      // We want "Order A_re_2", not "Order A_re_1_re_1"
-                      baseTitle = baseTitle.substring(0, reMatch.index);
-                      nextCount = parseInt(reMatch[1], 10) + 1;
-                  } 
+                  const currentReopenCount = order.reopenCount || 0;
+                  const nextReopenCount = currentReopenCount + 1;
                   
-                  // Also clean legacy pattern " (Reabertura X)" if exists
-                  baseTitle = baseTitle.replace(/ \(Reabertura \d+\)$/, "");
-
-                  const newTitle = `${baseTitle}_re_${nextCount}`;
+                  // Strip existing suffix to get base title
+                  let cleanTitle = order.title.replace(/_re_\d+$/, "").replace(/ \(Reabertura \d+\)$/, "").trim();
+                  const newTitle = `${cleanTitle}_re_${nextReopenCount}`;
                   
                   const backorder: Order = {
-                      ...order, // Inherit metadata (creator, company, etc)
+                      ...order, // Inherit metadata
                       id: Math.random().toString(36).substr(2, 9),
-                      displayId: 0, 
+                      displayId: 0, // System will assign if needed
                       status: 'OPEN', 
                       dateCreated: new Date().toISOString(),
-                      dueDate: order.dueDate, // Keep original deadline to emphasize priority
+                      dueDate: order.dueDate, // Keep priority
                       items: itemsToReopen,
                       originalOrderId: order.originalOrderId || order.id,
-                      reopenCount: nextCount,
+                      reopenCount: nextReopenCount, // Set count for this iteration
                       title: newTitle,
                       changeLog: [{
                           date: new Date().toISOString(),
                           actor: 'SYSTEM',
-                          details: `Reabertura automática por entrada de stock.`
+                          details: `Gerado automaticamente por entrada de stock.`
                       }],
-                      pickedItems: [] // Clear warehouse logs for new order
+                      pickedItems: [] // Clear warehouse logs
                   };
                   
                   newBackorders.push(backorder);
+                  
+                  // Update parent's count so next time we know it's _re_2, etc
+                  order.reopenCount = nextReopenCount;
               }
 
               if (parentUpdated) {
@@ -187,9 +180,9 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
           }
 
           // 4. Save Changes
-          if (newBackorders.length > 0) {
-              await StorageService.addOrders(newBackorders);
-              await StorageService.addOrders(updatedParents); // Save the flags on parents
+          if (newBackorders.length > 0 || updatedParents.length > 0) {
+              const allUpdates = [...newBackorders, ...updatedParents];
+              await StorageService.addOrders(allUpdates);
               return newBackorders.length;
           }
           return 0;
