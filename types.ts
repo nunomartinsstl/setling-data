@@ -99,6 +99,11 @@ export interface UnitOption {
   description: string; // The full name (Unidade, Kilograma)
 }
 
+export interface CategoryOption {
+  code: string; // e.g. 'TUB'
+  name: string; // e.g. 'TUBO'
+}
+
 // New Supplier Interface
 export interface Supplier {
   code: string; // 'Fornecedor' column
@@ -139,10 +144,11 @@ export interface AppSettings {
   companies?: Company[];
   adminAccessCode?: string; // Dynamic admin password
   unitOptions?: UnitOption[]; // List of available units of measure with descriptions
+  categories?: CategoryOption[]; // List of material categories
   suppliers?: Supplier[]; // List of imported suppliers
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES';
 
 // Backwards compatibility helper type if needed, though we are migrating fully
 export type OrderItem = Order;

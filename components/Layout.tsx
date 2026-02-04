@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -43,6 +43,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   // Helper booleans
   const isAdmin = user.role === UserRole.ADMIN;
   const isManagement = user.role === UserRole.MANAGEMENT;
+  const isWarehouse = user.role === UserRole.WAREHOUSE;
   
   // Auto-expand if active view is a child
   React.useEffect(() => {
@@ -203,6 +204,16 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 isActive={currentView === 'STOCK'} 
                 onClick={() => handleNavClick('STOCK')} 
               />
+
+              {(isAdmin || isWarehouse) && (
+                  <NavItem 
+                    view="SHORTAGES" 
+                    icon={AlertTriangle} 
+                    label="Relatório de Faltas" 
+                    isActive={currentView === 'SHORTAGES'} 
+                    onClick={() => handleNavClick('SHORTAGES')} 
+                  />
+              )}
               
               <NavItem 
                 view="QUERY" 
@@ -256,6 +267,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
+        {/* ... Header and desktop nav (unchanged) ... */}
         <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 flex-shrink-0">
           <button 
             onClick={() => onNavigate('DASHBOARD')}

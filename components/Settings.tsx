@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
-import { EmailRecipient, Company, UnitOption, Supplier } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet } from 'lucide-react';
+import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption } from '../types';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -16,6 +16,11 @@ const Settings: React.FC = () => {
   const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
   const [newUnitAbbr, setNewUnitAbbr] = useState('');
   const [newUnitDesc, setNewUnitDesc] = useState('');
+
+  // Categories
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
+  const [newCatCode, setNewCatCode] = useState('');
+  const [newCatName, setNewCatName] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -36,11 +41,23 @@ const Settings: React.FC = () => {
     }
     setCompanies(settings.companies || []);
     setAdminAccessCode(settings.adminAccessCode || '');
-    // Ensure we handle legacy string[] or new object[]
     if (settings.unitOptions) {
         setUnitOptions(settings.unitOptions);
     }
     setSuppliers(settings.suppliers || []);
+    
+    // Load categories or fallback to default if not present yet
+    if (settings.categories && settings.categories.length > 0) {
+        setCategories(settings.categories);
+    } else {
+        // If nothing in DB, we rely on the parent app to have passed default, or we fetch from service default (not imported here to avoid circular dep, we assume admin will save what's there)
+        // For now, let's init empty and if the user wants default they will likely have run the app once which might migrate it. 
+        // Better: Fetch default from service import
+        import('../services/storageService').then(mod => {
+             if(settings.categories) setCategories(settings.categories);
+             else setCategories(mod.DEFAULT_CATEGORIES);
+        });
+    }
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -53,7 +70,8 @@ const Settings: React.FC = () => {
           companies: companies,
           adminAccessCode: adminAccessCode, 
           unitOptions: unitOptions,
-          suppliers: suppliers
+          suppliers: suppliers,
+          categories: categories
       });
       setMessage('Configurações salvas com sucesso.');
       setTimeout(() => setMessage(''), 3000);
@@ -108,6 +126,27 @@ const Settings: React.FC = () => {
 
   const removeUnit = (unitToRemove: string) => {
       setUnitOptions(unitOptions.filter(u => u.value !== unitToRemove));
+  };
+
+  const addCategory = () => {
+      if (!newCatCode.trim() || !newCatName.trim()) {
+          alert("Preencha o código (3 letras) e o nome.");
+          return;
+      }
+      const code = newCatCode.trim().toUpperCase();
+      if (categories.some(c => c.code === code)) {
+          alert("Este código de categoria já existe.");
+          return;
+      }
+      setCategories([...categories, { code: code, name: newCatName.trim().toUpperCase() }]);
+      setNewCatCode('');
+      setNewCatName('');
+  };
+
+  const removeCategory = (codeToRemove: string) => {
+      if(window.confirm("Remover esta categoria? Isso não afeta pedidos antigos, mas remove a opção para novos.")) {
+          setCategories(categories.filter(c => c.code !== codeToRemove));
+      }
   };
 
   const handleSupplierUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,6 +215,146 @@ const Settings: React.FC = () => {
             <p className="text-[10px] text-slate-400 mt-1">
                 Se deixar em branco, o sistema usará o código de recuperação padrão.
             </p>
+        </div>
+      </div>
+
+      {/* CATEGORY SETTINGS */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Tag className="w-5 h-5 text-slate-500"/> Categorias de Material
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Defina as categorias disponíveis para a criação de novos materiais.
+        </p>
+
+        <div className="flex flex-col md:flex-row gap-2 mb-4">
+            <input 
+                type="text"
+                value={newCatCode}
+                onChange={(e) => setNewCatCode(e.target.value)}
+                placeholder="Cód (Ex: TUB)"
+                maxLength={3}
+                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
+            />
+            <input 
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="Nome da Categoria (Ex: TUBAGEM)"
+                maxLength={30}
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCategory())}
+            />
+            <button 
+                type="button"
+                onClick={addCategory}
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+            >
+                Adicionar
+            </button>
+        </div>
+
+        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                <thead className="bg-slate-50 dark:bg-slate-900 font-semibold sticky top-0">
+                    <tr>
+                        <th className="p-3 w-24 border-b dark:border-slate-700">Cód.</th>
+                        <th className="p-3 border-b dark:border-slate-700">Nome</th>
+                        <th className="p-3 w-16 text-center border-b dark:border-slate-700">Ação</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {categories.length === 0 ? (
+                        <tr><td colSpan={3} className="p-4 text-center text-slate-400 italic">Nenhuma categoria.</td></tr>
+                    ) : (
+                        categories.sort((a,b) => a.code.localeCompare(b.code)).map((cat, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <td className="p-3 font-bold">{cat.code}</td>
+                                <td className="p-3">{cat.name}</td>
+                                <td className="p-3 text-center">
+                                    <button 
+                                        onClick={() => removeCategory(cat.code)}
+                                        className="text-slate-400 hover:text-red-500 transition-colors"
+                                        title="Remover"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
+      </div>
+
+      {/* UNIT OF MEASURE SETTINGS */}
+       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Scale className="w-5 h-5 text-slate-500"/> Unidades de Medida
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Gerencie as opções de unidade de medida disponíveis para novos materiais.
+        </p>
+
+        <div className="flex flex-col md:flex-row gap-2 mb-4">
+            <input 
+                type="text"
+                value={newUnitAbbr}
+                onChange={(e) => setNewUnitAbbr(e.target.value)}
+                placeholder="Abrev (Ex: MT)"
+                maxLength={5}
+                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
+            />
+            <input 
+                type="text"
+                value={newUnitDesc}
+                onChange={(e) => setNewUnitDesc(e.target.value)}
+                placeholder="Descrição Curta (Ex: Metro)"
+                maxLength={30}
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addUnit())}
+            />
+            <button 
+                type="button"
+                onClick={addUnit}
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+            >
+                Adicionar
+            </button>
+        </div>
+
+        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                <thead className="bg-slate-50 dark:bg-slate-900 font-semibold sticky top-0">
+                    <tr>
+                        <th className="p-3 w-24 border-b dark:border-slate-700">Abrev.</th>
+                        <th className="p-3 border-b dark:border-slate-700">Descrição</th>
+                        <th className="p-3 w-16 text-center border-b dark:border-slate-700">Ação</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {unitOptions.length === 0 ? (
+                        <tr><td colSpan={3} className="p-4 text-center text-slate-400 italic">Nenhuma unidade cadastrada.</td></tr>
+                    ) : (
+                        unitOptions.map((unit, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <td className="p-3 font-bold">{unit.value}</td>
+                                <td className="p-3">{unit.description}</td>
+                                <td className="p-3 text-center">
+                                    <button 
+                                        onClick={() => removeUnit(unit.value)}
+                                        className="text-slate-400 hover:text-red-500 transition-colors"
+                                        title="Remover"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
         </div>
       </div>
 
@@ -302,76 +481,6 @@ const Settings: React.FC = () => {
                     </div>
                 ))
             )}
-        </div>
-      </div>
-
-       {/* UNIT OF MEASURE SETTINGS */}
-       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
-            <Scale className="w-5 h-5 text-slate-500"/> Unidades de Medida
-        </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            Gerencie as opções de unidade de medida disponíveis para novos materiais.
-        </p>
-
-        <div className="flex flex-col md:flex-row gap-2 mb-4">
-            <input 
-                type="text"
-                value={newUnitAbbr}
-                onChange={(e) => setNewUnitAbbr(e.target.value)}
-                placeholder="Abrev (Ex: MT)"
-                maxLength={5}
-                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
-            />
-            <input 
-                type="text"
-                value={newUnitDesc}
-                onChange={(e) => setNewUnitDesc(e.target.value)}
-                placeholder="Descrição Curta (Ex: Metro)"
-                maxLength={30}
-                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
-                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addUnit())}
-            />
-            <button 
-                type="button"
-                onClick={addUnit}
-                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
-            >
-                Adicionar
-            </button>
-        </div>
-
-        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
-            <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
-                <thead className="bg-slate-50 dark:bg-slate-900 font-semibold sticky top-0">
-                    <tr>
-                        <th className="p-3 w-24 border-b dark:border-slate-700">Abrev.</th>
-                        <th className="p-3 border-b dark:border-slate-700">Descrição</th>
-                        <th className="p-3 w-16 text-center border-b dark:border-slate-700">Ação</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {unitOptions.length === 0 ? (
-                        <tr><td colSpan={3} className="p-4 text-center text-slate-400 italic">Nenhuma unidade cadastrada.</td></tr>
-                    ) : (
-                        unitOptions.map((unit, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                                <td className="p-3 font-bold">{unit.value}</td>
-                                <td className="p-3">{unit.description}</td>
-                                <td className="p-3 text-center">
-                                    <button 
-                                        onClick={() => removeUnit(unit.value)}
-                                        className="text-slate-400 hover:text-red-500 transition-colors"
-                                        title="Remover"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
-                                </td>
-                            </tr>
-                        ))
-                    )}
-                </tbody>
-            </table>
         </div>
       </div>
 

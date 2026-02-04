@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company } from '../types';
-import { StorageService, MATERIAL_CATEGORIES } from '../services/storageService';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption } from '../types';
+import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash } from 'lucide-react';
 
@@ -17,6 +17,7 @@ interface OrderManagerProps {
   currentUsername: string;
   userCompanyId?: string;
   companies: Company[];
+  categories?: CategoryOption[]; // Dynamic categories from settings
 }
 
 interface ManualRow {
@@ -68,7 +69,7 @@ const calculateRelevance = (target: string, query: string): number => {
     return matches > 0 ? score : 0;
 };
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [] }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -115,10 +116,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     const groups: Record<string, OrderGroup> = {};
 
     // 1. Identify all Root orders and place them in groups
-    // A root order is one that has no originalOrderId, OR its originalOrderId is not present in the current list (orphaned child treated as root for display)
-    // Note: 'orders' prop contains ALL visible orders for this user, regardless of status, so we can link them.
-    
-    // First pass: Map by ID for easy lookup
     const orderMap = new Map<string, Order>();
     orders.forEach(o => orderMap.set(o.id, o));
 
@@ -128,20 +125,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         
         // Ensure group exists
         if (!groups[rootId]) {
-            // Try to find the actual root object. If not found (maybe filtered out by permission?), use the current if it matches
             const rootOrder = orderMap.get(rootId);
             if (rootOrder) {
                 groups[rootId] = { root: rootOrder, children: [] };
             } else {
-                // Fallback: If root is missing but we have a child, treating child as its own group for now
-                // This edge case shouldn't happen often if 'orders' has full visibility
                 groups[order.id] = { root: order, children: [] };
             }
         }
 
         // Add to children if it's not the root itself
         if (order.originalOrderId && groups[rootId]) {
-            // Avoid duplicates
             if (!groups[rootId].children.find(c => c.id === order.id)) {
                 groups[rootId].children.push(order);
             }
@@ -152,14 +145,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     let result = Object.values(groups);
 
     if (type === 'OPEN') {
-        // Show group if AT LEAST ONE order in the hierarchy is OPEN or IN_PROCESS
         result = result.filter(group => {
             const isRootActive = group.root.status === 'OPEN' || group.root.status === 'IN_PROCESS' || group.root.status === 'IN PROCESS';
             const hasActiveChild = group.children.some(c => c.status === 'OPEN' || c.status === 'IN_PROCESS' || c.status === 'IN PROCESS');
             return isRootActive || hasActiveChild;
         });
     } else {
-        // FINISHED: Show group only if ALL orders in hierarchy are COMPLETED
         result = result.filter(group => {
             const isRootDone = group.root.status === 'COMPLETED';
             const allChildrenDone = group.children.every(c => c.status === 'COMPLETED');
@@ -167,17 +158,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         });
     }
 
-    // 4. Search Filter (Only applies to Finished usually, but good to have)
+    // 4. Search Filter
     if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         result = result.filter(group => {
-            // Check Root
             if ((group.root.title || '').toLowerCase().includes(q) || 
                 (group.root.id || '').toLowerCase().includes(q) ||
                 (group.root.displayId?.toString() || '').includes(q) ||
                 (group.root.creator || '').toLowerCase().includes(q)) return true;
             
-            // Check Children
             return group.children.some(c => 
                 (c.title || '').toLowerCase().includes(q) ||
                 (c.id || '').toLowerCase().includes(q)
@@ -185,7 +174,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         });
     }
 
-    // 5. Sort Groups by latest activity (Date Created of the newest item in group)
+    // 5. Sort Groups by latest activity
     result.sort((a, b) => {
         const getLatestDate = (g: OrderGroup) => {
             let d = new Date(g.root.dateCreated).getTime();
@@ -240,6 +229,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     const savedTitle = localStorage.getItem('draft_title');
     const savedPep = localStorage.getItem('draft_pep');
     const savedAddress = localStorage.getItem('draft_address');
+    const savedDate = localStorage.getItem('draft_date');
     
     if (savedRows) {
         try { setManualRows(JSON.parse(savedRows)); } catch(e){}
@@ -247,6 +237,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     if (savedTitle) setOrderTitle(savedTitle);
     if (savedPep) setPep(savedPep);
     if (savedAddress) setAddress(savedAddress);
+    if (savedDate) setDueDate(savedDate);
   }, [editingOrderId]);
 
   useEffect(() => {
@@ -259,13 +250,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     localStorage.setItem('draft_title', orderTitle);
     localStorage.setItem('draft_pep', pep);
     localStorage.setItem('draft_address', address);
-  }, [orderTitle, pep, address, editingOrderId]);
+    localStorage.setItem('draft_date', dueDate);
+  }, [orderTitle, pep, address, dueDate, editingOrderId]);
 
   const clearDraft = () => {
       localStorage.removeItem('draft_rows');
       localStorage.removeItem('draft_title');
       localStorage.removeItem('draft_pep');
       localStorage.removeItem('draft_address');
+      localStorage.removeItem('draft_date');
       resetForm();
   };
 
@@ -280,7 +273,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setEditingOrderId(null);
       setExpandedRowIndex(0);
       setFormErrors({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
-      // Reset company if admin
       if (isAdmin) setTargetCompanyId('');
   };
 
@@ -321,6 +313,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     return stock.filter(s => s.sku === sku).reduce((total, item) => total + item.quantity, 0);
   };
 
+  // NEW LOGIC: Calculate "Available Stock" considering other open orders
+  // Reserved = Sum of qty in OTHER active orders (OPEN/IN_PROCESS)
+  const getReservedCount = (sku: string, excludeOrderId?: string) => {
+      let reserved = 0;
+      orders.forEach(order => {
+          // Skip the order currently being edited (if any) or orders that are completed
+          if (order.id === excludeOrderId || order.status === 'COMPLETED') return;
+          
+          order.items.forEach(item => {
+              if (item.sku === sku && !item.isCustom) {
+                  reserved += item.quantity;
+              }
+          });
+      });
+      return reserved;
+  };
+
   const getMaterialDescription = (sku: string): string => {
       const masterItem = masterList.find(m => m.sku === sku);
       if (masterItem) return masterItem.description;
@@ -329,7 +338,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       return "Material Desconhecido";
   };
   
-  // Helper to check if SKU exists in our known list
   const isKnownSku = (sku: string) => {
      return materialOptions.some(opt => opt.sku === sku);
   };
@@ -340,7 +348,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     return materialOptions.filter(opt => 
         normalizeText(opt.sku).includes(normalizedInput) || 
         normalizeText(opt.desc).includes(normalizedInput)
-    ).slice(0, 50); // Limit to 50 for performance
+    ).slice(0, 50); 
   };
 
   // --- IMPORT LOGIC ---
@@ -361,11 +369,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
               customCategory: '',
               isCustom: !isKnown,
               customDesc: !isKnown ? (item.description || item.sku) : '',
-              similarityChecked: isKnown // Automatically valid if known
+              similarityChecked: isKnown
           };
       });
 
-      // Filter out the initial empty row if it hasn't been touched
       let currentRows = [...manualRows];
       if (currentRows.length === 1 && !currentRows[0].sku && !currentRows[0].customDesc) {
           currentRows = [];
@@ -386,6 +393,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const missingCategoryErrors: number[] = [];
       let isTitleValid = orderTitle.trim().length > 0;
       let isCompanyValid = !!targetCompanyId;
+      let isDateValid = !!dueDate;
       
       manualRows.forEach((row, idx) => {
           const qty = Number(row.qty);
@@ -394,19 +402,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
               if (!row.customDesc) {
                   errors.push(idx);
               } else {
-                  // Must be checked via similarity
                   if (!row.similarityChecked) {
                       uncheckedErrors.push(idx);
                   }
-                  
-                  // Category Check
                   if (!row.category) {
                       missingCategoryErrors.push(idx);
                   } else if (row.category === '_OTHER_' && !row.customCategory.trim()) {
                       missingCategoryErrors.push(idx);
                   }
                   
-                  // Check if description already exists in master list
                   const exists = masterList.some(m => normalizeText(m.description) === normalizeText(row.customDesc));
                   if (exists) {
                       duplicateErrors.push(idx);
@@ -417,7 +421,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
               if (!row.sku) {
                   errors.push(idx);
               } else if (!isKnownSku(row.sku)) {
-                  // Entered text is not a known SKU -> Invalid
                   invalidSkus.push(idx);
               }
           }
@@ -426,6 +429,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setFormErrors({
           title: !isTitleValid,
           company: !isCompanyValid,
+          date: !isDateValid,
           rows: errors,
           duplicateCustom: duplicateErrors,
           invalidSkus: invalidSkus,
@@ -433,11 +437,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           missingCategory: missingCategoryErrors
       });
 
-      return isTitleValid && isCompanyValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0 && missingCategoryErrors.length === 0;
+      return isTitleValid && isCompanyValid && isDateValid && errors.length === 0 && duplicateErrors.length === 0 && invalidSkus.length === 0 && uncheckedErrors.length === 0 && missingCategoryErrors.length === 0;
   };
 
   const addManualRow = () => {
-     // Optional: Validate before adding new row to force user to finish current one
      if (!validateForm()) {
          setMessage({ type: 'error', text: "Preencha e verifique o item atual antes de adicionar outro." });
          return;
@@ -445,7 +448,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
      const nextIdx = manualRows.length;
      setManualRows([...manualRows, { sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false }]);
-     setExpandedRowIndex(nextIdx); // Auto collapse prev, expand new
+     setExpandedRowIndex(nextIdx);
      setMessage(null);
   };
 
@@ -459,12 +462,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         return;
     }
 
-    // 1. Filter Master List
     const candidates = masterList
         .map(m => ({ ...m, score: calculateRelevance(m.description, query) }))
         .filter(m => m.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 10); // Top 10
+        .slice(0, 10); 
 
     setSimilarityResults(candidates);
     setSimilarityTargetIdx(idx);
@@ -486,13 +488,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           sku: selectedCandidate.sku,
           isCustom: false,
           customDesc: '',
-          unit: 'UN', // Default unit for existing items
-          category: '', // Reset
-          similarityChecked: true // MARK CHECKED
+          unit: 'UN',
+          category: '', 
+          similarityChecked: true 
       };
       setManualRows(newRows);
       
-      // Clear error if any
       const newErrors = {...formErrors};
       newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
       newErrors.unchecked = newErrors.unchecked?.filter(i => i !== similarityTargetIdx);
@@ -510,7 +511,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (similarityTargetIdx === null) return;
       
       const newRows = [...manualRows];
-      // Use the query they typed
       const currentText = newRows[similarityTargetIdx].isCustom 
           ? newRows[similarityTargetIdx].customDesc 
           : newRows[similarityTargetIdx].sku;
@@ -520,11 +520,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           sku: '',
           isCustom: true,
           customDesc: currentText,
-          similarityChecked: true // MARK CHECKED
+          similarityChecked: true 
       };
       setManualRows(newRows);
 
-       // Clear error if any
        const newErrors = {...formErrors};
        newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== similarityTargetIdx);
        newErrors.unchecked = newErrors.unchecked?.filter(i => i !== similarityTargetIdx);
@@ -544,9 +543,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         });
         const hasInvalidSkus = manualRows.some((row) => !row.isCustom && row.sku && !isKnownSku(row.sku));
         const missingCompany = !targetCompanyId;
+        const missingDate = !dueDate;
 
         if (missingCompany) {
              setMessage({ type: 'error', text: "Selecione a empresa para este pedido." });
+        } else if (missingDate) {
+             setMessage({ type: 'error', text: "A data de levantamento é obrigatória." });
         } else if (unchecked) {
              setMessage({ type: 'error', text: "Você possui itens novos que não foram verificados. Clique em 'Confirmar Material' para validar." });
         } else if (missingCat) {
@@ -569,11 +571,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             if (row.category === '_OTHER_') {
                 finalCategory = row.customCategory;
             } else {
-                // Keep the Code but we know the name from MATERIAL_CATEGORIES
-                // Just storing code for logic, or display name? 
-                // Currently system expects category string.
-                // Let's store "CODE - Name" to be safe and compatible with old logic
-                const catObj = MATERIAL_CATEGORIES.find(c => c.code === row.category);
+                const catObj = categories.find(c => c.code === row.category);
                 if (catObj) finalCategory = `${catObj.code} - ${catObj.name}`;
             }
 
@@ -604,10 +602,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           qty: item.quantity,
           unit: item.unit || 'UN',
           category: item.category ? item.category.split(' - ')[0] : '', 
-          customCategory: '', // We don't restore custom text perfectly, user has to re-select if editing
+          customCategory: '', 
           isCustom: !!item.isCustom,
           customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : '',
-          similarityChecked: true // Assume edited existing items are checked
+          similarityChecked: true 
       }));
 
       setManualRows(rows);
@@ -616,7 +614,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setAddress(order.address || '');
       setDueDate(order.dueDate);
       setEditingOrderId(order.id);
-      // Ensure we keep existing company or user's company
       setTargetCompanyId(order.companyId || (isAdmin ? '' : (userCompanyId || '')));
       setCreationStep('INITIAL');
       setExpandedRowIndex(0);
@@ -646,15 +643,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       };
   };
 
-  // Logic to find the next available code for a category
   const getSuggestedCode = (categoryCode: string) => {
        const prefix = categoryCode.toUpperCase();
-       // Find all items matching Format AAA0000 (Prefix + 4 digits)
        const regex = new RegExp(`^${prefix}\\d{4}$`);
        
        let max = 0;
        
-       // Scan Master List
        masterList.forEach(m => {
            if(regex.test(m.sku)) {
                const num = parseInt(m.sku.substring(3), 10);
@@ -662,7 +656,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
            }
        });
 
-       // Scan Stock as well just in case items are only in stock but not master
        stock.forEach(s => {
            if(regex.test(s.sku)) {
                const num = parseInt(s.sku.substring(3), 10);
@@ -700,7 +693,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 address: address,
                 dueDate: dueDate,
                 items: pendingItems, 
-                companyId: targetCompanyId, // Ensure company persists or updates
+                companyId: targetCompanyId, 
                 changeLog: [...(existingOrder.changeLog || []), logEntry]
             };
 
@@ -722,7 +715,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 dateCreated: new Date().toISOString(),
                 dueDate: dueDate,
                 items: pendingItems.map(i => ({...i, quantityPicked: 0})),
-                companyId: targetCompanyId // Save the company ID
+                companyId: targetCompanyId 
             };
 
             await StorageService.addOrders([newOrder]);
@@ -738,9 +731,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     // Filter for specific conditions
                     const missingStockItems = newOrder.items.filter(item => {
                         if (item.isCustom) return false;
-                        // FIX: Use getStockCount to sum up all batches/positions
+                        
                         const currentStock = getStockCount(item.sku);
-                        return currentStock < item.quantity;
+                        const reservedStock = getReservedCount(item.sku, newOrder.id); // Exclude self if editing, but this is new order so id not in list yet
+                        const availableStock = Math.max(0, currentStock - reservedStock);
+                        
+                        // It is missing if what we need is greater than what is free
+                        return item.quantity > availableStock;
                     });
 
                     const newMaterialItems = newOrder.items.filter(item => item.isCustom);
@@ -758,12 +755,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                     if (missingStockItems.length > 0) {
                         hasAlerts = true;
-                        body += `Falta de stock:\n`;
+                        body += `Falta de stock (Total ou Parcial):\n`;
                         missingStockItems.forEach(item => {
-                            // Format: Referência: [MATERIAL] \n Descrição: [TEXTO] \n Quantidade pedida: [QTY]
+                            const currentStock = getStockCount(item.sku);
+                            const reservedStock = getReservedCount(item.sku);
+                            const availableStock = Math.max(0, currentStock - reservedStock);
+                            
+                            const missingQty = Math.max(0, item.quantity - availableStock);
+
                             body += `Referência: ${item.sku}\n`;
                             body += `Descrição: ${item.description}\n`;
-                            body += `Quantidade pedida: ${item.quantity}\n\n`;
+                            body += `Stock Físico: ${currentStock} | Reservado: ${reservedStock} | Disponível: ${availableStock}\n`;
+                            body += `Necessário encomendar: ${missingQty}\n\n`;
                         });
                     }
 
@@ -771,18 +774,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         hasAlerts = true;
                         body += `Necessário criar código:\n`;
                         newMaterialItems.forEach(item => {
-                            // Find unit description
                             const uom = unitOptions.find(u => u.value === item.unit);
                             const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
 
-                            // Calculate suggested code
                             let suggestedCode = "A Definir";
                             if (item.category) {
-                                // Extract the code from "CODE - Name" or just use it if it's "CODE"
                                 const catParts = item.category.split(' - ');
                                 const catCode = catParts[0];
-                                // Only suggest for standard categories, not "Other"
-                                const isStandard = MATERIAL_CATEGORIES.some(c => c.code === catCode);
+                                const isStandard = categories.some(c => c.code === catCode);
                                 if (isStandard) {
                                     suggestedCode = getSuggestedCode(catCode);
                                 }
@@ -790,12 +789,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                             body += `Referência Sugerida: ${suggestedCode}\n`;
                             body += `Descrição: ${item.description}\n`;
-                            // Add Category
                             if (item.category) {
                                 body += `Categoria: ${item.category}\n`;
                             }
-                            body += `Quantidade pedida: ${item.quantity}\n`;
-                            // ADD UNIT TO EMAIL
+                            body += `Necessário encomendar: ${item.quantity}\n`;
+                            
                             if (item.unit) {
                                 body += `Unidade: ${unitDesc}\n`;
                             }
@@ -811,9 +809,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         window.location.href = mailtoLink;
                         setMessage({ type: 'success', text: `Pedido criado. E-mail de alerta aberto.` });
                     } else {
-                         // Fallback for standard order (no issues)
                          const subject = `Novo Pedido: ${orderTitle} (${currentUsername})`;
-                         let simpleBody = `${greeting},\n\nNovo pedido criado por ${currentUsername}.\nObra: ${orderTitle}\nData: ${new Date(dueDate).toLocaleDateString()}\n\nTodos os itens possuem stock.\n\nCumprimentos`;
+                         let simpleBody = `${greeting},\n\nNovo pedido criado por ${currentUsername}.\nObra: ${orderTitle}\nData: ${new Date(dueDate).toLocaleDateString()}\n\nTodos os itens possuem stock disponível.\n\nCumprimentos`;
                          const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(simpleBody)}`;
                          window.location.href = mailtoLink;
                          setMessage({ type: 'success', text: `Pedido criado com sucesso.` });
@@ -850,18 +847,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       }
   };
   
-  // Safe array helper
   const toArray = (data: any) => {
       if(!data) return [];
       if(Array.isArray(data)) return data;
       return Object.values(data);
   };
 
-  // Helper to extract actual picked quantity from the warehouse logs (pickedItems)
   const getPickedQtyForSku = (order: Order, sku: string): number => {
-    // Handle both Array and Object (Firebase quirk)
     const pickedList = toArray(order.pickedItems);
-    
     if (pickedList.length > 0) {
         const cleanSku = sku.trim().toLowerCase();
         return pickedList
@@ -871,17 +864,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     return 0;
   };
 
-  // Advanced helper that aggregates picked qty from the order AND its completed child backorders
   const getTotalPickedQuantity = (order: Order, allOrders: Order[], sku: string): number => {
      let total = getPickedQtyForSku(order, sku);
-     
-     // Find child orders (backorders) that are completed
      const children = allOrders.filter(o => o.originalOrderId === order.id && o.status === 'COMPLETED');
-     
      children.forEach(child => {
         total += getPickedQtyForSku(child, sku);
      });
-     
      return total;
   };
 
@@ -892,21 +880,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           return;
       }
 
-      // Sheet 1: Síntese (Existing Data)
       const headers = ["Itm", "C", "I", "Cen.", "Depósito de saída", "Depósito", "Material", "Texto breve", "Lote", "Qtd.pedido", "Dt.remessa"];
       const data = pickedList.map((item: any, idx: number) => {
           return [
-              (idx + 1) * 10, // Itm: 10, 20, 30...
-              "P", // C: Fixed
-              "", // I: Empty
-              "1700", // Cen.: Fixed
-              "0001", // Depósito de saída: Fixed
-              "0004", // Depósito: Fixed
-              item.material, // Material
-              "", // Texto breve: Empty
-              item.bin || "", // Lote (from bin/batch info if available)
-              item.pickedQty, // Qtd.pedido (using picked qty)
-              new Date().toLocaleDateString('pt-PT') // Dt.remessa: Today's date
+              (idx + 1) * 10, 
+              "P", 
+              "", 
+              "1700", 
+              "0001", 
+              "0004", 
+              item.material, 
+              "", 
+              item.bin || "", 
+              item.pickedQty, 
+              new Date().toLocaleDateString('pt-PT') 
           ];
       });
 
@@ -914,7 +901,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Síntese");
 
-      // Sheet 2: Detalhe (New Sheet with PEP and Address)
       const detailData = [
           ["PEP", order.pep || ""],
           ["Morada", order.address || ""]
@@ -933,12 +919,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         </h4>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Título do Pedido</label>
-                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                    {orderTitle}
-                </div>
-            </div>
             {targetCompanyId && (
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
@@ -948,6 +928,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     </div>
                 </div>
             )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Título do Pedido</label>
+                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                    {orderTitle}
+                </div>
+            </div>
+            <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Levantamento</label>
+                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                    {dueDate ? new Date(dueDate).toLocaleDateString() : 'N/A'}
+                </div>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -967,20 +962,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     </div>
                 </div>
             )}
-        </div>
-
-        <div>
-            <label className={`block text-sm font-medium mb-1 ${formErrors.date ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>
-                Data Levantamento {formErrors.date && '*'}
-            </label>
-            <input 
-                type="date"
-                value={dueDate}
-                min={getMinDate()}
-                onChange={handleDateChange}
-                className={`w-full p-2 border rounded-md focus:ring-2 outline-none dark:bg-slate-800 dark:text-white ${formErrors.date ? 'border-red-500 focus:ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-brand-500 dark:border-slate-600'}`}
-            />
-            {formErrors.date && <p className="text-xs text-red-500 mt-1">Data obrigatória.</p>}
         </div>
 
         <div className="text-sm text-slate-600 dark:text-slate-400 mt-4">
@@ -1069,7 +1050,7 @@ TUBO 20MM, 2"
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
-                
+                {/* ... existing modal code ... */}
                 {similarityStep === 'LIST' && (
                     <>
                         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
@@ -1227,6 +1208,7 @@ TUBO 20MM, 2"
               <FinalizeOrderForm />
           ) : (
             <div>
+                {/* ... existing form ... */}
                 <div className="space-y-3 animate-fade-in">
                     {/* Admin Company Selector */}
                     {isAdmin && (
@@ -1250,23 +1232,38 @@ TUBO 20MM, 2"
                         </div>
                     )}
 
-                    <div className="mb-4">
-                        <label className={`block text-xs font-semibold mb-1 ${formErrors.title ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>
-                            Título do Pedido {formErrors.title && '*'}
-                        </label>
-                        <input 
-                            type="text"
-                            value={orderTitle}
-                            maxLength={19}
-                            onChange={e => {
-                                setOrderTitle(e.target.value);
-                                if(formErrors.title) setFormErrors({...formErrors, title: false});
-                            }}
-                            placeholder="Nome da obra (máx 19 chars)"
-                            className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.title ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
-                        />
-                        <div className="text-right text-[10px] text-slate-400 mt-1">
-                            {orderTitle.length}/19
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        {/* Title and Date Inputs (Same as before) */}
+                        <div className="md:col-span-2">
+                            <label className={`block text-xs font-semibold mb-1 ${formErrors.title ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>
+                                Título do Pedido {formErrors.title && '*'}
+                            </label>
+                            <input 
+                                type="text"
+                                value={orderTitle}
+                                maxLength={19}
+                                onChange={e => {
+                                    setOrderTitle(e.target.value);
+                                    if(formErrors.title) setFormErrors({...formErrors, title: false});
+                                }}
+                                placeholder="Nome da obra (máx 19 chars)"
+                                className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.title ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                            />
+                            <div className="text-right text-[10px] text-slate-400 mt-1">
+                                {orderTitle.length}/19
+                            </div>
+                        </div>
+                        <div>
+                            <label className={`block text-xs font-semibold mb-1 ${formErrors.date ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>
+                                Data Levantamento {formErrors.date && '*'}
+                            </label>
+                            <input 
+                                type="date"
+                                value={dueDate}
+                                min={getMinDate()}
+                                onChange={handleDateChange}
+                                className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.date ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                            />
                         </div>
                     </div>
 
@@ -1319,7 +1316,7 @@ TUBO 20MM, 2"
                                         isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-md ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                     }`}
                                 >
-                                    {/* Header (Always Visible) */}
+                                    {/* ... Header ... */}
                                     <div 
                                         onClick={() => setExpandedRowIndex(isExpanded ? -1 : idx)}
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
@@ -1352,8 +1349,7 @@ TUBO 20MM, 2"
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
-                                            
-                                            {/* Button to toggle New Material mode */}
+                                            {/* ... Toggle Buttons ... */}
                                             <div className="flex justify-end mb-2">
                                                 {!row.isCustom ? (
                                                     <button 
@@ -1394,6 +1390,7 @@ TUBO 20MM, 2"
                                             <div className="mb-3">
                                                 {row.isCustom ? (
                                                     <div>
+                                                        {/* Custom Input ... */}
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Descrição do Novo Material</label>
                                                         <div className="relative flex items-center gap-2">
                                                             <input 
@@ -1403,7 +1400,7 @@ TUBO 20MM, 2"
                                                                 onChange={(e) => {
                                                                     const newRows = [...manualRows];
                                                                     newRows[idx].customDesc = e.target.value;
-                                                                    newRows[idx].similarityChecked = false; // Reset check on edit
+                                                                    newRows[idx].similarityChecked = false; 
                                                                     setManualRows(newRows);
                                                                 }}
                                                                 placeholder="Descreva o material..."
@@ -1413,7 +1410,6 @@ TUBO 20MM, 2"
                                                                     : 'border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 focus:ring-2 focus:ring-blue-500'
                                                                 }`}
                                                             />
-                                                            {/* Button for Custom Mode - Always visible if not checked, or as badge if checked */}
                                                             {!row.similarityChecked ? (
                                                                 <button 
                                                                     onClick={() => handleCheckSimilarity(idx)}
@@ -1427,11 +1423,8 @@ TUBO 20MM, 2"
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <div className="text-right text-[10px] text-slate-400 mt-1">
-                                                            {row.customDesc.length}/40 caracteres
-                                                        </div>
                                                         
-                                                        {/* Category Select for Custom Items */}
+                                                        {/* Category Select using Dynamic Categories */}
                                                         <div className="mt-3">
                                                             <label className={`block text-xs font-bold uppercase mb-1 ${isMissingCat ? 'text-red-500' : 'text-slate-400'}`}>Categoria Obrigatória</label>
                                                             <div className="relative">
@@ -1445,7 +1438,7 @@ TUBO 20MM, 2"
                                                                     className={`w-full p-2.5 border rounded-md text-sm outline-none appearance-none dark:bg-slate-900 dark:text-white ${isMissingCat ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
                                                                 >
                                                                     <option value="">Selecione uma categoria...</option>
-                                                                    {MATERIAL_CATEGORIES.map(cat => (
+                                                                    {categories.map(cat => (
                                                                         <option key={cat.code} value={cat.code}>
                                                                             {cat.name}
                                                                         </option>
@@ -1455,7 +1448,6 @@ TUBO 20MM, 2"
                                                                 <Tag className="absolute right-3 top-3 w-4 h-4 text-slate-400 pointer-events-none" />
                                                             </div>
                                                             
-                                                            {/* Custom Category Input if "Other" selected */}
                                                             {row.category === '_OTHER_' && (
                                                                 <input 
                                                                     type="text"
@@ -1470,20 +1462,13 @@ TUBO 20MM, 2"
                                                                 />
                                                             )}
                                                         </div>
-
-                                                        {isDuplicate && (
-                                                            <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                                                                <AlertCircle className="w-3 h-3"/> Este material já existe na lista. Por favor, desmarque "Novo" e busque pelo nome.
-                                                            </p>
-                                                        )}
-                                                        {isUnchecked && (
-                                                             <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                                                                <AlertCircle className="w-3 h-3"/> Validação obrigatória. Clique em "Verificar".
-                                                            </p>
-                                                        )}
+                                                        {/* Error messages */}
+                                                        {isDuplicate && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Este material já existe na lista. Por favor, desmarque "Novo" e busque pelo nome.</p>}
+                                                        {isUnchecked && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Validação obrigatória. Clique em "Verificar".</p>}
                                                     </div>
                                                 ) : (
                                                     <div className="relative">
+                                                        {/* Standard Input ... */}
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Buscar Material Existente</label>
                                                         <div className="relative">
                                                             <input 
@@ -1492,8 +1477,7 @@ TUBO 20MM, 2"
                                                                 onChange={(e) => {
                                                                     const newRows = [...manualRows];
                                                                     newRows[idx].sku = e.target.value;
-                                                                    newRows[idx].similarityChecked = false; // Reset check
-                                                                    // Reset invalid error when typing
+                                                                    newRows[idx].similarityChecked = false; 
                                                                     if (isInvalidSku) {
                                                                         const newErrors = {...formErrors};
                                                                         newErrors.invalidSkus = newErrors.invalidSkus?.filter(i => i !== idx);
@@ -1505,8 +1489,6 @@ TUBO 20MM, 2"
                                                                 className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && !row.sku || isInvalidSku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                                                             />
                                                         </div>
-                                                        
-                                                        {/* Custom Autocomplete List */}
                                                         {row.sku && !isKnownSku(row.sku) && suggestions.length > 0 && (
                                                             <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
                                                                 {suggestions.map((opt) => (
@@ -1528,11 +1510,7 @@ TUBO 20MM, 2"
                                                         )}
                                                     </div>
                                                 )}
-                                                {isInvalidSku && !row.isCustom && (
-                                                    <p className="text-xs text-red-600 mt-1 flex items-center gap-1">
-                                                        <AlertCircle className="w-3 h-3"/> Material não encontrado. Tente buscar pelo nome ou crie um novo.
-                                                    </p>
-                                                )}
+                                                {isInvalidSku && !row.isCustom && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Material não encontrado. Tente buscar pelo nome ou crie um novo.</p>}
                                             </div>
 
                                             <div className="flex gap-4 mb-3">
@@ -1552,7 +1530,6 @@ TUBO 20MM, 2"
                                                     />
                                                 </div>
                                                 
-                                                {/* Unit Selector for Custom Items */}
                                                 {row.isCustom && (
                                                     <div className="w-1/3">
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Unid.</label>
@@ -1590,7 +1567,7 @@ TUBO 20MM, 2"
                         })}
                     </div>
 
-                    {/* Action Buttons: Add Item & Import */}
+                    {/* ... Action Buttons ... */}
                     <div className="flex gap-3">
                         <button
                             onClick={addManualRow}
@@ -1607,7 +1584,7 @@ TUBO 20MM, 2"
                         </button>
                     </div>
 
-                    {/* Submit Button (Next Step) */}
+                    {/* ... Submit Button ... */}
                     <div className="pt-4 flex justify-end">
                          <button
                             onClick={handleManualNext}
@@ -1622,7 +1599,7 @@ TUBO 20MM, 2"
         </div>
       )}
 
-      {/* LIST AREA - Grouped Visualization */}
+      {/* ... List Area (No major changes needed here, relies on same logic) ... */}
       {showList && (
         <div className="space-y-6 animate-fade-in">
            {groupedOrders.length === 0 ? (
@@ -1634,33 +1611,22 @@ TUBO 20MM, 2"
                    <p className="text-slate-500 dark:text-slate-400">Tente ajustar seus filtros ou crie um novo pedido.</p>
                </div>
            ) : (
+               // ... existing list rendering ...
                groupedOrders.map((group, groupIdx) => {
-                   // Render group container
-                   // We need to render Root + Children
-                   // If in OPEN view, parent might be completed (ghosted)
                    const allOrdersInGroup = [group.root, ...group.children];
-                   
                    return (
                        <div key={group.root.id} className="relative group-container space-y-3">
-                           {/* Connecting Line for Group */}
-                           {group.children.length > 0 && (
-                               <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-slate-700 z-0"></div>
-                           )}
-
+                           {group.children.length > 0 && <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-slate-700 z-0"></div>}
                            {allOrdersInGroup.map((order, orderIdx) => {
                                const isExpanded = expandedOrderId === order.id;
                                const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
                                const isCompleted = order.status === 'COMPLETED';
                                const hasBackorder = order.reopenCount && order.reopenCount > 0;
                                const isReopen = !!order.originalOrderId;
-
-                               // Check picking status
                                const isOrderFullyFulfilled = order.items.every(item => {
                                     const picked = getTotalPickedQuantity(order, orders, item.sku);
                                     return picked >= item.quantity;
                                 });
-                               
-                               // Ghost styling for completed parents in OPEN view
                                const isGhost = type === 'OPEN' && isCompleted;
 
                                return (
@@ -1670,27 +1636,13 @@ TUBO 20MM, 2"
                                             isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'
                                         } ${isGhost ? 'opacity-70 grayscale' : ''} ${isReopen ? 'ml-6' : ''}`}
                                    >
-                                       {/* Indentation Visual for Children */}
-                                       {isReopen && (
-                                           <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center">
-                                                <CornerDownRight className="w-5 h-5 text-slate-300 dark:text-slate-600" />
-                                           </div>
-                                       )}
-
+                                       {isReopen && <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center"><CornerDownRight className="w-5 h-5 text-slate-300 dark:text-slate-600" /></div>}
+                                       {/* ... Order Card Header ... */}
                                        <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                <div className="flex items-start gap-4">
-                                                   <div className={`p-3 rounded-full flex-shrink-0 mr-3 ${
-                                                        type === 'OPEN' 
-                                                            ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') 
-                                                            : (isOrderFullyFulfilled 
-                                                                ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
-                                                                : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')
-                                                   }`}>
-                                                       {type === 'OPEN' 
-                                                            ? (isCompleted ? <CheckCircle className="w-6 h-6"/> : <Clock className="w-6 h-6" />)
-                                                            : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)
-                                                       }
+                                                   <div className={`p-3 rounded-full flex-shrink-0 mr-3 ${type === 'OPEN' ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') : (isOrderFullyFulfilled ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')}`}>
+                                                       {type === 'OPEN' ? (isCompleted ? <CheckCircle className="w-6 h-6"/> : <Clock className="w-6 h-6" />) : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)}
                                                    </div>
                                                    <div className="flex-1 min-w-0">
                                                        <div className="flex items-center gap-2">
@@ -1702,7 +1654,6 @@ TUBO 20MM, 2"
                                                            <span className="flex items-center gap-1 flex-shrink-0"><User className="w-3 h-3" /> {order.creator}</span>
                                                            <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>
                                                            <span className="flex items-center gap-1 flex-shrink-0"><Calendar className="w-3 h-3" /> {new Date(order.dateCreated).toLocaleDateString()}</span>
-                                                           
                                                            {(order.dueDate) && (
                                                                <>
                                                                  <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>
@@ -1714,13 +1665,8 @@ TUBO 20MM, 2"
                                                        </div>
                                                    </div>
                                                </div>
-                                               
                                                <div className="flex items-center gap-3 ml-14 md:ml-0">
-                                                   {isInProcess && (
-                                                        <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full flex items-center gap-1 border border-amber-100 dark:border-amber-800">
-                                                            <Activity className="w-3 h-3 animate-pulse" /> Em Separação
-                                                        </span>
-                                                   )}
+                                                   {isInProcess && <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full flex items-center gap-1 border border-amber-100 dark:border-amber-800"><Activity className="w-3 h-3 animate-pulse" /> Em Separação</span>}
                                                    {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400"/> : <ChevronDown className="w-5 h-5 text-slate-400"/>}
                                                </div>
                                            </div>
@@ -1728,24 +1674,12 @@ TUBO 20MM, 2"
                                        
                                        {isExpanded && (
                                            <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 animate-fade-in">
-                                               {/* Order Details (Address/PEP) if available */}
                                                {(order.pep || order.address) && (
                                                    <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-500 dark:text-slate-400">
-                                                       {order.pep && (
-                                                           <div className="flex items-center gap-2">
-                                                               <span className="font-bold text-slate-700 dark:text-slate-300">PEP / Obra:</span>
-                                                               <span>{order.pep}</span>
-                                                           </div>
-                                                       )}
-                                                       {order.address && (
-                                                           <div className="flex items-center gap-2">
-                                                               <span className="font-bold text-slate-700 dark:text-slate-300">Morada:</span>
-                                                               <span>{order.address}</span>
-                                                           </div>
-                                                       )}
+                                                       {order.pep && <div className="flex items-center gap-2"><span className="font-bold text-slate-700 dark:text-slate-300">PEP / Obra:</span><span>{order.pep}</span></div>}
+                                                       {order.address && <div className="flex items-center gap-2"><span className="font-bold text-slate-700 dark:text-slate-300">Morada:</span><span>{order.address}</span></div>}
                                                    </div>
                                                )}
-
                                                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
                                                    <div className="overflow-x-auto">
                                                         <table className="w-full text-sm text-left">
@@ -1774,15 +1708,7 @@ TUBO 20MM, 2"
                                                                                 <>
                                                                                 <td className="p-3 text-right font-bold whitespace-nowrap">{picked}</td>
                                                                                 <td className="p-3 whitespace-nowrap">
-                                                                                    {isFullyPicked ? (
-                                                                                        <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
-                                                                                    ) : (
-                                                                                        picked === 0 ? (
-                                                                                             <span className="text-red-500 dark:text-red-400 flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span>
-                                                                                        ) : (
-                                                                                             <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
-                                                                                        )
-                                                                                    )}
+                                                                                    {isFullyPicked ? <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span> : (picked === 0 ? <span className="text-red-500 dark:text-red-400 flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span> : <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>)}
                                                                                 </td>
                                                                                 </>
                                                                             )}
@@ -1793,13 +1719,10 @@ TUBO 20MM, 2"
                                                         </table>
                                                    </div>
                                                </div>
-
-                                               {/* Change Log */}
+                                               {/* ... Change Logs and Buttons ... */}
                                                {order.changeLog && order.changeLog.length > 0 && (
                                                    <div className="mb-4">
-                                                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1">
-                                                           <History className="w-3 h-3" /> Histórico de Alterações
-                                                       </p>
+                                                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1"><History className="w-3 h-3" /> Histórico de Alterações</p>
                                                        <div className="space-y-2">
                                                            {order.changeLog.map((log, idx) => (
                                                                <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700">
@@ -1813,33 +1736,15 @@ TUBO 20MM, 2"
                                                        </div>
                                                    </div>
                                                )}
-
                                                <div className="flex justify-end gap-3">
-                                                   {/* Actions for OPEN orders */}
                                                    {type === 'OPEN' && canEdit && !isGhost && (
                                                         <>
-                                                            <button 
-                                                                onClick={() => handleDeleteOrder(order.id)}
-                                                                className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" /> Excluir
-                                                            </button>
-                                                            <button 
-                                                                onClick={() => handleEditStart(order)}
-                                                                className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"
-                                                            >
-                                                                <Edit className="w-4 h-4" /> Editar Pedido
-                                                            </button>
+                                                            <button onClick={() => handleDeleteOrder(order.id)} className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"><Trash2 className="w-4 h-4" /> Excluir</button>
+                                                            <button onClick={() => handleEditStart(order)} className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"><Edit className="w-4 h-4" /> Editar Pedido</button>
                                                         </>
                                                    )}
-                                                   {/* Actions for FINISHED orders */}
                                                    {(type === 'FINISHED' || isGhost) && (
-                                                       <button 
-                                                            onClick={() => downloadExcel(order)}
-                                                            className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm"
-                                                        >
-                                                            <Download className="w-4 h-4" /> Exportar Excel
-                                                        </button>
+                                                       <button onClick={() => downloadExcel(order)} className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm"><Download className="w-4 h-4" /> Exportar Excel</button>
                                                    )}
                                                </div>
                                            </div>

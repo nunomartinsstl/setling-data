@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company } from './types';
+import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -9,7 +9,8 @@ import QueryAssistant from './components/QueryAssistant';
 import Settings from './components/Settings';
 import UsersManager from './components/UsersManager';
 import PurchaseOrderManager from './components/PurchaseOrderManager';
-import { StorageService } from './services/storageService';
+import ShortagesReport from './components/ShortagesReport';
+import { StorageService, DEFAULT_CATEGORIES } from './services/storageService';
 
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
 const LOGO_HOTELARIA = "https://setlinghotelaria.pt/wp-content/uploads/2024/12/setling-hotelaria-logo-big.svg";
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]); // Store companies
+  const [categories, setCategories] = useState<CategoryOption[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   
@@ -76,13 +78,19 @@ const App: React.FC = () => {
   const refreshData = async () => {
     try {
       // 1. Fetch current data
-      const [fetchedStock, fetchedMaster, fetchedCompanies] = await Promise.all([
+      const [fetchedStock, fetchedMaster, fetchedCompanies, fetchedSettings] = await Promise.all([
         StorageService.getStock(),
         StorageService.getMasterMaterials(),
-        StorageService.getCompanies()
+        StorageService.getCompanies(),
+        StorageService.getSettings()
       ]);
       
       setCompanies(fetchedCompanies);
+      if (fetchedSettings.categories && fetchedSettings.categories.length > 0) {
+          setCategories(fetchedSettings.categories);
+      } else {
+          setCategories(DEFAULT_CATEGORIES);
+      }
 
       // Determine Company for Logo
       if (user?.role === UserRole.ADMIN) {
@@ -132,7 +140,7 @@ const App: React.FC = () => {
   // --- FILTERED ORDERS LOGIC ---
   // Admins see all. Users see only their company's orders or legacy orders (undefined companyId).
   const visibleOrders = orders.filter(o => {
-      if (user?.role === UserRole.ADMIN) return true;
+      if (user?.role === UserRole.ADMIN || user?.role === UserRole.WAREHOUSE) return true; // Warehouse sees all to pick
       return !o.companyId || o.companyId === user?.companyId;
   });
 
@@ -178,7 +186,7 @@ const App: React.FC = () => {
       case 'CREATE_ORDER':
         return (
             <OrderManager 
-              orders={visibleOrders} 
+              orders={orders} // Pass all orders so reservation logic works correctly
               stock={stock}
               masterList={masterList}
               type="OPEN"
@@ -188,6 +196,7 @@ const App: React.FC = () => {
               currentUsername={user.username}
               userCompanyId={user.companyId}
               companies={companies}
+              categories={categories}
             />
           );
       case 'OPEN_ORDERS':
@@ -203,6 +212,7 @@ const App: React.FC = () => {
             currentUsername={user.username}
             userCompanyId={user.companyId}
             companies={companies}
+            categories={categories}
           />
         );
       case 'FINISHED_ORDERS':
@@ -218,6 +228,7 @@ const App: React.FC = () => {
             currentUsername={user.username}
             userCompanyId={user.companyId}
             companies={companies}
+            categories={categories}
           />
         );
       case 'PURCHASE_ORDERS':
@@ -236,6 +247,14 @@ const App: React.FC = () => {
             userRole={user.role} 
             refreshData={refreshData} 
           />
+        );
+      case 'SHORTAGES':
+        return (
+            <ShortagesReport 
+                orders={orders} // Pass all orders to calculate aggregate demand
+                stock={stock} 
+                onNavigateToOrder={(id) => console.log(id)} 
+            />
         );
       case 'QUERY':
         return <QueryAssistant orders={visibleOrders} stock={stock} />;

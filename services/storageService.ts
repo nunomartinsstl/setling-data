@@ -50,7 +50,7 @@ const KEYS = {
   INVITES: 'nexus_invites'
 };
 
-export const MATERIAL_CATEGORIES = [
+export const DEFAULT_CATEGORIES = [
     { code: 'ABR', name: 'ABRAÇADEIRAS' },
     { code: 'ACC', name: 'ACESSÓRIOS' },
     { code: 'ARC', name: 'AR COMPRIMIDO' },
@@ -96,6 +96,9 @@ export const MATERIAL_CATEGORIES = [
     { code: 'VDE', name: 'VASO DE EXPANSÃO' },
     { code: 'VEN', name: 'VENTILADORES' }
 ];
+
+// Re-export for compatibility, but prefer using AppSettings
+export const MATERIAL_CATEGORIES = DEFAULT_CATEGORIES;
 
 // Helper to normalize string for matching
 const normalizeText = (text: string): string => {
