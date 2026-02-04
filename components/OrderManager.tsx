@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company } from '../types';
 import { StorageService, MATERIAL_CATEGORIES } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -28,6 +28,12 @@ interface ManualRow {
     isCustom: boolean;
     customDesc: string;
     similarityChecked: boolean;
+}
+
+// Group interface to handle hierarchy
+interface OrderGroup {
+    root: Order;
+    children: Order[];
 }
 
 // Helper to normalize string (remove accents/diacritics)
@@ -73,6 +79,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   // Manual Entry Buffer (Drafts)
   const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false}]);
   const [orderTitle, setOrderTitle] = useState('');
+  const [pep, setPep] = useState('');
+  const [address, setAddress] = useState('');
+
   // Company Selection for Admins
   const [targetCompanyId, setTargetCompanyId] = useState<string>('');
   
@@ -101,32 +110,95 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Updated filter: 
-  const filteredOrders = useMemo(() => {
-      let result = orders.filter(o => {
-        const isInProcess = o.status === 'IN_PROCESS' || o.status === 'IN PROCESS';
-        if (type === 'OPEN') return o.status === 'OPEN' || isInProcess;
-        return o.status === 'COMPLETED';
-      });
+  // GROUPING LOGIC
+  const groupedOrders = useMemo(() => {
+    const groups: Record<string, OrderGroup> = {};
 
-      if (type === 'FINISHED' && searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          result = result.filter(o => 
-              (o.title || '').toLowerCase().includes(q) ||
-              (o.id || '').toLowerCase().includes(q) ||
-              (o.displayId?.toString() || '').includes(q) ||
-              (o.creator || '').toLowerCase().includes(q) ||
-              o.items.some(i => i.sku.toLowerCase().includes(q) || i.description.toLowerCase().includes(q))
-          );
-      }
-      
-      // Sort finished orders by most recent
-      if (type === 'FINISHED') {
-          // Sort by creation date or completion date if available
-          result.sort((a, b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime());
-      }
+    // 1. Identify all Root orders and place them in groups
+    // A root order is one that has no originalOrderId, OR its originalOrderId is not present in the current list (orphaned child treated as root for display)
+    // Note: 'orders' prop contains ALL visible orders for this user, regardless of status, so we can link them.
+    
+    // First pass: Map by ID for easy lookup
+    const orderMap = new Map<string, Order>();
+    orders.forEach(o => orderMap.set(o.id, o));
 
-      return result;
+    // Second pass: Build hierarchy
+    orders.forEach(order => {
+        const rootId = order.originalOrderId || order.id;
+        
+        // Ensure group exists
+        if (!groups[rootId]) {
+            // Try to find the actual root object. If not found (maybe filtered out by permission?), use the current if it matches
+            const rootOrder = orderMap.get(rootId);
+            if (rootOrder) {
+                groups[rootId] = { root: rootOrder, children: [] };
+            } else {
+                // Fallback: If root is missing but we have a child, treating child as its own group for now
+                // This edge case shouldn't happen often if 'orders' has full visibility
+                groups[order.id] = { root: order, children: [] };
+            }
+        }
+
+        // Add to children if it's not the root itself
+        if (order.originalOrderId && groups[rootId]) {
+            // Avoid duplicates
+            if (!groups[rootId].children.find(c => c.id === order.id)) {
+                groups[rootId].children.push(order);
+            }
+        }
+    });
+
+    // 3. Filter Groups based on View Type
+    let result = Object.values(groups);
+
+    if (type === 'OPEN') {
+        // Show group if AT LEAST ONE order in the hierarchy is OPEN or IN_PROCESS
+        result = result.filter(group => {
+            const isRootActive = group.root.status === 'OPEN' || group.root.status === 'IN_PROCESS' || group.root.status === 'IN PROCESS';
+            const hasActiveChild = group.children.some(c => c.status === 'OPEN' || c.status === 'IN_PROCESS' || c.status === 'IN PROCESS');
+            return isRootActive || hasActiveChild;
+        });
+    } else {
+        // FINISHED: Show group only if ALL orders in hierarchy are COMPLETED
+        result = result.filter(group => {
+            const isRootDone = group.root.status === 'COMPLETED';
+            const allChildrenDone = group.children.every(c => c.status === 'COMPLETED');
+            return isRootDone && allChildrenDone;
+        });
+    }
+
+    // 4. Search Filter (Only applies to Finished usually, but good to have)
+    if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        result = result.filter(group => {
+            // Check Root
+            if ((group.root.title || '').toLowerCase().includes(q) || 
+                (group.root.id || '').toLowerCase().includes(q) ||
+                (group.root.displayId?.toString() || '').includes(q) ||
+                (group.root.creator || '').toLowerCase().includes(q)) return true;
+            
+            // Check Children
+            return group.children.some(c => 
+                (c.title || '').toLowerCase().includes(q) ||
+                (c.id || '').toLowerCase().includes(q)
+            );
+        });
+    }
+
+    // 5. Sort Groups by latest activity (Date Created of the newest item in group)
+    result.sort((a, b) => {
+        const getLatestDate = (g: OrderGroup) => {
+            let d = new Date(g.root.dateCreated).getTime();
+            g.children.forEach(c => {
+                const cd = new Date(c.dateCreated).getTime();
+                if (cd > d) d = cd;
+            });
+            return d;
+        };
+        return getLatestDate(b) - getLatestDate(a);
+    });
+
+    return result;
   }, [orders, type, searchQuery]);
   
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
@@ -161,14 +233,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       }
   }, [isAdmin, userCompanyId]);
 
+  // Persistence for Order Fields
   useEffect(() => {
     if (editingOrderId) return; 
     const savedRows = localStorage.getItem('draft_rows');
     const savedTitle = localStorage.getItem('draft_title');
+    const savedPep = localStorage.getItem('draft_pep');
+    const savedAddress = localStorage.getItem('draft_address');
+    
     if (savedRows) {
         try { setManualRows(JSON.parse(savedRows)); } catch(e){}
     }
     if (savedTitle) setOrderTitle(savedTitle);
+    if (savedPep) setPep(savedPep);
+    if (savedAddress) setAddress(savedAddress);
   }, [editingOrderId]);
 
   useEffect(() => {
@@ -179,17 +257,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   useEffect(() => {
     if (editingOrderId) return;
     localStorage.setItem('draft_title', orderTitle);
-  }, [orderTitle, editingOrderId]);
+    localStorage.setItem('draft_pep', pep);
+    localStorage.setItem('draft_address', address);
+  }, [orderTitle, pep, address, editingOrderId]);
 
   const clearDraft = () => {
       localStorage.removeItem('draft_rows');
       localStorage.removeItem('draft_title');
+      localStorage.removeItem('draft_pep');
+      localStorage.removeItem('draft_address');
       resetForm();
   };
 
   const resetForm = () => {
       setManualRows([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false}]);
       setOrderTitle('');
+      setPep('');
+      setAddress('');
       setDueDate('');
       setPendingItems([]);
       setCreationStep('INITIAL');
@@ -528,6 +612,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
       setManualRows(rows);
       setOrderTitle(order.title);
+      setPep(order.pep || '');
+      setAddress(order.address || '');
       setDueDate(order.dueDate);
       setEditingOrderId(order.id);
       // Ensure we keep existing company or user's company
@@ -610,6 +696,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             const updatedOrder: Order = {
                 ...existingOrder,
                 title: orderTitle,
+                pep: pep,
+                address: address,
                 dueDate: dueDate,
                 items: pendingItems, 
                 companyId: targetCompanyId, // Ensure company persists or updates
@@ -627,6 +715,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 id: Math.random().toString(36).substr(2, 9),
                 displayId: 0, 
                 title: orderTitle,
+                pep: pep,
+                address: address,
                 creator: currentUsername,
                 status: 'OPEN',
                 dateCreated: new Date().toISOString(),
@@ -802,7 +892,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           return;
       }
 
-      // Format required: Itm, C, I, Cen., Depósito de saída, Depósito, Material, Texto breve, Lote, Qtd.pedido, Dt.remessa
+      // Sheet 1: Síntese (Existing Data)
       const headers = ["Itm", "C", "I", "Cen.", "Depósito de saída", "Depósito", "Material", "Texto breve", "Lote", "Qtd.pedido", "Dt.remessa"];
       const data = pickedList.map((item: any, idx: number) => {
           return [
@@ -822,7 +912,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
       const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Pedido");
+      XLSX.utils.book_append_sheet(wb, ws, "Síntese");
+
+      // Sheet 2: Detalhe (New Sheet with PEP and Address)
+      const detailData = [
+          ["PEP", order.pep || ""],
+          ["Morada", order.address || ""]
+      ];
+      const wsDetail = XLSX.utils.aoa_to_sheet(detailData);
+      XLSX.utils.book_append_sheet(wb, wsDetail, "Detalhe");
       
       const fileName = `Pedido_${order.displayId}_${order.title.replace(/\s+/g, '_')}.xlsx`;
       XLSX.writeFile(wb, fileName);
@@ -834,28 +932,42 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             {editingOrderId ? 'Salvar Alterações' : 'Finalizar Pedido'}
         </h4>
         
-        <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Título do Pedido</label>
-            <input 
-                type="text"
-                value={orderTitle}
-                maxLength={19}
-                onChange={e => setOrderTitle(e.target.value)}
-                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
-                disabled
-            />
-        </div>
-
-        {/* Company Confirmation (Read-only here) */}
-        {targetCompanyId && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
-                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                    <Building className="w-4 h-4"/>
-                    {companies.find(c => c.id === targetCompanyId)?.name || "Empresa Desconhecida"}
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Título do Pedido</label>
+                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                    {orderTitle}
                 </div>
             </div>
-        )}
+            {targetCompanyId && (
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
+                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <Building className="w-4 h-4"/>
+                        {companies.find(c => c.id === targetCompanyId)?.name || "Empresa Desconhecida"}
+                    </div>
+                </div>
+            )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pep && (
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">PEP / Obra</label>
+                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                        {pep}
+                    </div>
+                </div>
+            )}
+            {address && (
+                <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Morada de Entrega</label>
+                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                        {address}
+                    </div>
+                </div>
+            )}
+        </div>
 
         <div>
             <label className={`block text-sm font-medium mb-1 ${formErrors.date ? 'text-red-600' : 'text-slate-700 dark:text-slate-300'}`}>
@@ -1083,11 +1195,6 @@ TUBO 20MM, 2"
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
           {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
           {mode === 'CREATE' ? 'Novo Pedido ao Armazém' : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos ao Armazém Finalizados')}
-          {mode === 'LIST' && (
-             <span className="text-sm font-normal text-slate-500 dark:text-slate-400 ml-2 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-full">
-                {filteredOrders.length}
-             </span>
-          )}
         </h2>
         
         {/* Search for Finished Orders */}
@@ -1160,6 +1267,33 @@ TUBO 20MM, 2"
                         />
                         <div className="text-right text-[10px] text-slate-400 mt-1">
                             {orderTitle.length}/19
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <Hash className="w-3 h-3" /> PEP / Obra
+                            </label>
+                            <input 
+                                type="text"
+                                value={pep}
+                                onChange={e => setPep(e.target.value)}
+                                placeholder="Código PEP"
+                                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                <MapPin className="w-3 h-3" /> Morada / Local
+                            </label>
+                            <input 
+                                type="text"
+                                value={address}
+                                onChange={e => setAddress(e.target.value)}
+                                placeholder="Local de entrega"
+                                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                            />
                         </div>
                     </div>
 
@@ -1488,10 +1622,10 @@ TUBO 20MM, 2"
         </div>
       )}
 
-      {/* LIST AREA */}
+      {/* LIST AREA - Grouped Visualization */}
       {showList && (
-        <div className="space-y-4 animate-fade-in">
-           {filteredOrders.length === 0 ? (
+        <div className="space-y-6 animate-fade-in">
+           {groupedOrders.length === 0 ? (
                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
                    <div className="bg-slate-100 dark:bg-slate-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                        <Search className="w-8 h-8 text-slate-400" />
@@ -1500,171 +1634,219 @@ TUBO 20MM, 2"
                    <p className="text-slate-500 dark:text-slate-400">Tente ajustar seus filtros ou crie um novo pedido.</p>
                </div>
            ) : (
-               filteredOrders.map(order => {
-                   const isExpanded = expandedOrderId === order.id;
-                   const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
-                   const hasBackorder = order.reopenCount && order.reopenCount > 0;
-                   const isReopen = !!order.originalOrderId;
-
-                   // Logic for Finished Orders Visual Status
-                   // Check if ALL items are fully picked
-                   const isOrderFullyFulfilled = type === 'FINISHED' 
-                        ? order.items.every(item => {
-                             const picked = getTotalPickedQuantity(order, orders, item.sku);
-                             return picked >= item.quantity;
-                        })
-                        : false; 
-
+               groupedOrders.map((group, groupIdx) => {
+                   // Render group container
+                   // We need to render Root + Children
+                   // If in OPEN view, parent might be completed (ghosted)
+                   const allOrdersInGroup = [group.root, ...group.children];
+                   
                    return (
-                       <div key={order.id} className={`bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all ${isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'}`}>
-                           <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
-                               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                   <div className="flex items-start gap-4">
-                                       <div className={`p-3 rounded-full hidden md:block ${
-                                            type === 'OPEN' 
-                                                ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') 
-                                                : (isOrderFullyFulfilled 
-                                                    ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
-                                                    : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')
-                                       }`}>
-                                           {type === 'OPEN' 
-                                                ? <Clock className="w-6 h-6" /> 
-                                                : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)
-                                           }
-                                       </div>
-                                       <div>
-                                           <div className="flex items-center gap-2">
-                                               <h3 className="font-bold text-lg text-slate-800 dark:text-white">{order.title}</h3>
-                                               {hasBackorder && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-bold">Reabertura ({order.reopenCount})</span>}
-                                               {isReopen && <span className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-bold">Derivado</span>}
-                                           </div>
-                                           <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400 mt-1">
-                                               <span className="flex items-center gap-1"><User className="w-3 h-3" /> {order.creator}</span>
-                                               <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full"></span>
-                                               <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(order.dateCreated).toLocaleDateString()}</span>
-                                               {type === 'OPEN' && (
-                                                   <>
-                                                     <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full"></span>
-                                                     <span className={`font-semibold ${new Date(order.dueDate) < new Date() ? 'text-red-500' : 'text-blue-500'}`}>
-                                                        Levantar: {new Date(order.dueDate).toLocaleDateString()}
-                                                     </span>
-                                                   </>
-                                               )}
-                                           </div>
-                                       </div>
-                                   </div>
-                                   
-                                   <div className="flex items-center gap-3 ml-14 md:ml-0">
-                                       {isInProcess && (
-                                            <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full flex items-center gap-1 border border-amber-100 dark:border-amber-800">
-                                                <Activity className="w-3 h-3 animate-pulse" /> Em Separação
-                                            </span>
-                                       )}
-                                       {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400"/> : <ChevronDown className="w-5 h-5 text-slate-400"/>}
-                                   </div>
-                               </div>
-                           </div>
-                           
-                           {isExpanded && (
-                               <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 animate-fade-in">
-                                   <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
-                                       <div className="overflow-x-auto">
-                                            <table className="w-full text-sm text-left">
-                                                <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
-                                                    <tr>
-                                                        <th className="p-3 whitespace-nowrap">Material</th>
-                                                        <th className="p-3 whitespace-nowrap">Descrição</th>
-                                                        <th className="p-3 text-right whitespace-nowrap">Qtd</th>
-                                                        {type === 'FINISHED' && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
-                                                        {type === 'FINISHED' && <th className="p-3 whitespace-nowrap">Status</th>}
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
-                                                    {order.items.map((item, idx) => {
-                                                        const picked = type === 'FINISHED' ? getTotalPickedQuantity(order, orders, item.sku) : 0;
-                                                        const isFullyPicked = picked >= item.quantity;
-                                                        return (
-                                                            <tr key={idx}>
-                                                                <td className="p-3 font-mono text-xs whitespace-nowrap">{item.sku}</td>
-                                                                <td className="p-3 min-w-[200px]">
-                                                                    {item.description}
-                                                                    {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
-                                                                </td>
-                                                                <td className="p-3 text-right font-bold whitespace-nowrap">{item.quantity}</td>
-                                                                {type === 'FINISHED' && (
-                                                                    <>
-                                                                    <td className="p-3 text-right font-bold whitespace-nowrap">{picked}</td>
-                                                                    <td className="p-3 whitespace-nowrap">
-                                                                        {isFullyPicked ? (
-                                                                            <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
-                                                                        ) : (
-                                                                            picked === 0 ? (
-                                                                                 <span className="text-red-500 dark:text-red-400 flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span>
-                                                                            ) : (
-                                                                                 <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
-                                                                            )
-                                                                        )}
-                                                                    </td>
-                                                                    </>
-                                                                )}
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                       </div>
-                                   </div>
-
-                                   {/* Change Log */}
-                                   {order.changeLog && order.changeLog.length > 0 && (
-                                       <div className="mb-4">
-                                           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1">
-                                               <History className="w-3 h-3" /> Histórico de Alterações
-                                           </p>
-                                           <div className="space-y-2">
-                                               {order.changeLog.map((log, idx) => (
-                                                   <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700">
-                                                       <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(log.date).toLocaleString()}</span>
-                                                       <span className="mx-1 text-slate-300">|</span>
-                                                       <span className="text-brand-600 dark:text-brand-400 font-medium">{log.actor}</span>
-                                                       <span className="mx-1 text-slate-300">|</span>
-                                                       <span>{log.details}</span>
-                                                   </div>
-                                               ))}
-                                           </div>
-                                       </div>
-                                   )}
-
-                                   <div className="flex justify-end gap-3">
-                                       {/* Actions for OPEN orders */}
-                                       {type === 'OPEN' && canEdit && (
-                                            <>
-                                                <button 
-                                                    onClick={() => handleDeleteOrder(order.id)}
-                                                    className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"
-                                                >
-                                                    <Trash2 className="w-4 h-4" /> Excluir
-                                                </button>
-                                                <button 
-                                                    onClick={() => handleEditStart(order)}
-                                                    className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"
-                                                >
-                                                    <Edit className="w-4 h-4" /> Editar Pedido
-                                                </button>
-                                            </>
-                                       )}
-                                       {/* Actions for FINISHED orders */}
-                                       {type === 'FINISHED' && (
-                                           <button 
-                                                onClick={() => downloadExcel(order)}
-                                                className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm"
-                                            >
-                                                <Download className="w-4 h-4" /> Exportar Excel
-                                            </button>
-                                       )}
-                                   </div>
-                               </div>
+                       <div key={group.root.id} className="relative group-container space-y-3">
+                           {/* Connecting Line for Group */}
+                           {group.children.length > 0 && (
+                               <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-slate-700 z-0"></div>
                            )}
+
+                           {allOrdersInGroup.map((order, orderIdx) => {
+                               const isExpanded = expandedOrderId === order.id;
+                               const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
+                               const isCompleted = order.status === 'COMPLETED';
+                               const hasBackorder = order.reopenCount && order.reopenCount > 0;
+                               const isReopen = !!order.originalOrderId;
+
+                               // Check picking status
+                               const isOrderFullyFulfilled = order.items.every(item => {
+                                    const picked = getTotalPickedQuantity(order, orders, item.sku);
+                                    return picked >= item.quantity;
+                                });
+                               
+                               // Ghost styling for completed parents in OPEN view
+                               const isGhost = type === 'OPEN' && isCompleted;
+
+                               return (
+                                   <div 
+                                        key={order.id} 
+                                        className={`relative z-10 bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all ${
+                                            isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'
+                                        } ${isGhost ? 'opacity-70 grayscale' : ''} ${isReopen ? 'ml-6' : ''}`}
+                                   >
+                                       {/* Indentation Visual for Children */}
+                                       {isReopen && (
+                                           <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center">
+                                                <CornerDownRight className="w-5 h-5 text-slate-300 dark:text-slate-600" />
+                                           </div>
+                                       )}
+
+                                       <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
+                                           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                               <div className="flex items-start gap-4">
+                                                   <div className={`p-3 rounded-full flex-shrink-0 mr-3 ${
+                                                        type === 'OPEN' 
+                                                            ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') 
+                                                            : (isOrderFullyFulfilled 
+                                                                ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                                                                : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')
+                                                   }`}>
+                                                       {type === 'OPEN' 
+                                                            ? (isCompleted ? <CheckCircle className="w-6 h-6"/> : <Clock className="w-6 h-6" />)
+                                                            : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)
+                                                       }
+                                                   </div>
+                                                   <div className="flex-1 min-w-0">
+                                                       <div className="flex items-center gap-2">
+                                                           <h3 className="font-bold text-base md:text-lg text-slate-800 dark:text-white truncate">{order.title}</h3>
+                                                           {hasBackorder && <span className="hidden md:inline-flex text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-bold">Reabertura ({order.reopenCount})</span>}
+                                                           {isReopen && <span className="hidden md:inline-flex text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-bold">Derivado</span>}
+                                                       </div>
+                                                       <div className="flex items-center gap-2 text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5 md:mt-1 overflow-x-auto whitespace-nowrap">
+                                                           <span className="flex items-center gap-1 flex-shrink-0"><User className="w-3 h-3" /> {order.creator}</span>
+                                                           <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>
+                                                           <span className="flex items-center gap-1 flex-shrink-0"><Calendar className="w-3 h-3" /> {new Date(order.dateCreated).toLocaleDateString()}</span>
+                                                           
+                                                           {(order.dueDate) && (
+                                                               <>
+                                                                 <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>
+                                                                 <span className={`flex-shrink-0 ${new Date(order.dueDate) < new Date() && type === 'OPEN' ? 'text-red-500 font-semibold' : ''}`}>
+                                                                    {type === 'OPEN' ? 'Levantar: ' : ''}{new Date(order.dueDate).toLocaleDateString()}
+                                                                 </span>
+                                                               </>
+                                                           )}
+                                                       </div>
+                                                   </div>
+                                               </div>
+                                               
+                                               <div className="flex items-center gap-3 ml-14 md:ml-0">
+                                                   {isInProcess && (
+                                                        <span className="px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 text-xs font-bold rounded-full flex items-center gap-1 border border-amber-100 dark:border-amber-800">
+                                                            <Activity className="w-3 h-3 animate-pulse" /> Em Separação
+                                                        </span>
+                                                   )}
+                                                   {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400"/> : <ChevronDown className="w-5 h-5 text-slate-400"/>}
+                                               </div>
+                                           </div>
+                                       </div>
+                                       
+                                       {isExpanded && (
+                                           <div className="border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 p-4 animate-fade-in">
+                                               {/* Order Details (Address/PEP) if available */}
+                                               {(order.pep || order.address) && (
+                                                   <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-slate-500 dark:text-slate-400">
+                                                       {order.pep && (
+                                                           <div className="flex items-center gap-2">
+                                                               <span className="font-bold text-slate-700 dark:text-slate-300">PEP / Obra:</span>
+                                                               <span>{order.pep}</span>
+                                                           </div>
+                                                       )}
+                                                       {order.address && (
+                                                           <div className="flex items-center gap-2">
+                                                               <span className="font-bold text-slate-700 dark:text-slate-300">Morada:</span>
+                                                               <span>{order.address}</span>
+                                                           </div>
+                                                       )}
+                                                   </div>
+                                               )}
+
+                                               <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
+                                                   <div className="overflow-x-auto">
+                                                        <table className="w-full text-sm text-left">
+                                                            <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
+                                                                <tr>
+                                                                    <th className="p-3 whitespace-nowrap">Material</th>
+                                                                    <th className="p-3 whitespace-nowrap">Descrição</th>
+                                                                    <th className="p-3 text-right whitespace-nowrap">Qtd</th>
+                                                                    {(type === 'FINISHED' || isGhost) && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
+                                                                    {(type === 'FINISHED' || isGhost) && <th className="p-3 whitespace-nowrap">Status</th>}
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                                                                {order.items.map((item, idx) => {
+                                                                    const picked = (type === 'FINISHED' || isGhost) ? getTotalPickedQuantity(order, orders, item.sku) : 0;
+                                                                    const isFullyPicked = picked >= item.quantity;
+                                                                    return (
+                                                                        <tr key={idx}>
+                                                                            <td className="p-3 font-mono text-xs whitespace-nowrap">{item.sku}</td>
+                                                                            <td className="p-3 min-w-[200px]">
+                                                                                {item.description}
+                                                                                {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
+                                                                            </td>
+                                                                            <td className="p-3 text-right font-bold whitespace-nowrap">{item.quantity}</td>
+                                                                            {(type === 'FINISHED' || isGhost) && (
+                                                                                <>
+                                                                                <td className="p-3 text-right font-bold whitespace-nowrap">{picked}</td>
+                                                                                <td className="p-3 whitespace-nowrap">
+                                                                                    {isFullyPicked ? (
+                                                                                        <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span>
+                                                                                    ) : (
+                                                                                        picked === 0 ? (
+                                                                                             <span className="text-red-500 dark:text-red-400 flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span>
+                                                                                        ) : (
+                                                                                             <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>
+                                                                                        )
+                                                                                    )}
+                                                                                </td>
+                                                                                </>
+                                                                            )}
+                                                                        </tr>
+                                                                    );
+                                                                })}
+                                                            </tbody>
+                                                        </table>
+                                                   </div>
+                                               </div>
+
+                                               {/* Change Log */}
+                                               {order.changeLog && order.changeLog.length > 0 && (
+                                                   <div className="mb-4">
+                                                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1">
+                                                           <History className="w-3 h-3" /> Histórico de Alterações
+                                                       </p>
+                                                       <div className="space-y-2">
+                                                           {order.changeLog.map((log, idx) => (
+                                                               <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700">
+                                                                   <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(log.date).toLocaleString()}</span>
+                                                                   <span className="mx-1 text-slate-300">|</span>
+                                                                   <span className="text-brand-600 dark:text-brand-400 font-medium">{log.actor}</span>
+                                                                   <span className="mx-1 text-slate-300">|</span>
+                                                                   <span>{log.details}</span>
+                                                               </div>
+                                                           ))}
+                                                       </div>
+                                                   </div>
+                                               )}
+
+                                               <div className="flex justify-end gap-3">
+                                                   {/* Actions for OPEN orders */}
+                                                   {type === 'OPEN' && canEdit && !isGhost && (
+                                                        <>
+                                                            <button 
+                                                                onClick={() => handleDeleteOrder(order.id)}
+                                                                className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" /> Excluir
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleEditStart(order)}
+                                                                className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"
+                                                            >
+                                                                <Edit className="w-4 h-4" /> Editar Pedido
+                                                            </button>
+                                                        </>
+                                                   )}
+                                                   {/* Actions for FINISHED orders */}
+                                                   {(type === 'FINISHED' || isGhost) && (
+                                                       <button 
+                                                            onClick={() => downloadExcel(order)}
+                                                            className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm"
+                                                        >
+                                                            <Download className="w-4 h-4" /> Exportar Excel
+                                                        </button>
+                                                   )}
+                                               </div>
+                                           </div>
+                                       )}
+                                   </div>
+                               );
+                           })}
                        </div>
                    );
                })

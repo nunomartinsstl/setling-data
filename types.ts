@@ -70,6 +70,8 @@ export interface Order {
   pickedItems?: PickedItem[]; // Items actually picked in the warehouse
   exportData?: any[]; // Legacy or extra data for exports
   companyId?: string; // Links order to a specific company
+  pep?: string; // Project/Obra Code
+  address?: string; // Delivery/Site Address
 }
 
 export interface StockItem {

@@ -111,10 +111,14 @@ const App: React.FC = () => {
         await StorageService.processBackorders(fetchedStock);
       }
 
-      // 3. Sync Custom Materials (Requires master list)
+      // 3. Reconcile Custom Items
+      // This checks if any "Custom" items in orders now exist in the master list, and links them via SKU
+      await StorageService.reconcileCustomItems(fetchedMaster);
+
+      // 4. Sync Custom Materials (Legacy placeholder logic)
       await StorageService.syncCustomMaterials(fetchedMaster);
 
-      // 4. Fetch Orders (now updated)
+      // 5. Fetch Orders (now updated)
       const fetchedOrders = await StorageService.getOrders();
 
       setOrders(fetchedOrders);

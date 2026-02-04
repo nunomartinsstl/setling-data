@@ -255,6 +255,63 @@ export const StorageService = {
        await set(ref(db, KEYS.MASTER_MATERIALS), materials);
   },
 
+  // Looks for Custom items in orders and matches them with Master List descriptions
+  // If match found, converts Custom item to Standard item (sets SKU)
+  // This allows logic like picked quantity tracking to work correctly across backorders
+  reconcileCustomItems: async (masterList: MasterMaterial[]) => {
+     if (!db || !masterList || masterList.length === 0) return;
+     
+     try {
+         const allOrders = await StorageService.getOrders();
+         const updates: any = {};
+         let hasUpdates = false;
+
+         // Create a map for fast lookup of Master Materials by Description
+         const descToSkuMap = new Map<string, string>();
+         masterList.forEach(m => {
+             descToSkuMap.set(normalizeText(m.description), m.sku);
+         });
+
+         allOrders.forEach(order => {
+             // Only process if order has items
+             if (!order.items) return;
+             
+             let orderChanged = false;
+             const newItems = order.items.map(item => {
+                 // Check if item is custom AND has a description
+                 if (item.isCustom && item.description) {
+                     const matchSku = descToSkuMap.get(normalizeText(item.description));
+                     
+                     if (matchSku) {
+                         // FOUND MATCH! Convert to standard item
+                         orderChanged = true;
+                         return {
+                             ...item,
+                             sku: matchSku,
+                             isCustom: false,
+                             // description: item.description // Keep original description or update? Keep original to avoid confusion
+                         };
+                     }
+                 }
+                 return item;
+             });
+
+             if (orderChanged) {
+                 hasUpdates = true;
+                 updates[`${KEYS.ORDERS}/${order.id}/items`] = newItems;
+             }
+         });
+
+         if (hasUpdates) {
+             await update(ref(db), updates);
+             console.log("Reconciled custom items with master list.");
+         }
+
+     } catch (e) {
+         console.error("Error reconciling custom items:", e);
+     }
+  },
+
   syncCustomMaterials: async (masterList: MasterMaterial[]) => {
       // Placeholder for sync logic
   },
