@@ -1,11 +1,8 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash } from 'lucide-react';
-
-// ... (previous imports and interfaces remain the same)
 
 declare const XLSX: any;
 
@@ -1316,7 +1313,7 @@ TUBO 20MM, 2"
                                 value={dueDate}
                                 min={getMinDate()}
                                 onChange={handleDateChange}
-                                className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.date ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white dark:[color-scheme:dark] ${formErrors.date ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                             />
                         </div>
                     </div>
@@ -1653,7 +1650,7 @@ TUBO 20MM, 2"
         </div>
       )}
 
-      {/* ... List Area (No major changes needed here, relies on same logic) ... */}
+      {/* ... List Area ... */}
       {showList && (
         <div className="space-y-6 animate-fade-in">
            {groupedOrders.length === 0 ? (
@@ -1773,46 +1770,55 @@ TUBO 20MM, 2"
                                                         </table>
                                                    </div>
                                                </div>
-                                               {/* ... Change Logs and Buttons ... */}
                                                {order.changeLog && order.changeLog.length > 0 && (
                                                    <div className="mb-4">
-                                                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2 flex items-center gap-1"><History className="w-3 h-3" /> Histórico de Alterações</p>
-                                                       <div className="space-y-2">
-                                                           {order.changeLog.map((log, idx) => (
-                                                               <div key={idx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-2 rounded border border-slate-200 dark:border-slate-700">
-                                                                   <span className="font-bold text-slate-800 dark:text-slate-200">{new Date(log.date).toLocaleString()}</span>
-                                                                   <span className="mx-1 text-slate-300">|</span>
-                                                                   <span className="text-brand-600 dark:text-brand-400 font-medium">{log.actor}</span>
-                                                                   <span className="mx-1 text-slate-300">|</span>
-                                                                   <span>{log.details}</span>
-                                                               </div>
+                                                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
+                                                           <History className="w-3 h-3" /> Histórico:
+                                                       </p>
+                                                       <ul className="space-y-1 pl-4 list-disc">
+                                                           {order.changeLog.map((log, logIdx) => (
+                                                               <li key={logIdx} className="text-xs text-slate-500 dark:text-slate-400">
+                                                                   <span className="font-semibold">{new Date(log.date).toLocaleDateString()}</span> <span className="text-slate-400">|</span> {log.actor}: {log.details}
+                                                               </li>
                                                            ))}
-                                                       </div>
+                                                       </ul>
                                                    </div>
                                                )}
-                                               <div className="flex justify-end gap-3">
-                                                   {/* OPEN Order Actions */}
-                                                   {type === 'OPEN' && !isGhost && (
+                                               
+                                               {/* Action Buttons */}
+                                               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); downloadExcel(order); }}
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                    >
+                                                        <Download className="w-3 h-3" /> Excel
+                                                    </button>
+                                                    
+                                                    {type === 'OPEN' && canEdit && (
                                                         <>
-                                                            {(userRole === UserRole.WAREHOUSE || userRole === UserRole.ADMIN) && (
-                                                                <button 
-                                                                    onClick={() => handleFinishOrder(order)}
-                                                                    className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-green-200 dark:border-green-800"
-                                                                >
-                                                                    <Check className="w-4 h-4" /> Finalizar Entrega
-                                                                </button>
-                                                            )}
-                                                            {canEdit && (
-                                                                <>
-                                                                    <button onClick={() => handleDeleteOrder(order.id)} className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"><Trash2 className="w-4 h-4" /> Excluir</button>
-                                                                    <button onClick={() => handleEditStart(order)} className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"><Edit className="w-4 h-4" /> Editar Pedido</button>
-                                                                </>
-                                                            )}
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                                                            >
+                                                                <Edit className="w-3 h-3" /> Editar
+                                                            </button>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleFinishOrder(order); }}
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                                                            >
+                                                                <CheckCircle className="w-3 h-3" /> Finalizar
+                                                            </button>
                                                         </>
-                                                   )}
-                                                   {(type === 'FINISHED' || isGhost) && (
-                                                       <button onClick={() => downloadExcel(order)} className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-lg text-sm font-medium flex items-center gap-2 shadow-sm"><Download className="w-4 h-4" /> Exportar Excel</button>
-                                                   )}
+                                                    )}
+
+                                                    {isAdmin && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
+                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" /> Excluir
+                                                        </button>
+                                                    )}
                                                </div>
                                            </div>
                                        )}
@@ -1823,16 +1829,6 @@ TUBO 20MM, 2"
                    );
                })
            )}
-        </div>
-      )}
-
-      {message && (
-        <div className={`fixed bottom-4 right-4 z-50 p-4 rounded-lg shadow-lg flex items-center gap-2 animate-slide-up ${message.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
-            {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5"/>}
-            <span className="font-medium">{message.text}</span>
-            <button onClick={() => setMessage(null)} className="ml-2 p-1 hover:bg-white/20 rounded-full">
-                <X className="w-4 h-4" />
-            </button>
         </div>
       )}
     </div>

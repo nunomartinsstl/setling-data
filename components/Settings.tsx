@@ -84,6 +84,30 @@ const Settings: React.FC = () => {
     }
   };
 
+  // Helper to save immediately when toggling feature flags
+  const toggleStockBehavior = async () => {
+      const newValue = !autoDecrementStock;
+      setAutoDecrementStock(newValue); // Optimistic update
+
+      try {
+          await StorageService.saveSettings({ 
+              emailRecipients: recipients,
+              notificationEmail: recipients.length > 0 ? recipients[0].email : '',
+              companies: companies,
+              adminAccessCode: adminAccessCode, 
+              unitOptions: unitOptions,
+              suppliers: suppliers,
+              categories: categories,
+              autoDecrementStock: newValue // Use the new value
+          });
+          setMessage(`Stock automático ${newValue ? 'ativado' : 'desativado'}.`);
+          setTimeout(() => setMessage(''), 2000);
+      } catch (err) {
+          setAutoDecrementStock(!newValue); // Revert on error
+          setMessage('Erro ao salvar alteração.');
+      }
+  };
+
   const addRecipient = () => {
       setRecipients([...recipients, { email: '', type: 'TO' }]);
   };
@@ -211,7 +235,7 @@ const Settings: React.FC = () => {
                 </p>
             </div>
             <button 
-                onClick={() => setAutoDecrementStock(!autoDecrementStock)}
+                onClick={toggleStockBehavior}
                 className={`p-1 rounded-full transition-colors ${autoDecrementStock ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}
             >
                 {autoDecrementStock ? <ToggleRight className="w-8 h-8"/> : <ToggleLeft className="w-8 h-8"/>}
