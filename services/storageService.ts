@@ -235,42 +235,81 @@ export const StorageService = {
               if (!picked.material || picked.pickedQty <= 0) return;
 
               const pickedSku = picked.material.trim().toUpperCase();
-              const pickedBin = picked.bin ? picked.bin.trim() : null;
+              const pickedBin = picked.bin ? picked.bin.trim().toUpperCase() : null;
+              let qtyToDeduct = picked.pickedQty;
 
-              let targetIndex = -1;
-
-              // Priority 1: Match by SKU and Batch/Bin (if bin provided)
+              // Priority 1: Exact Match by SKU and Batch/Bin (if bin provided)
+              // Only affects specific bin.
               if (pickedBin) {
-                  targetIndex = currentStock.findIndex(s => 
+                  const targetIndex = currentStock.findIndex(s => 
                       s.sku.trim().toUpperCase() === pickedSku && 
-                      (s.batch || '').trim() === pickedBin
+                      (s.batch || '').toString().trim().toUpperCase() === pickedBin
                   );
-              }
 
-              // Priority 2: Fallback to any batch if exact match not found or not requested
-              if (targetIndex === -1) {
-                  // Prefer items with positive quantity first
-                  targetIndex = currentStock.findIndex(s => s.sku.trim().toUpperCase() === pickedSku && s.quantity > 0);
-                  
-                  // If all zero/negative, just take the first one
-                  if (targetIndex === -1) {
-                       targetIndex = currentStock.findIndex(s => s.sku.trim().toUpperCase() === pickedSku);
+                  if (targetIndex !== -1) {
+                      const stockItem = currentStock[targetIndex];
+                      const available = stockItem.quantity;
+                      // Don't go below zero for specific bin requests unless explicit override (safe default is clamp at 0)
+                      const deduction = Math.min(available, qtyToDeduct);
+                      
+                      if (deduction > 0) {
+                          stockItem.quantity -= deduction;
+                          stockItem.lastUpdated = new Date().toISOString();
+                          currentStock[targetIndex] = stockItem;
+                          qtyToDeduct -= deduction;
+                          hasChanges = true;
+                      }
                   }
-              }
+                  // Note: If qtyToDeduct is still > 0 here, it means the specific bin didn't have enough.
+                  // We generally stop here if a specific bin was requested, as it implies physical reality mismatch.
+              } 
+              
+              // Priority 2: Generic Deduction (if bin NOT provided)
+              // This runs if no bin was specified in the picked item (e.g. manual finish without app)
+              else {
+                  // Find all matching stock lines for this SKU that have quantity
+                  // Map to preserve original index
+                  const candidates = currentStock
+                      .map((item, index) => ({ ...item, originalIndex: index }))
+                      .filter(item => item.sku.trim().toUpperCase() === pickedSku && item.quantity > 0);
 
-              if (targetIndex !== -1) {
-                  const stockItem = currentStock[targetIndex];
-                  stockItem.quantity = Math.max(0, stockItem.quantity - picked.pickedQty);
-                  stockItem.lastUpdated = new Date().toISOString();
-                  currentStock[targetIndex] = stockItem; // Update array in place
-                  hasChanges = true;
+                  if (candidates.length > 0) {
+                      // Smart Heuristic: 
+                      // Try to find a single batch that can fulfill the entire order first.
+                      // This prevents fragmentation (taking 1 from Batch A and 1 from Batch B when Batch C has 2).
+                      const perfectMatch = candidates.find(c => c.quantity >= qtyToDeduct);
+
+                      if (perfectMatch) {
+                          const realIndex = perfectMatch.originalIndex;
+                          currentStock[realIndex].quantity -= qtyToDeduct;
+                          currentStock[realIndex].lastUpdated = new Date().toISOString();
+                          qtyToDeduct = 0;
+                          hasChanges = true;
+                      } else {
+                          // Fallback: Split deduction across multiple batches
+                          // Iterate through candidates until demand is met
+                          for (const match of candidates) {
+                              if (qtyToDeduct <= 0) break;
+
+                              const realIndex = match.originalIndex;
+                              const available = currentStock[realIndex].quantity;
+                              const deduction = Math.min(available, qtyToDeduct);
+
+                              currentStock[realIndex].quantity -= deduction;
+                              currentStock[realIndex].lastUpdated = new Date().toISOString();
+                              
+                              qtyToDeduct -= deduction;
+                              hasChanges = true;
+                          }
+                      }
+                  }
               }
           });
 
           // 3. Save back if changes occurred
           if (hasChanges) {
               await set(ref(db, KEYS.STOCK), currentStock);
-              console.log("Stock auto-decremented successfully (position aware).");
+              console.log("Stock auto-decremented successfully.");
           }
 
       } catch (e) {
@@ -546,8 +585,8 @@ export const StorageService = {
                         stockItemFound = stockSkuMap.get((item.sku || '').toString().trim().toUpperCase());
                     }
 
-                    // Check if we found stock and it has quantity > 0
-                    if (stockItemFound && stockItemFound.quantity > 0) {
+                    // Check if we found stock metadata. Even if quantity is 0, we must create a backorder.
+                    if (stockItemFound) {
                         
                         // Prepare the new item
                         // If it was custom but we found a match, convert to standard
@@ -570,6 +609,18 @@ export const StorageService = {
                         itemsToReopen.push(reopenItem);
                         
                         // Mark parent as handled
+                        item.backorderCreated = true;
+                        parentUpdated = true;
+                    } else if (item.isCustom) {
+                        // If it's pure custom and no match found, we still backorder it
+                        const reopenItem: OrderLineItem = {
+                            ...item,
+                            quantity: qtyMissing, 
+                            quantityPicked: 0,
+                            backorderCreated: false, 
+                        };
+                        delete reopenItem.fulfilledInOrderId;
+                        itemsToReopen.push(reopenItem);
                         item.backorderCreated = true;
                         parentUpdated = true;
                     }
@@ -600,7 +651,7 @@ export const StorageService = {
                     changeLog: [{
                         date: new Date().toISOString(),
                         actor: 'SYSTEM',
-                        details: `Gerado automaticamente por entrada de stock.`
+                        details: `Gerado automaticamente por falta de stock.`
                     }],
                     pickedItems: [] // Clear warehouse logs
                 };
