@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, child, update, remove, Database } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, Auth } from 'firebase/auth';
-import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem } from '../types';
+import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem } from '../types';
 
 // Safely access environment variables
 const env = ((import.meta as any).env || {}) as any;
@@ -218,6 +218,65 @@ export const StorageService = {
   replaceStock: async (newStock: StockItem[]) => {
       if (!db) return;
       await set(ref(db, KEYS.STOCK), newStock);
+  },
+
+  // Decrement stock based on picking execution
+  decrementStock: async (pickedItems: PickedItem[]) => {
+      if (!db || !pickedItems || pickedItems.length === 0) return;
+
+      try {
+          // 1. Fetch current stock
+          // Use a fresh copy of the array to modify
+          const currentStock = await StorageService.getStock();
+          let hasChanges = false;
+
+          // 2. Iterate picked items and subtract
+          pickedItems.forEach(picked => {
+              if (!picked.material || picked.pickedQty <= 0) return;
+
+              const pickedSku = picked.material.trim().toUpperCase();
+              const pickedBin = picked.bin ? picked.bin.trim() : null;
+
+              let targetIndex = -1;
+
+              // Priority 1: Match by SKU and Batch/Bin (if bin provided)
+              if (pickedBin) {
+                  targetIndex = currentStock.findIndex(s => 
+                      s.sku.trim().toUpperCase() === pickedSku && 
+                      (s.batch || '').trim() === pickedBin
+                  );
+              }
+
+              // Priority 2: Fallback to any batch if exact match not found or not requested
+              if (targetIndex === -1) {
+                  // Prefer items with positive quantity first
+                  targetIndex = currentStock.findIndex(s => s.sku.trim().toUpperCase() === pickedSku && s.quantity > 0);
+                  
+                  // If all zero/negative, just take the first one
+                  if (targetIndex === -1) {
+                       targetIndex = currentStock.findIndex(s => s.sku.trim().toUpperCase() === pickedSku);
+                  }
+              }
+
+              if (targetIndex !== -1) {
+                  const stockItem = currentStock[targetIndex];
+                  stockItem.quantity = Math.max(0, stockItem.quantity - picked.pickedQty);
+                  stockItem.lastUpdated = new Date().toISOString();
+                  currentStock[targetIndex] = stockItem; // Update array in place
+                  hasChanges = true;
+              }
+          });
+
+          // 3. Save back if changes occurred
+          if (hasChanges) {
+              await set(ref(db, KEYS.STOCK), currentStock);
+              console.log("Stock auto-decremented successfully (position aware).");
+          }
+
+      } catch (e) {
+          console.error("Failed to auto-decrement stock:", e);
+          throw new Error("Erro ao atualizar stock automático.");
+      }
   },
 
   getOrders: async (): Promise<Order[]> => {

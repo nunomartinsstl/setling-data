@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
 import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag } from 'lucide-react';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, Box, ToggleLeft, ToggleRight } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -11,6 +11,9 @@ const Settings: React.FC = () => {
   const [newCompany, setNewCompany] = useState('');
   const [adminAccessCode, setAdminAccessCode] = useState('');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  
+  // Feature Flags
+  const [autoDecrementStock, setAutoDecrementStock] = useState(false);
   
   // Unit Options
   const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
@@ -45,14 +48,12 @@ const Settings: React.FC = () => {
         setUnitOptions(settings.unitOptions);
     }
     setSuppliers(settings.suppliers || []);
+    setAutoDecrementStock(settings.autoDecrementStock || false);
     
     // Load categories or fallback to default if not present yet
     if (settings.categories && settings.categories.length > 0) {
         setCategories(settings.categories);
     } else {
-        // If nothing in DB, we rely on the parent app to have passed default, or we fetch from service default (not imported here to avoid circular dep, we assume admin will save what's there)
-        // For now, let's init empty and if the user wants default they will likely have run the app once which might migrate it. 
-        // Better: Fetch default from service import
         import('../services/storageService').then(mod => {
              if(settings.categories) setCategories(settings.categories);
              else setCategories(mod.DEFAULT_CATEGORIES);
@@ -71,7 +72,8 @@ const Settings: React.FC = () => {
           adminAccessCode: adminAccessCode, 
           unitOptions: unitOptions,
           suppliers: suppliers,
-          categories: categories
+          categories: categories,
+          autoDecrementStock: autoDecrementStock
       });
       setMessage('Configurações salvas com sucesso.');
       setTimeout(() => setMessage(''), 3000);
@@ -193,6 +195,29 @@ const Settings: React.FC = () => {
       <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
         Configurações do Sistema
       </h2>
+
+      {/* FEATURE FLAGS - STOCK */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Box className="w-5 h-5 text-slate-500"/> Comportamento de Stock
+        </h3>
+        
+        <div className="flex items-center justify-between">
+            <div>
+                <p className="text-sm font-bold text-slate-700 dark:text-slate-300">Deduzir Stock Automaticamente</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md">
+                    Ao finalizar um pedido, a quantidade picada será subtraída do stock disponível na base de dados.
+                    Isso evita que o sistema tente reabrir pedidos para materiais que acabaram de ser consumidos.
+                </p>
+            </div>
+            <button 
+                onClick={() => setAutoDecrementStock(!autoDecrementStock)}
+                className={`p-1 rounded-full transition-colors ${autoDecrementStock ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}
+            >
+                {autoDecrementStock ? <ToggleRight className="w-8 h-8"/> : <ToggleLeft className="w-8 h-8"/>}
+            </button>
+        </div>
+      </div>
 
       {/* ADMIN CODE */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">

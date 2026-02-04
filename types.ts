@@ -6,87 +6,19 @@ export enum UserRole {
   VIEWER = 'VIEWER'
 }
 
+export interface User {
+  uid: string;
+  email: string;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  role: UserRole;
+  companyId?: string;
+}
+
 export interface Company {
   id: string;
   name: string;
-}
-
-export interface User {
-  uid?: string; // Firebase Auth ID
-  username: string; // Kept for display (First-Last)
-  email: string;
-  role: UserRole;
-  firstName?: string;
-  lastName?: string;
-  companyId?: string; // Optional for Admins, required for others
-}
-
-export interface Invite {
-  email: string;
-  role: UserRole;
-  used: boolean;
-  dateCreated: string;
-}
-
-// Inner item within an order
-export interface OrderLineItem {
-  sku: string; // Internal ID, but displayed as "Material"
-  description: string;
-  quantity: number;
-  unit?: string; // Unit of Measure (e.g., UN, KG, M)
-  category?: string; // Material Category (e.g., 'CMV - COMANDOS')
-  quantityPicked?: number; // How much was actually fulfilled
-  backorderCreated?: boolean; // Flag to prevent duplicate re-opens
-  isCustom?: boolean; // Flag for manually typed items
-  fulfilledInOrderId?: number; // If this item was fulfilled in a child order (backorder)
-}
-
-export interface ChangeLogEntry {
-  date: string;
-  actor: string;
-  details: string;
-}
-
-export interface PickedItem {
-  material: string;
-  pickedQty: number;
-  bin?: string;
-  // Add other fields from DB if necessary
-}
-
-// The Parent Order Object
-export interface Order {
-  id: string; // UUID for system
-  displayId: number; // Incremental ID (1, 2, 3...)
-  title: string;
-  creator: string;
-  status: 'OPEN' | 'COMPLETED' | 'IN_PROCESS' | 'IN PROCESS';
-  dateCreated: string;
-  dueDate: string; // "Data Levantamento"
-  items: OrderLineItem[];
-  changeLog?: ChangeLogEntry[];
-  reopenCount?: number; // Tracks iterations (_re_1, _re_2)
-  originalOrderId?: string; // Links back to parent if reopened
-  pickedItems?: PickedItem[]; // Items actually picked in the warehouse
-  exportData?: any[]; // Legacy or extra data for exports
-  companyId?: string; // Links order to a specific company
-  pep?: string; // Project/Obra Code
-  address?: string; // Delivery/Site Address
-}
-
-export interface StockItem {
-  sku: string;
-  description: string;
-  quantity: number;
-  batch: string;
-  lastUpdated: string;
-}
-
-// Master list of materials (Catálogo Geral) - distinct from stock
-export interface MasterMaterial {
-  sku: string;
-  description: string;
-  quantity?: number; // Optional for compatibility if mistakenly used
 }
 
 export interface EmailRecipient {
@@ -95,24 +27,77 @@ export interface EmailRecipient {
 }
 
 export interface UnitOption {
-  value: string; // The Abbreviation (UN, KG)
-  description: string; // The full name (Unidade, Kilograma)
+  value: string;
+  description: string;
 }
 
 export interface CategoryOption {
-  code: string; // e.g. 'TUB'
-  name: string; // e.g. 'TUBO'
+  code: string;
+  name: string;
 }
 
-// New Supplier Interface
 export interface Supplier {
-  code: string; // 'Fornecedor' column
-  name: string; // 'Nome' column
-  paymentTerms: string; // 'Dias pagamento' column
-  address: string; // 'Morada' column
+  code: string;
+  name: string;
+  paymentTerms?: string;
+  address?: string;
 }
 
-// New Purchase Order Interface
+export interface StockItem {
+  sku: string;
+  description: string;
+  quantity: number;
+  batch?: string;
+  lastUpdated?: string;
+}
+
+export interface MasterMaterial {
+  sku: string;
+  description: string;
+}
+
+export interface OrderLineItem {
+  sku: string;
+  description: string;
+  quantity: number;
+  unit?: string;
+  category?: string;
+  isCustom?: boolean;
+  quantityPicked?: number;
+  backorderCreated?: boolean;
+  fulfilledInOrderId?: string;
+}
+
+export interface PickedItem {
+  material: string;
+  pickedQty: number;
+  bin?: string;
+}
+
+export interface ChangeLogEntry {
+  date: string;
+  actor: string;
+  details: string;
+}
+
+export interface Order {
+  id: string;
+  displayId?: number;
+  title: string;
+  pep?: string;
+  address?: string;
+  creator: string;
+  status: 'OPEN' | 'IN_PROCESS' | 'IN PROCESS' | 'COMPLETED';
+  dateCreated: string;
+  dueDate: string;
+  items: OrderLineItem[];
+  companyId?: string;
+  changeLog?: ChangeLogEntry[];
+  pickedItems?: PickedItem[];
+  originalOrderId?: string;
+  reopenCount?: number;
+}
+
 export interface PurchaseOrderItem {
   sku: string;
   description: string;
@@ -125,30 +110,29 @@ export interface PurchaseOrderItem {
 
 export interface PurchaseOrder {
   id: string;
-  displayId?: number; // Incremental for POs
+  displayId?: number;
   dateCreated: string;
   supplier: Supplier;
-  pep: string;
+  pep?: string;
   items: PurchaseOrderItem[];
   subTotal: number;
   vatTotal: number;
   grandTotal: number;
   creator: string;
-  status: 'DRAFT' | 'SENT' | 'COMPLETED';
+  status: string;
 }
 
 export interface AppSettings {
-  // Legacy support optional
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
   companies?: Company[];
-  adminAccessCode?: string; // Dynamic admin password
-  unitOptions?: UnitOption[]; // List of available units of measure with descriptions
-  categories?: CategoryOption[]; // List of material categories
-  suppliers?: Supplier[]; // List of imported suppliers
+  adminAccessCode?: string;
+  unitOptions?: UnitOption[]; 
+  categories?: CategoryOption[];
+  suppliers?: Supplier[];
+  autoDecrementStock?: boolean; 
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES';
 
-// Backwards compatibility helper type if needed, though we are migrating fully
 export type OrderItem = Order;

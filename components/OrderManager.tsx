@@ -1,8 +1,11 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash } from 'lucide-react';
+
+// ... (previous imports and interfaces remain the same)
 
 declare const XLSX: any;
 
@@ -70,6 +73,7 @@ const calculateRelevance = (target: string, query: string): number => {
 };
 
 const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [] }) => {
+  // ... (existing state)
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -111,7 +115,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // GROUPING LOGIC
+  // ... (groupedOrders logic)
   const groupedOrders = useMemo(() => {
     const groups: Record<string, OrderGroup> = {};
 
@@ -193,6 +197,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const isAdmin = userRole === UserRole.ADMIN;
 
+  // ... (materialOptions, settings load, persistence)
+  
   const materialOptions = useMemo(() => {
     const optionsMap = new Map<string, string>();
     masterList.forEach(m => optionsMap.set(m.sku, m.description));
@@ -314,7 +320,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   // NEW LOGIC: Calculate "Available Stock" considering other open orders
-  // Reserved = Sum of qty in OTHER active orders (OPEN/IN_PROCESS)
   const getReservedCount = (sku: string, excludeOrderId?: string) => {
       let reserved = 0;
       orders.forEach(order => {
@@ -351,6 +356,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     ).slice(0, 50); 
   };
 
+  // ... (import logic, validation logic, similarity logic, submit logic... unchanged)
+  
   // --- IMPORT LOGIC ---
   const handleImportProcess = () => {
       const parsedItems = ParserService.parseOrderImport(importText);
@@ -383,8 +390,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setImportText('');
       setMessage({ type: 'success', text: `${newRows.length} itens importados com sucesso. Verifique se há itens novos (customizados).` });
   };
-  // --------------------
-
+  
   const validateForm = (): boolean => {
       const errors: number[] = [];
       const duplicateErrors: number[] = [];
@@ -532,8 +538,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       setSimilarityModalOpen(false);
   };
 
-  // -----------------------------
-
   const handleManualNext = () => {
     if (!validateForm()) {
         const unchecked = manualRows.some(r => r.isCustom && !r.similarityChecked);
@@ -625,8 +629,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (oldOrder.title !== newTitle) changes.push(`Título alterado.`);
       if (oldOrder.dueDate !== newDate) changes.push(`Data alterada para ${newDate}.`);
 
-      const oldMap = new Map((oldOrder.items || []).map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
-      const newMap = new Map(newItems.map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
+      const oldMap = new Map<string, number>((oldOrder.items || []).map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
+      const newMap = new Map<string, number>(newItems.map(i => [i.isCustom ? `CUST:${i.description}` : i.sku, i.quantity]));
 
       oldMap.forEach((qty, key) => {
           if (!newMap.has(key)) changes.push(`Removido: ${key.replace('CUST:', '')}`);
@@ -667,6 +671,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const submitOrder = async () => {
+    // ... (existing implementation)
     if (!dueDate) {
         setFormErrors(prev => ({ ...prev, date: true }));
         setMessage({ type: 'error', text: "A data de levantamento é obrigatória." });
@@ -873,7 +878,54 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
      return total;
   };
 
+  const handleFinishOrder = async (order: Order) => {
+      if(!window.confirm("Confirmar a entrega deste pedido? Isso irá marcar como CONCLUÍDO.")) return;
+      
+      setIsProcessing(true);
+      try {
+          // 1. Check settings
+          const settings = await StorageService.getSettings();
+          
+          // 2. If auto-decrement is on, deduct stock based on PICKED items (or requested if no picking logic used yet)
+          if (settings.autoDecrementStock) {
+              const itemsToDeduct = toArray(order.pickedItems);
+              if (itemsToDeduct.length > 0) {
+                  await StorageService.decrementStock(itemsToDeduct);
+              } else {
+                  const virtualPicked = order.items.map(i => ({
+                      material: i.sku,
+                      pickedQty: i.quantity // Full fulfillment assumed if no specific log
+                  }));
+                  await StorageService.decrementStock(virtualPicked);
+              }
+          }
+
+          // 3. Update Status
+          const finishedOrder: Order = {
+              ...order,
+              status: 'COMPLETED',
+              changeLog: [...(order.changeLog || []), {
+                  date: new Date().toISOString(),
+                  actor: currentUsername,
+                  details: 'Pedido marcado como entregue/concluído.'
+              }]
+          };
+          
+          await StorageService.updateOrder(finishedOrder);
+          
+          // Refresh to calc backorders
+          refreshData();
+          setMessage({ type: 'success', text: "Pedido finalizado e stock atualizado." });
+
+      } catch (err: any) {
+          setMessage({ type: 'error', text: err.message });
+      } finally {
+          setIsProcessing(false);
+      }
+  };
+
   const downloadExcel = (order: Order) => {
+      // ... (existing logic)
       const pickedList = toArray(order.pickedItems);
       if (pickedList.length === 0) {
           alert("Este pedido não tem itens processados para exportar.");
@@ -914,6 +966,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   const FinalizeOrderForm = () => (
     <div className="space-y-4 animate-fade-in bg-slate-50 dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+        {/* ... (existing form) ... */}
         <h4 className="font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
             {editingOrderId ? 'Salvar Alterações' : 'Finalizar Pedido'}
         </h4>
@@ -1196,6 +1249,7 @@ TUBO 20MM, 2"
       {/* CREATION/EDIT AREA */}
       {showForm && (
         <div className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100 dark:ring-amber-900' : 'border-brand-200 dark:border-slate-700'}`}>
+          {/* ... (existing form body) ... */}
           {editingOrderId && (
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Edit className="w-5 h-5 text-amber-600 dark:text-amber-400" /> 
@@ -1208,7 +1262,7 @@ TUBO 20MM, 2"
               <FinalizeOrderForm />
           ) : (
             <div>
-                {/* ... existing form ... */}
+                {/* ... existing form inputs ... */}
                 <div className="space-y-3 animate-fade-in">
                     {/* Admin Company Selector */}
                     {isAdmin && (
@@ -1737,10 +1791,23 @@ TUBO 20MM, 2"
                                                    </div>
                                                )}
                                                <div className="flex justify-end gap-3">
-                                                   {type === 'OPEN' && canEdit && !isGhost && (
+                                                   {/* OPEN Order Actions */}
+                                                   {type === 'OPEN' && !isGhost && (
                                                         <>
-                                                            <button onClick={() => handleDeleteOrder(order.id)} className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"><Trash2 className="w-4 h-4" /> Excluir</button>
-                                                            <button onClick={() => handleEditStart(order)} className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"><Edit className="w-4 h-4" /> Editar Pedido</button>
+                                                            {(userRole === UserRole.WAREHOUSE || userRole === UserRole.ADMIN) && (
+                                                                <button 
+                                                                    onClick={() => handleFinishOrder(order)}
+                                                                    className="px-4 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-green-200 dark:border-green-800"
+                                                                >
+                                                                    <Check className="w-4 h-4" /> Finalizar Entrega
+                                                                </button>
+                                                            )}
+                                                            {canEdit && (
+                                                                <>
+                                                                    <button onClick={() => handleDeleteOrder(order.id)} className="px-4 py-2 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg text-sm font-medium flex items-center gap-2"><Trash2 className="w-4 h-4" /> Excluir</button>
+                                                                    <button onClick={() => handleEditStart(order)} className="px-4 py-2 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 hover:bg-amber-200 dark:hover:bg-amber-900/50 rounded-lg text-sm font-medium flex items-center gap-2 border border-amber-200 dark:border-amber-800"><Edit className="w-4 h-4" /> Editar Pedido</button>
+                                                                </>
+                                                            )}
                                                         </>
                                                    )}
                                                    {(type === 'FINISHED' || isGhost) && (
