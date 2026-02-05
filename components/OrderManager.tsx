@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption } from '../types';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash } from 'lucide-react';
@@ -152,10 +152,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             return isRootActive || hasActiveChild;
         });
     } else {
+        // FINISHED VIEW: Show group if the ROOT is completed.
+        // We will hide active children in the render loop.
         result = result.filter(group => {
-            const isRootDone = group.root.status === 'COMPLETED';
-            const allChildrenDone = group.children.every(c => c.status === 'COMPLETED');
-            return isRootDone && allChildrenDone;
+            return group.root.status === 'COMPLETED';
         });
     }
 
@@ -353,8 +353,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     ).slice(0, 50); 
   };
 
-  // ... (import logic, validation logic, similarity logic, submit logic... unchanged)
-  
   // --- IMPORT LOGIC ---
   const handleImportProcess = () => {
       const parsedItems = ParserService.parseOrderImport(importText);
@@ -716,7 +714,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                 status: 'OPEN',
                 dateCreated: new Date().toISOString(),
                 dueDate: dueDate,
-                items: pendingItems.map(i => ({...i, quantityPicked: 0})),
+                items: pendingItems, // Removed explicit quantityPicked: 0
                 companyId: targetCompanyId 
             };
 
@@ -873,52 +871,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         total += getPickedQtyForSku(child, sku);
      });
      return total;
-  };
-
-  const handleFinishOrder = async (order: Order) => {
-      if(!window.confirm("Confirmar a entrega deste pedido? Isso irá marcar como CONCLUÍDO.")) return;
-      
-      setIsProcessing(true);
-      try {
-          // 1. Check settings
-          const settings = await StorageService.getSettings();
-          
-          // 2. If auto-decrement is on, deduct stock based on PICKED items (or requested if no picking logic used yet)
-          if (settings.autoDecrementStock) {
-              const itemsToDeduct = toArray(order.pickedItems);
-              if (itemsToDeduct.length > 0) {
-                  await StorageService.decrementStock(itemsToDeduct);
-              } else {
-                  const virtualPicked = order.items.map(i => ({
-                      material: i.sku,
-                      pickedQty: i.quantity // Full fulfillment assumed if no specific log
-                  }));
-                  await StorageService.decrementStock(virtualPicked);
-              }
-          }
-
-          // 3. Update Status
-          const finishedOrder: Order = {
-              ...order,
-              status: 'COMPLETED',
-              changeLog: [...(order.changeLog || []), {
-                  date: new Date().toISOString(),
-                  actor: currentUsername,
-                  details: 'Pedido marcado como entregue/concluído.'
-              }]
-          };
-          
-          await StorageService.updateOrder(finishedOrder);
-          
-          // Refresh to calc backorders
-          refreshData();
-          setMessage({ type: 'success', text: "Pedido finalizado e stock atualizado." });
-
-      } catch (err: any) {
-          setMessage({ type: 'error', text: err.message });
-      } finally {
-          setIsProcessing(false);
-      }
   };
 
   const downloadExcel = (order: Order) => {
@@ -1665,10 +1617,18 @@ TUBO 20MM, 2"
                // ... existing list rendering ...
                groupedOrders.map((group, groupIdx) => {
                    const allOrdersInGroup = [group.root, ...group.children];
+                   
+                   // Filter displayed orders for Finished view: Hide active children
+                   const displayedOrders = type === 'FINISHED' 
+                        ? allOrdersInGroup.filter(o => o.status === 'COMPLETED')
+                        : allOrdersInGroup;
+
+                   if (displayedOrders.length === 0) return null;
+
                    return (
                        <div key={group.root.id} className="relative group-container space-y-3">
                            {group.children.length > 0 && <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-slate-700 z-0"></div>}
-                           {allOrdersInGroup.map((order, orderIdx) => {
+                           {displayedOrders.map((order, orderIdx) => {
                                const isExpanded = expandedOrderId === order.id;
                                const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
                                const isCompleted = order.status === 'COMPLETED';
@@ -1787,6 +1747,9 @@ TUBO 20MM, 2"
                                                
                                                {/* Action Buttons */}
                                                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
+                                                    
+                                                    {/* REMOVED: handleFinishOrder button logic as per user request */}
+
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); downloadExcel(order); }}
                                                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
@@ -1795,20 +1758,12 @@ TUBO 20MM, 2"
                                                     </button>
                                                     
                                                     {type === 'OPEN' && canEdit && (
-                                                        <>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
-                                                            >
-                                                                <Edit className="w-3 h-3" /> Editar
-                                                            </button>
-                                                            <button 
-                                                                onClick={(e) => { e.stopPropagation(); handleFinishOrder(order); }}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
-                                                            >
-                                                                <CheckCircle className="w-3 h-3" /> Finalizar
-                                                            </button>
-                                                        </>
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
+                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                                                        >
+                                                            <Edit className="w-3 h-3" /> Editar
+                                                        </button>
                                                     )}
 
                                                     {isAdmin && (

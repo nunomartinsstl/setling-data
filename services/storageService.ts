@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, set, get, child, update, remove, Database } from 'firebase/database';
+import { getDatabase, ref, set, get, child, update, remove, runTransaction, Database } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, Auth } from 'firebase/auth';
 import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem } from '../types';
 
@@ -100,7 +100,7 @@ export const DEFAULT_CATEGORIES = [
 // Re-export for compatibility, but prefer using AppSettings
 export const MATERIAL_CATEGORIES = DEFAULT_CATEGORIES;
 
-// Helper to normalize string for matching
+// Helper to normalize string for matching descriptions (keep this for fuzzy description search)
 const normalizeText = (text: string): string => {
     if (!text) return '';
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -187,7 +187,10 @@ export const StorageService = {
   getSettings: async (): Promise<AppSettings> => {
       if (!db) return { emailRecipients: [] };
       const snapshot = await get(child(ref(db), KEYS.SETTINGS));
-      return snapshot.val() || { emailRecipients: [] };
+      const val = snapshot.val() || { emailRecipients: [] };
+      // Enforce permanent stock deduction for all clients reading settings
+      val.autoDecrementStock = true;
+      return val;
   },
 
   getCompanies: async (): Promise<Company[]> => {
@@ -212,6 +215,7 @@ export const StorageService = {
       if (!db) return [];
       const snapshot = await get(child(ref(db), KEYS.STOCK));
       if (!snapshot.exists()) return [];
+      // If it's an object (sparse array), Object.values fixes it. If array, it's fine.
       return Object.values(snapshot.val());
   },
   
@@ -220,94 +224,167 @@ export const StorageService = {
       await set(ref(db, KEYS.STOCK), newStock);
   },
 
-  // Decrement stock based on picking execution
-  // STRICT MODE: Only deduct from specific bin if bin is provided. No cascading.
-  decrementStock: async (pickedItems: PickedItem[]) => {
-      if (!db || !pickedItems || pickedItems.length === 0) return;
+  // ----------------------------------------------------------------
+  // REWRITTEN DECREMENT STOCK LOGIC (INSTRUMENTED)
+  // ----------------------------------------------------------------
+  decrementStock: async (pickedItems: PickedItem[]): Promise<{ success: boolean; details: string[] }> => {
+      // FORCE ARRAY: Firebase might return { "0": {...}, "1": {...} } as an object
+      const itemsToProcess = toArray(pickedItems);
+      
+      console.log("[STOCK-DEBUG] Starting decrement for items:", itemsToProcess);
+
+      if (!db || !itemsToProcess || itemsToProcess.length === 0) {
+          console.warn("[STOCK-DEBUG] Abort: No items or no DB.");
+          return { success: false, details: ["Nenhum item para processar."] };
+      }
 
       try {
-          // 1. Fetch current stock
-          const currentStock = await StorageService.getStock();
-          let hasChanges = false;
+          const stockRef = ref(db, KEYS.STOCK);
+          const logs: string[] = [];
+          
+          const transactionResult = await runTransaction(stockRef, (currentData) => {
+              if (!currentData) {
+                  console.warn("[STOCK-DEBUG] Transaction found NO stock data in DB.");
+                  return currentData;
+              }
 
-          // 2. Iterate picked items
-          pickedItems.forEach(picked => {
-              if (!picked.material || picked.pickedQty <= 0) return;
+              // Iterate through items picked by the warehouse app
+              itemsToProcess.forEach((picked: any, idx: number) => {
+                  // Ensure we are working with strings, but NO trimming/replacing
+                  const pickedSku = String(picked.material || ''); 
+                  const pickedBin = String(picked.bin || '');
+                  const qtyToDeduct = Number(picked.pickedQty);
 
-              // Robust normalization: Trim and Uppercase both sides
-              const pickedSku = picked.material.toString().trim().toUpperCase();
-              const pickedBin = picked.bin ? picked.bin.toString().trim().toUpperCase() : null;
-              
-              let qtyToDeduct = picked.pickedQty;
+                  console.log(`[STOCK-DEBUG] Item #${idx} -> SKU: '${pickedSku}', BIN: '${pickedBin}', QTY: ${qtyToDeduct}`);
 
-              if (pickedBin) {
-                  // SCENARIO A: Strict Bin Match
-                  // We look for the stock item that matches SKU and BATCH/BIN exactly.
-                  // If not found, we do NOT deduct (per user request).
-                  const targetIndex = currentStock.findIndex(s => {
-                      const stockSku = (s.sku || '').toString().trim().toUpperCase();
-                      const stockBatch = (s.batch || '').toString().trim().toUpperCase();
-                      return stockSku === pickedSku && stockBatch === pickedBin;
-                  });
+                  if (qtyToDeduct > 0 && pickedSku) {
+                      let matched = false;
+                      // We must iterate the stock DB structure
+                      for (const key in currentData) {
+                          const stockItem = currentData[key];
+                          if (!stockItem) continue;
 
-                  if (targetIndex !== -1) {
-                      const stockItem = currentStock[targetIndex];
-                      const available = stockItem.quantity;
-                      
-                      // We only deduct what is available in THIS bin. 
-                      const deduction = Math.min(available, qtyToDeduct);
-                      
-                      if (deduction > 0) {
-                          stockItem.quantity -= deduction;
-                          stockItem.lastUpdated = new Date().toISOString();
-                          currentStock[targetIndex] = stockItem;
-                          hasChanges = true;
-                      }
-                  } else {
-                       console.warn(`Stock deduction mismatch: SKU ${pickedSku} not found in Batch ${pickedBin}`);
-                  }
-              } else {
-                  // SCENARIO B: Generic Match (Only if bin NOT provided at all)
-                  // This is for legacy/manual web completions without bin info.
-                  const candidates = currentStock
-                      .map((item, index) => ({ ...item, originalIndex: index }))
-                      .filter(item => (item.sku || '').toString().trim().toUpperCase() === pickedSku && item.quantity > 0);
+                          const stockSku = String(stockItem.sku || '');
+                          const stockBatch = String(stockItem.batch || '');
 
-                  if (candidates.length > 0) {
-                      // Try exact match first
-                      const perfectMatch = candidates.find(c => c.quantity >= qtyToDeduct);
-                      if (perfectMatch) {
-                          const realIndex = perfectMatch.originalIndex;
-                          currentStock[realIndex].quantity -= qtyToDeduct;
-                          currentStock[realIndex].lastUpdated = new Date().toISOString();
-                          hasChanges = true;
-                      } else {
-                          // Cascade across batches (Generic fallback)
-                          for (const match of candidates) {
-                              if (qtyToDeduct <= 0) break;
-                              const realIndex = match.originalIndex;
-                              const available = currentStock[realIndex].quantity;
-                              const deduction = Math.min(available, qtyToDeduct);
-                              currentStock[realIndex].quantity -= deduction;
-                              currentStock[realIndex].lastUpdated = new Date().toISOString();
-                              qtyToDeduct -= deduction;
-                              hasChanges = true;
+                          // EXACT MATCH REQUIRED
+                          const isSkuMatch = stockSku === pickedSku;
+                          // If picked bin is empty/undefined, we require logic to handle it.
+                          // Here we assume strict bin matching if provided.
+                          const isBinMatch = pickedBin ? (stockBatch === pickedBin) : false;
+
+                          if (isSkuMatch && isBinMatch) {
+                              const currentQty = Number(stockItem.quantity) || 0;
+                              
+                              console.log(`[STOCK-DEBUG] MATCH FOUND at Key '${key}'. DB Stock: ${currentQty}. Deducting: ${qtyToDeduct}`);
+
+                              // Deduct
+                              const deduction = Math.min(currentQty, qtyToDeduct);
+                              
+                              if (deduction > 0) {
+                                  stockItem.quantity = currentQty - deduction;
+                                  stockItem.lastUpdated = new Date().toISOString();
+                                  console.log(`[STOCK-DEBUG] NEW DB Stock: ${stockItem.quantity}`);
+                              } else {
+                                  console.warn(`[STOCK-DEBUG] Stock was 0, could not deduct.`);
+                              }
+                              matched = true;
+                              break; // Stop looking for this specific picked line
                           }
                       }
+                      if (!matched) {
+                           console.error(`[STOCK-DEBUG] NO MATCH for SKU: '${pickedSku}' + Bin: '${pickedBin}'`);
+                      }
+                  } else {
+                      console.warn(`[STOCK-DEBUG] Skipped Item #${idx} due to invalid data.`);
                   }
-              }
+              });
+
+              return currentData; // Commit changes
           });
 
-          // 3. Save back if changes occurred
-          if (hasChanges) {
-              await set(ref(db, KEYS.STOCK), currentStock);
-              console.log("Stock auto-decremented successfully (Strict Mode).");
+          if (transactionResult.committed) {
+              console.log("[STOCK-DEBUG] Transaction Committed Successfully.");
+              // Post-process logs for the UI 
+              itemsToProcess.forEach((p: any) => {
+                  if(Number(p.pickedQty) > 0) {
+                      logs.push(`Processado: ${p.material} (${p.pickedQty})`);
+                  }
+              });
+              return { success: true, details: logs };
+          } else {
+              console.error("[STOCK-DEBUG] Transaction Failed/Aborted by Firebase.");
+              return { success: false, details: ["Transação abortada pelo banco de dados."] };
           }
 
-      } catch (e) {
-          console.error("Failed to auto-decrement stock:", e);
-          throw new Error("Erro ao atualizar stock automático.");
+      } catch (e: any) {
+          console.error("[STOCK-DEBUG] Exception in decrementStock:", e);
+          return { success: false, details: [e.message] };
       }
+  },
+  
+  // NEW: Process completed orders automatically on refresh
+  deductStockForCompletedOrders: async (): Promise<number> => {
+    if (!db) return 0;
+    try {
+        const orders = await StorageService.getOrders();
+        // Identify orders that are COMPLETED but not yet processed
+        const unprocessed = orders.filter(o => o.status === 'COMPLETED' && !o.stockProcessed);
+
+        if (unprocessed.length === 0) return 0;
+
+        let processedCount = 0;
+        console.log(`[AUTO-PROCESS] Found ${unprocessed.length} orders to process.`);
+
+        for (const order of unprocessed) {
+            // A. Prepare Items to Deduct
+            let itemsToDeduct = toArray(order.pickedItems);
+            
+            // Fallback: If no picked items log exists (e.g. legacy or external app didn't sync pickedItems properly), 
+            // assume fully picked for Standard items to ensure stock consistency.
+            if (itemsToDeduct.length === 0) {
+                 console.log(`[AUTO-PROCESS] Order ${order.id} has no picked logs. Assuming full pick for standard items.`);
+                 itemsToDeduct = order.items
+                      .filter(i => !i.isCustom && i.sku)
+                      .map(i => ({
+                          material: i.sku,
+                          pickedQty: i.quantity,
+                          bin: ''
+                      }));
+            }
+
+            // B. Deduct Stock
+            if (itemsToDeduct.length > 0) {
+                await StorageService.decrementStock(itemsToDeduct);
+            }
+
+            // C. Mark as Processed and Save
+            order.stockProcessed = true;
+            if(!order.changeLog) order.changeLog = [];
+            order.changeLog.push({
+                date: new Date().toISOString(),
+                actor: 'SYSTEM',
+                details: `Stock debitado automaticamente após finalização externa.`
+            });
+
+            await StorageService.updateOrder(order);
+            processedCount++;
+            console.log(`[AUTO-PROCESS] Order ${order.id} processed.`);
+        }
+
+        return processedCount;
+
+    } catch (e) {
+        console.error("Error in auto-processing completed orders:", e);
+        return 0;
+    }
+  },
+
+  getOrder: async (id: string): Promise<Order | null> => {
+      if (!db) return null;
+      const snapshot = await get(child(ref(db), `${KEYS.ORDERS}/${id}`));
+      if (!snapshot.exists()) return null;
+      return snapshot.val() as Order;
   },
 
   getOrders: async (): Promise<Order[]> => {
@@ -369,8 +446,11 @@ export const StorageService = {
              // Only process if order has items
              if (!order.items) return;
              
+             // Ensure order.items is an array (Firebase safety)
+             const safeItems = toArray(order.items);
+
              let orderChanged = false;
-             const newItems = order.items.map(item => {
+             const newItems = safeItems.map((item: any) => {
                  // Check if item is custom AND has a description
                  if (item.isCustom && item.description) {
                      const matchSku = descToSkuMap.get(normalizeText(item.description));
@@ -502,12 +582,15 @@ export const StorageService = {
         // 1. Get all orders
         const allOrders = await StorageService.getOrders();
         
-        // 2. Map new stock for fast lookup (Case Insensitive for SKU)
+        // 2. Map new stock for fast lookup
         const stockSkuMap = new Map<string, StockItem>();
         const stockDescMap = new Map<string, StockItem>();
         
         newStockList.forEach(s => {
-            if(s.sku) stockSkuMap.set(s.sku.toString().trim().toUpperCase(), s);
+            // EXACT SKU MATCH (Same as decrementStock)
+            if(s.sku) stockSkuMap.set(String(s.sku), s);
+            
+            // Fuzzy match for description is okay/expected
             if(s.description) stockDescMap.set(normalizeText(s.description), s);
         });
 
@@ -545,11 +628,11 @@ export const StorageService = {
                     qtyMissing = item.quantity;
                 } else {
                     // Standard Item: Calculate what was actually picked vs requested
-                    // Use UpperCase for matching
-                    const currentSku = (item.sku || '').toString().trim().toUpperCase();
+                    // EXACT MATCHING for consistency with decrementStock
+                    const currentSku = String(item.sku || '');
                     
                     const totalPickedForSku = pickedLogs
-                        .filter((p: any) => (p.material || '').toString().trim().toUpperCase() === currentSku)
+                        .filter((p: any) => String(p.material || '') === currentSku)
                         .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
 
                     // Calculate how much of that picked amount is already "used" by previous lines in this loop
@@ -573,8 +656,8 @@ export const StorageService = {
                         const descKey = normalizeText(item.description);
                         stockItemFound = stockDescMap.get(descKey);
                     } else {
-                        // Match by SKU (Case Insensitive)
-                        stockItemFound = stockSkuMap.get((item.sku || '').toString().trim().toUpperCase());
+                        // Match by SKU exact
+                        stockItemFound = stockSkuMap.get(String(item.sku || ''));
                     }
 
                     // Check if we found stock metadata. Even if quantity is 0, we must create a backorder.
@@ -591,12 +674,13 @@ export const StorageService = {
                             isCustom: isNowStandard ? false : item.isCustom,
                             
                             quantity: qtyMissing, // Only request missing amount
-                            quantityPicked: 0,
+                            // quantityPicked: 0, // REMOVED: Do not initialize picked quantity for backorder
                             backorderCreated: false, // Reset flag for new order
                         };
 
                         // Fix: Firebase does not support 'undefined'. Delete property explicitly.
                         delete reopenItem.fulfilledInOrderId;
+                        delete reopenItem.quantityPicked; // Explicitly remove to be safe
 
                         itemsToReopen.push(reopenItem);
                         
@@ -608,10 +692,11 @@ export const StorageService = {
                         const reopenItem: OrderLineItem = {
                             ...item,
                             quantity: qtyMissing, 
-                            quantityPicked: 0,
+                            // quantityPicked: 0, // REMOVED
                             backorderCreated: false, 
                         };
                         delete reopenItem.fulfilledInOrderId;
+                        delete reopenItem.quantityPicked; // Explicitly remove
                         itemsToReopen.push(reopenItem);
                         item.backorderCreated = true;
                         parentUpdated = true;
@@ -629,8 +714,11 @@ export const StorageService = {
                 let cleanTitle = order.title.replace(/_re_\d+$/, "").replace(/ \(Reabertura \d+\)$/, "").trim();
                 const newTitle = `${cleanTitle}_re_${nextReopenCount}`;
                 
+                // Remove legacy export data to avoid confusion in integration
+                const { exportData, ...cleanOrder } = order as any;
+
                 const backorder: Order = {
-                    ...order, // Inherit metadata
+                    ...cleanOrder, // Inherit metadata
                     id: Math.random().toString(36).substr(2, 9),
                     displayId: 0, // System will assign if needed
                     status: 'OPEN', 
@@ -640,6 +728,7 @@ export const StorageService = {
                     originalOrderId: order.originalOrderId || order.id,
                     reopenCount: nextReopenCount, // Set count for this iteration
                     title: newTitle,
+                    creator: 'SYSTEM', // Overwrite creator
                     changeLog: [{
                         date: new Date().toISOString(),
                         actor: 'SYSTEM',

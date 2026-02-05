@@ -113,10 +113,22 @@ const App: React.FC = () => {
           }
       }
       
-      // 2. Process Backorders (Force check on refresh)
+      // 2. AUTO-PROCESS COMPLETED ORDERS (Force check on refresh)
       // Only execute for roles that can potentially affect stock or manage orders, though technically safe for all
       if (user && (user.role === UserRole.ADMIN || user.role === UserRole.WAREHOUSE || user.role === UserRole.MANAGEMENT)) {
-        await StorageService.processBackorders(fetchedStock);
+         // Step A: Deduct stock for any new completed orders
+         await StorageService.deductStockForCompletedOrders();
+         
+         // Step B: Re-read stock (because step A might have changed it)
+         const updatedStock = await StorageService.getStock();
+         
+         // Step C: Check for Backorders (using updated stock)
+         await StorageService.processBackorders(updatedStock);
+         
+         // Update local stock state
+         setStock(updatedStock);
+      } else {
+         setStock(fetchedStock);
       }
 
       // 3. Reconcile Custom Items
@@ -130,7 +142,6 @@ const App: React.FC = () => {
       const fetchedOrders = await StorageService.getOrders();
 
       setOrders(fetchedOrders);
-      setStock(fetchedStock);
       setMasterList(fetchedMaster);
     } catch (error) {
       console.error("Failed to fetch data", error);

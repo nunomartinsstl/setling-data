@@ -54,6 +54,7 @@ export interface StockItem {
 export interface MasterMaterial {
   sku: string;
   description: string;
+  quantity: number;
 }
 
 export interface OrderLineItem {
@@ -96,6 +97,7 @@ export interface Order {
   pickedItems?: PickedItem[];
   originalOrderId?: string;
   reopenCount?: number;
+  stockProcessed?: boolean; // New flag to track if stock has been deducted
 }
 
 export interface PurchaseOrderItem {

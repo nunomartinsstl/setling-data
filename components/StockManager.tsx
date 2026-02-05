@@ -159,7 +159,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
              const sku = row['Material']?.toString().trim();
              const description = row['Texto breve material']?.toString().trim();
              if (sku && description) {
-                 newMaster.push({ sku, description });
+                 newMaster.push({ sku, description, quantity: 0 });
              }
         });
         
