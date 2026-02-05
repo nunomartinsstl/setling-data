@@ -114,6 +114,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
 
+  // Validation Flags
+  const hasUnverifiedItems = rows.some(r => !r.similarityChecked || !r.description);
+  const hasInvalidPrices = rows.some(r => Number(r.unitPrice) <= 0);
+  const isFormValid = !!selectedSupplier && !hasUnverifiedItems && rows.length > 0;
+
   // Handlers
   const handleSupplierSelect = (s: Supplier) => {
       setSelectedSupplier(s);
@@ -442,7 +447,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       if (!selectedSupplier) return alert("Selecione um fornecedor.");
       
       // Check validation BEFORE exporting
-      if (rows.some(r => !r.description || !r.similarityChecked)) {
+      if (hasUnverifiedItems) {
         return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
       }
       
@@ -469,8 +474,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
   const handleSave = async () => {
       if (!selectedSupplier) return alert("Selecione fornecedor.");
-      if (rows.some(r => !r.description || !r.similarityChecked)) return alert("Verifique todos os itens.");
-      if (rows.some(r => Number(r.unitPrice) <= 0)) return alert("Preços devem ser maior que 0.");
+      if (hasUnverifiedItems) return alert("Verifique todos os itens (clique na lupa).");
+      if (hasInvalidPrices) return alert("Preços devem ser maior que 0.");
 
       if (!window.confirm("Salvar pedido?")) return;
 
@@ -746,7 +751,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       const isExpanded = idx === expandedRow;
 
                       return (
-                          <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'}`}>
+                          <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'} ${!row.similarityChecked && !isExpanded ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : ''}`}>
                               {/* Header Row (Summary) */}
                               <div 
                                 onClick={() => setExpandedRow(isExpanded ? -1 : idx)}
@@ -759,6 +764,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             <span className="font-bold">{row.quantity}x</span>
                                             <span className="truncate">{row.description || '(Sem descrição)'}</span>
                                             {row.isCustom && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">Novo</span>}
+                                            {!row.similarityChecked && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
                                         </div>
                                     )}
                                 </div>
@@ -780,7 +786,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                 type="text" 
                                                 value={row.description} 
                                                 onChange={e => updateRow(idx, 'description', e.target.value)}
-                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!row.similarityChecked ? 'border-amber-400' : 'border-slate-300 dark:border-slate-600'}`}
+                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!row.similarityChecked ? 'border-amber-400 ring-1 ring-amber-200' : 'border-slate-300 dark:border-slate-600'}`}
                                             />
                                             {row.showSuggestions && matches.length > 0 && (
                                                 <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border shadow-lg mt-1 rounded">
@@ -795,9 +801,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             <div className="flex justify-between items-center mt-1">
                                                 <div className="text-xs text-slate-400 font-mono">{row.sku || '-'}</div>
                                                 {!row.similarityChecked ? (
-                                                    <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded font-bold flex items-center gap-1">
-                                                        <Search className="w-3 h-3"/> Verificar
-                                                    </button>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] text-amber-600 animate-pulse font-bold">Verificação Pendente</span>
+                                                        <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded font-bold flex items-center gap-1 hover:bg-amber-600 shadow-sm">
+                                                            <Search className="w-3 h-3"/> Verificar
+                                                        </button>
+                                                    </div>
                                                 ) : (
                                                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1"><Check className="w-3 h-3"/> OK</span>
                                                 )}
@@ -845,10 +854,40 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                           <div className="text-xl font-bold">{grandTotal.toFixed(2)} €</div>
                       </div>
                   </div>
-                  <div className="flex gap-2 w-full md:w-auto">
-                      <button onClick={() => handlePrintOrder()} className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded hover:bg-blue-50 flex items-center justify-center gap-2"><FileText className="w-4 h-4"/> PDF</button>
-                      <button onClick={generateExcel} className="flex-1 px-4 py-2 border border-green-600 text-green-600 rounded hover:bg-green-50 flex items-center justify-center gap-2"><FileSpreadsheet className="w-4 h-4"/> Excel</button>
-                      <button onClick={handleSave} className="flex-1 px-6 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center justify-center gap-2"><Save className="w-4 h-4"/> Salvar</button>
+                  
+                  <div className="flex items-center gap-4 w-full md:w-auto">
+                      {hasUnverifiedItems && (
+                          <div className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                              <AlertCircle className="w-4 h-4" />
+                              Itens pendentes de verificação
+                          </div>
+                      )}
+                      
+                      <div className="flex gap-2 flex-1">
+                          <button 
+                            onClick={() => handlePrintOrder()} 
+                            disabled={!isFormValid}
+                            className={`flex-1 px-4 py-2 border rounded flex items-center justify-center gap-2 transition-colors ${!isFormValid ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50 dark:border-slate-700 dark:bg-slate-800' : 'border-blue-600 text-blue-600 hover:bg-blue-50'}`}
+                          >
+                              <FileText className="w-4 h-4"/> PDF
+                          </button>
+                          
+                          <button 
+                            onClick={generateExcel} 
+                            disabled={!isFormValid}
+                            className={`flex-1 px-4 py-2 border rounded flex items-center justify-center gap-2 transition-colors ${!isFormValid ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50 dark:border-slate-700 dark:bg-slate-800' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
+                          >
+                              <FileSpreadsheet className="w-4 h-4"/> Excel
+                          </button>
+                          
+                          <button 
+                            onClick={handleSave} 
+                            disabled={!isFormValid}
+                            className={`flex-1 px-6 py-2 rounded flex items-center justify-center gap-2 font-bold transition-colors ${!isFormValid ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                          >
+                              <Save className="w-4 h-4"/> Salvar
+                          </button>
+                      </div>
                   </div>
               </div>
           </div>

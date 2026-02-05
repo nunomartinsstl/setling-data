@@ -740,6 +740,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         return item.quantity > availableStock;
                     });
 
+                    // New Check: Stock Exhaustion (Remaining Stock == 0)
+                    const exhaustingStockItems = newOrder.items.filter(item => {
+                        if (item.isCustom) return false;
+                        const currentStock = getStockCount(item.sku);
+                        const reservedStock = getReservedCount(item.sku, newOrder.id); 
+                        const availableStock = Math.max(0, currentStock - reservedStock);
+                        // Alert if we use up ALL available stock exactly
+                        return item.quantity === availableStock && item.quantity > 0;
+                    });
+
                     const newMaterialItems = newOrder.items.filter(item => item.isCustom);
 
                     // Determine time of day
@@ -749,13 +759,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                     else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
 
                     let body = `${greeting},\n\n`;
-                    body += `O utilizador ${currentUsername} colocou o pedido ${orderTitle} em que estão em falta as seguintes referências:\n\n`;
+                    body += `O utilizador ${currentUsername} colocou o pedido ${orderTitle} que requer atenção:\n\n`;
                     
                     let hasAlerts = false;
 
                     if (missingStockItems.length > 0) {
                         hasAlerts = true;
-                        body += `Falta de stock (Total ou Parcial):\n`;
+                        body += `-------------------------------------------\n`;
+                        body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
+                        body += `-------------------------------------------\n`;
                         missingStockItems.forEach(item => {
                             const currentStock = getStockCount(item.sku);
                             const reservedStock = getReservedCount(item.sku);
@@ -770,9 +782,22 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         });
                     }
 
+                    if (exhaustingStockItems.length > 0) {
+                        hasAlerts = true;
+                        body += `-------------------------------------------\n`;
+                        body += `ℹ️  AVISO: STOCK FICARÁ A ZERO (Esgotamento)\n`;
+                        body += `-------------------------------------------\n`;
+                        exhaustingStockItems.forEach(item => {
+                             body += `Referência: ${item.sku} - ${item.description}\n`;
+                             body += `Qtd Pedida: ${item.quantity}\n\n`;
+                        });
+                    }
+
                     if (newMaterialItems.length > 0) {
                         hasAlerts = true;
-                        body += `Necessário criar código:\n`;
+                        body += `-------------------------------------------\n`;
+                        body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
+                        body += `-------------------------------------------\n`;
                         newMaterialItems.forEach(item => {
                             const uom = unitOptions.find(u => u.value === item.unit);
                             const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
@@ -809,11 +834,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                         window.location.href = mailtoLink;
                         setMessage({ type: 'success', text: `Pedido criado. E-mail de alerta aberto.` });
                     } else {
-                         const subject = `Novo Pedido: ${orderTitle} (${currentUsername})`;
-                         let simpleBody = `${greeting},\n\nNovo pedido criado por ${currentUsername}.\nObra: ${orderTitle}\nData: ${new Date(dueDate).toLocaleDateString()}\n\nTodos os itens possuem stock disponível.\n\nCumprimentos`;
-                         const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(simpleBody)}`;
-                         window.location.href = mailtoLink;
-                         setMessage({ type: 'success', text: `Pedido criado com sucesso.` });
+                         // DO NOT SEND EMAIL IF EVERYTHING IS FINE
+                         // Just show success message in UI
+                         setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
                     }
 
                 } else {
