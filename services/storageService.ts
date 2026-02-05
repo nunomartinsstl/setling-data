@@ -221,83 +221,75 @@ export const StorageService = {
   },
 
   // Decrement stock based on picking execution
+  // STRICT MODE: Only deduct from specific bin if bin is provided. No cascading.
   decrementStock: async (pickedItems: PickedItem[]) => {
       if (!db || !pickedItems || pickedItems.length === 0) return;
 
       try {
           // 1. Fetch current stock
-          // Use a fresh copy of the array to modify
           const currentStock = await StorageService.getStock();
           let hasChanges = false;
 
-          // 2. Iterate picked items and subtract
+          // 2. Iterate picked items
           pickedItems.forEach(picked => {
               if (!picked.material || picked.pickedQty <= 0) return;
 
-              const pickedSku = picked.material.trim().toUpperCase();
-              const pickedBin = picked.bin ? picked.bin.trim().toUpperCase() : null;
+              // Robust normalization: Trim and Uppercase both sides
+              const pickedSku = picked.material.toString().trim().toUpperCase();
+              const pickedBin = picked.bin ? picked.bin.toString().trim().toUpperCase() : null;
+              
               let qtyToDeduct = picked.pickedQty;
 
-              // Priority 1: Exact Match by SKU and Batch/Bin (if bin provided)
-              // Only affects specific bin.
               if (pickedBin) {
-                  const targetIndex = currentStock.findIndex(s => 
-                      s.sku.trim().toUpperCase() === pickedSku && 
-                      (s.batch || '').toString().trim().toUpperCase() === pickedBin
-                  );
+                  // SCENARIO A: Strict Bin Match
+                  // We look for the stock item that matches SKU and BATCH/BIN exactly.
+                  // If not found, we do NOT deduct (per user request).
+                  const targetIndex = currentStock.findIndex(s => {
+                      const stockSku = (s.sku || '').toString().trim().toUpperCase();
+                      const stockBatch = (s.batch || '').toString().trim().toUpperCase();
+                      return stockSku === pickedSku && stockBatch === pickedBin;
+                  });
 
                   if (targetIndex !== -1) {
                       const stockItem = currentStock[targetIndex];
                       const available = stockItem.quantity;
-                      // Don't go below zero for specific bin requests unless explicit override (safe default is clamp at 0)
+                      
+                      // We only deduct what is available in THIS bin. 
                       const deduction = Math.min(available, qtyToDeduct);
                       
                       if (deduction > 0) {
                           stockItem.quantity -= deduction;
                           stockItem.lastUpdated = new Date().toISOString();
                           currentStock[targetIndex] = stockItem;
-                          qtyToDeduct -= deduction;
                           hasChanges = true;
                       }
+                  } else {
+                       console.warn(`Stock deduction mismatch: SKU ${pickedSku} not found in Batch ${pickedBin}`);
                   }
-                  // Note: If qtyToDeduct is still > 0 here, it means the specific bin didn't have enough.
-                  // We generally stop here if a specific bin was requested, as it implies physical reality mismatch.
-              } 
-              
-              // Priority 2: Generic Deduction (if bin NOT provided)
-              // This runs if no bin was specified in the picked item (e.g. manual finish without app)
-              else {
-                  // Find all matching stock lines for this SKU that have quantity
-                  // Map to preserve original index
+              } else {
+                  // SCENARIO B: Generic Match (Only if bin NOT provided at all)
+                  // This is for legacy/manual web completions without bin info.
                   const candidates = currentStock
                       .map((item, index) => ({ ...item, originalIndex: index }))
-                      .filter(item => item.sku.trim().toUpperCase() === pickedSku && item.quantity > 0);
+                      .filter(item => (item.sku || '').toString().trim().toUpperCase() === pickedSku && item.quantity > 0);
 
                   if (candidates.length > 0) {
-                      // Smart Heuristic: 
-                      // Try to find a single batch that can fulfill the entire order first.
-                      // This prevents fragmentation (taking 1 from Batch A and 1 from Batch B when Batch C has 2).
+                      // Try exact match first
                       const perfectMatch = candidates.find(c => c.quantity >= qtyToDeduct);
-
                       if (perfectMatch) {
                           const realIndex = perfectMatch.originalIndex;
                           currentStock[realIndex].quantity -= qtyToDeduct;
                           currentStock[realIndex].lastUpdated = new Date().toISOString();
-                          qtyToDeduct = 0;
                           hasChanges = true;
                       } else {
-                          // Fallback: Split deduction across multiple batches
-                          // Iterate through candidates until demand is met
+                          // Cascade across batches (Generic fallback)
                           for (const match of candidates) {
                               if (qtyToDeduct <= 0) break;
-
                               const realIndex = match.originalIndex;
                               const available = currentStock[realIndex].quantity;
                               const deduction = Math.min(available, qtyToDeduct);
-
                               currentStock[realIndex].quantity -= deduction;
                               currentStock[realIndex].lastUpdated = new Date().toISOString();
-                              
                               qtyToDeduct -= deduction;
                               hasChanges = true;
                           }
@@ -309,7 +301,7 @@ export const StorageService = {
           // 3. Save back if changes occurred
           if (hasChanges) {
               await set(ref(db, KEYS.STOCK), currentStock);
-              console.log("Stock auto-decremented successfully.");
+              console.log("Stock auto-decremented successfully (Strict Mode).");
           }
 
       } catch (e) {
