@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Plataforma de Gestão</title>
+    <title>Setling Pedidos</title>
     
     <!-- PWA / Mobile Capable Settings -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="theme-color" content="#0277bd">
-    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB4PSI1NiIgeT0iODYiIHdpZHRoPSI0MDAiIGhlaWdodD0iMzQwIiByeD0iNjAiIGZpbGw9IiMwMjc3YmQiLz48dGV4dCB4PSIyNTYiIHk9IjMwMCIgZm9udC1mYW1pbHk9InNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjUwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjRTFGNUZFIj5QbGF0YWZvcm1hPC90ZXh0Pjx0ZXh0IHg9IjI1NiIgeT0iMzYwIiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZm9udC13ZWlnaHQ9ImJvbGQiIGZvbnQtc2l6ZT0iNTAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZpbGw9IiNFMUY1RkUiPmRlIEdlc3TDo288L3RleHQ+PGcgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTE2LIDE1MCkgc2NhbGUoMi42KSI+PHBhdGggZmlsbD0ibm9uZSIgc3Ryb2tlPSIjRTFGNUZFIiBzdHJva2Utd2lkdGg9IjQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgZD0iTTI1IDAgaDU1IHY0MCBoLTU1IHogTTM1IDEyIGgzNSBNMzUgMjIgaDM1IE0zNSAzMiBoMjAiLz48L2c+PC9zdmc+">
+    <meta name="theme-color" content="#2563eb">
+    <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgZmlsbD0iIzI1NjNlYiIgcng9IjEwMCIvPjxwYXRoIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0MCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBkPSJNMTYwIDE1NmgyMDBNMTYwIDI1NmgyMDBNMTYwIDM1NmgyMDBNMTEwIDE1NmguMDFNMTEwIDI1NmguMDFNMTEwIDM1NmguMDEiLz48L3N2Zz4=">
 
     <!-- We keep Tailwind via CDN for simplicity in this setup -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -63,14 +63,5 @@
   <body class="bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 transition-colors duration-200">
     <div id="root" class="h-full"></div>
     <script type="module" src="/index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then(reg => console.log('SW registered'))
-            .catch(err => console.log('SW failed', err));
-        });
-      }
-    </script>
   </body>
 </html>

@@ -113,7 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                     alt="Setling" 
                     className={logoClasses}
                 />
-                <p className="text-xs text-slate-400 font-medium group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors pl-1">Plataforma de Gestão</p>
+                <p className="text-xs text-slate-400 font-medium group-hover:text-slate-500 dark:group-hover:text-slate-300 transition-colors pl-1">Gestão de Pedidos</p>
             </button>
         </div>
 
