@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Order, StockItem, UserRole, ViewState } from '../types';
-import { ShoppingCart, CheckCircle, Activity, PlusCircle, ShoppingBag } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Activity, PlusCircle, ShoppingBag, ArrowDownCircle, AlertTriangle, Search } from 'lucide-react';
 
 interface DashboardProps {
   orders: Order[];
@@ -27,6 +27,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
 
   const hasInProcess = stats.inProcessCount > 0;
   const canCreate = userRole === UserRole.ADMIN || userRole === UserRole.MANAGEMENT;
+  const isLogisticsOrAdmin = userRole === UserRole.ADMIN || userRole === UserRole.WAREHOUSE;
 
   const StatCard = ({ title, value, icon: Icon, color, onClick, children }: any) => (
     <div 
@@ -71,6 +72,35 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
         </div>
       )}
       
+      {/* Logistics & Admin Quick Access */}
+      {isLogisticsOrAdmin && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <button 
+                onClick={() => onNavigate('RECEIPTS')}
+                className="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-blue-700 dark:text-blue-300"
+              >
+                  <ArrowDownCircle className="w-6 h-6" />
+                  <span className="font-semibold">Entradas</span>
+              </button>
+              
+              <button 
+                onClick={() => onNavigate('SHORTAGES')}
+                className="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-red-700 dark:text-red-300"
+              >
+                  <AlertTriangle className="w-6 h-6" />
+                  <span className="font-semibold">Relatório de Faltas</span>
+              </button>
+
+              <button 
+                onClick={() => onNavigate('QUERY')}
+                className="bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-slate-700 dark:text-slate-300"
+              >
+                  <Search className="w-6 h-6" />
+                  <span className="font-semibold">Busca Geral</span>
+              </button>
+          </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatCard 
             title="Pedidos Abertos" 

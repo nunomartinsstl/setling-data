@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, set, get, child, update, remove, runTransaction, Database } from 'firebase/database';
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, Auth } from 'firebase/auth';
-import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem } from '../types';
+import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem, Receipt } from '../types';
 
 // Safely access environment variables
 const env = ((import.meta as any).env || {}) as any;
@@ -47,7 +47,8 @@ const KEYS = {
   MASTER_MATERIALS: 'nexus_master',
   SETTINGS: 'nexus_settings',
   PURCHASE_ORDERS: 'nexus_purchase_orders', // Separate nexus for purchase orders
-  INVITES: 'nexus_invites'
+  INVITES: 'nexus_invites',
+  RECEIPTS: 'nexus_receipts'
 };
 
 export const DEFAULT_CATEGORIES = [
@@ -575,6 +576,20 @@ export const StorageService = {
   deletePurchaseOrder: async (id: string) => {
       if (!db) return;
       await remove(ref(db, `${KEYS.PURCHASE_ORDERS}/${id}`));
+  },
+
+  // RECEIPTS
+  getReceipts: async (): Promise<Receipt[]> => {
+      if (!db) return [];
+      try {
+          const snapshot = await get(child(ref(db), KEYS.RECEIPTS));
+          if (!snapshot.exists()) return [];
+          const val = snapshot.val();
+          return Array.isArray(val) ? val : Object.values(val);
+      } catch (e) {
+          console.error("Error fetching receipts:", e);
+          return [];
+      }
   },
 
   processBackorders: async (newStockList: StockItem[]) => {

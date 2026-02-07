@@ -1,6 +1,6 @@
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle, ArrowDownCircle } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -203,6 +203,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 label="Stock e Materiais" 
                 isActive={currentView === 'STOCK'} 
                 onClick={() => handleNavClick('STOCK')} 
+              />
+
+              <NavItem 
+                view="RECEIPTS" 
+                icon={ArrowDownCircle} 
+                label="Entradas" 
+                isActive={currentView === 'RECEIPTS'} 
+                onClick={() => handleNavClick('RECEIPTS')} 
               />
 
               {(isAdmin || isWarehouse) && (

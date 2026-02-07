@@ -124,6 +124,22 @@ export interface PurchaseOrder {
   status: string;
 }
 
+export interface ReceiptItem {
+  id: string;
+  material: string;
+  qty: number;
+  bin?: string;
+}
+
+export interface Receipt {
+  id: string;
+  date: string;
+  poNumber: string;
+  userId: string;
+  documentImage?: string;
+  items: ReceiptItem[];
+}
+
 export interface AppSettings {
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
@@ -135,6 +151,6 @@ export interface AppSettings {
   autoDecrementStock?: boolean; 
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS';
 
 export type OrderItem = Order;

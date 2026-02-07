@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption } from './types';
+import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption, Receipt } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -10,6 +10,7 @@ import Settings from './components/Settings';
 import UsersManager from './components/UsersManager';
 import PurchaseOrderManager from './components/PurchaseOrderManager';
 import ShortagesReport from './components/ShortagesReport';
+import ReceiptsManager from './components/ReceiptsManager';
 import { StorageService, DEFAULT_CATEGORIES } from './services/storageService';
 
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
@@ -23,6 +24,7 @@ const App: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stock, setStock] = useState<StockItem[]>([]);
   const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]); // Store companies
   const [categories, setCategories] = useState<CategoryOption[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(false);
@@ -78,14 +80,17 @@ const App: React.FC = () => {
   const refreshData = async () => {
     try {
       // 1. Fetch current data
-      const [fetchedStock, fetchedMaster, fetchedCompanies, fetchedSettings] = await Promise.all([
+      const [fetchedStock, fetchedMaster, fetchedCompanies, fetchedSettings, fetchedReceipts] = await Promise.all([
         StorageService.getStock(),
         StorageService.getMasterMaterials(),
         StorageService.getCompanies(),
-        StorageService.getSettings()
+        StorageService.getSettings(),
+        StorageService.getReceipts()
       ]);
       
       setCompanies(fetchedCompanies);
+      setReceipts(fetchedReceipts);
+      
       if (fetchedSettings.categories && fetchedSettings.categories.length > 0) {
           setCategories(fetchedSettings.categories);
       } else {
@@ -167,6 +172,7 @@ const App: React.FC = () => {
     setOrders([]);
     setStock([]);
     setMasterList([]);
+    setReceipts([]);
     setLogoUrl(LOGO_AVAC); // Reset
   };
 
@@ -257,6 +263,13 @@ const App: React.FC = () => {
             masterList={masterList}
             userRole={user.role} 
             refreshData={refreshData} 
+          />
+        );
+      case 'RECEIPTS':
+        return (
+          <ReceiptsManager 
+            receipts={receipts}
+            masterList={masterList}
           />
         );
       case 'SHORTAGES':
