@@ -777,7 +777,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
                             body += `Referência: ${item.sku}\n`;
                             body += `Descrição: ${item.description}\n`;
-                            body += `Stock Físico: ${currentStock} | Reservado: ${reservedStock} | Disponível: ${availableStock}\n`;
+                            body += `Qtd Pedida: ${item.quantity}\n`;
+                            body += `Stock Físico: ${currentStock} | Cativo: ${reservedStock} | Disponível: ${availableStock}\n`;
                             body += `Necessário encomendar: ${missingQty}\n\n`;
                         });
                     }

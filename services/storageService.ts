@@ -107,6 +107,21 @@ const normalizeText = (text: string): string => {
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 };
 
+// Helper to calculate business days
+const addBusinessDays = (startDate: Date, days: number): Date => {
+    const result = new Date(startDate);
+    let count = 0;
+    while (count < days) {
+        result.setDate(result.getDate() + 1);
+        const day = result.getDay();
+        // 0 is Sunday, 6 is Saturday
+        if (day !== 0 && day !== 6) {
+            count++;
+        }
+    }
+    return result;
+};
+
 // Safe array helper for Firebase data
 const toArray = (data: any) => {
   if (!data) return [];
@@ -675,8 +690,9 @@ export const StorageService = {
                         stockItemFound = stockSkuMap.get(String(item.sku || ''));
                     }
 
-                    // Check if we found stock metadata. Even if quantity is 0, we must create a backorder.
-                    if (stockItemFound) {
+                    // Check if we found stock metadata. 
+                    // CRITICAL UPDATE: Only create backorder if we have positive stock
+                    if (stockItemFound && stockItemFound.quantity > 0) {
                         
                         // Prepare the new item
                         // If it was custom but we found a match, convert to standard
@@ -703,11 +719,11 @@ export const StorageService = {
                         item.backorderCreated = true;
                         parentUpdated = true;
                     } else if (item.isCustom) {
-                        // If it's pure custom and no match found, we still backorder it
+                        // If it's pure custom and no match found, we still backorder it immediately
+                        // because we can't track its stock level anyway
                         const reopenItem: OrderLineItem = {
                             ...item,
                             quantity: qtyMissing, 
-                            // quantityPicked: 0, // REMOVED
                             backorderCreated: false, 
                         };
                         delete reopenItem.fulfilledInOrderId;
@@ -738,7 +754,7 @@ export const StorageService = {
                     displayId: 0, // System will assign if needed
                     status: 'OPEN', 
                     dateCreated: new Date().toISOString(),
-                    dueDate: order.dueDate, // Keep priority
+                    dueDate: addBusinessDays(new Date(), 3).toISOString().split('T')[0], // 3 Business Days from now
                     items: itemsToReopen,
                     originalOrderId: order.originalOrderId || order.id,
                     reopenCount: nextReopenCount, // Set count for this iteration
