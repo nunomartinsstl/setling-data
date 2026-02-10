@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Receipt, MasterMaterial } from '../types';
+import { Receipt, MasterMaterial, ReceiptItem } from '../types';
 import { Search, Download, ArrowDownCircle, X, Image as ImageIcon, Calendar, ChevronDown, ChevronUp, User, Package } from 'lucide-react';
 
 declare const XLSX: any;
@@ -33,7 +33,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
         if (r.poNumber && r.poNumber.toLowerCase().includes(q)) return true;
         
         // Match Items data
-        const items = r.items ? (Array.isArray(r.items) ? r.items : Object.values(r.items)) : [];
+        const items: ReceiptItem[] = r.items ? (Array.isArray(r.items) ? r.items : Object.values(r.items as any)) : [];
         return items.some(item => 
             item.material.toLowerCase().includes(q) || 
             getDescription(item.material).toLowerCase().includes(q) ||
@@ -56,7 +56,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
     const flatData: any[] = [];
 
     filteredReceipts.forEach(receipt => {
-        const items = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items)) : [];
+        const items: ReceiptItem[] = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items as any)) : [];
         items.forEach(item => {
             flatData.push({
                 "Centro": "1700",
@@ -151,7 +151,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
             ) : (
                 filteredReceipts.map((receipt) => {
                     const isExpanded = expandedId === receipt.id;
-                    const items = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items)) : [];
+                    const items: ReceiptItem[] = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items as any)) : [];
                     const itemCount = items.length;
 
                     return (

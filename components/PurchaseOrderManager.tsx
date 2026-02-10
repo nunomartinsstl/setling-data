@@ -115,9 +115,18 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const grandTotal = subTotal + vatTotal;
 
   // Validation Flags
-  const hasUnverifiedItems = rows.some(r => !r.similarityChecked || !r.description);
-  const hasInvalidPrices = rows.some(r => Number(r.unitPrice) <= 0);
-  const isFormValid = !!selectedSupplier && !hasUnverifiedItems && rows.length > 0;
+  const isFormValid = useMemo(() => {
+      if (!selectedSupplier) return false;
+      if (!pep || pep.trim().length === 0) return false;
+      if (rows.length === 0) return false;
+      
+      return rows.every(r => 
+          r.description && r.description.trim().length > 0 &&
+          r.similarityChecked &&
+          Number(r.quantity) > 0 &&
+          Number(r.unitPrice) > 0
+      );
+  }, [selectedSupplier, pep, rows]);
 
   // Handlers
   const handleSupplierSelect = (s: Supplier) => {
@@ -259,16 +268,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
     if (!printSupplier) return alert("Selecione um fornecedor.");
     
-    // Check validation BEFORE exporting if manually triggering from form
-    if (!orderToPrint) {
-        if (rows.some(r => !r.description || !r.similarityChecked)) {
-            return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
-        }
-        if (rows.some(r => Number(r.quantity) <= 0)) {
-            return alert("Quantidade deve ser maior que 0.");
-        }
-    }
-
     const title = printId ? `PEDIDO DE COMPRA #${printId}` : "RASCUNHO";
     const todayStr = printDate ? new Date(printDate).toLocaleDateString() : new Date().toLocaleDateString();
 
@@ -443,47 +442,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
     }
   };
 
-  const generateExcel = () => {
-      if (!selectedSupplier) return alert("Selecione um fornecedor.");
-      
-      // Check validation BEFORE exporting
-      if (hasUnverifiedItems) {
-        return alert("Por favor, verifique todos os itens (lupa) e confirme as descrições antes de exportar.");
-      }
-      
-      const data = rows.map(r => ({
-          "ID": displayId ? `#${displayId}` : "RASCUNHO",
-          "Data": orderDate || new Date().toLocaleDateString(),
-          "Responsavel": currentUsername,
-          "PEP": pep,
-          "Fornecedor": selectedSupplier.name,
-          "Ref": r.sku,
-          "Desc": r.description,
-          "Qtd": Number(r.quantity),
-          "Unid": r.unit,
-          "Preco": Number(r.unitPrice),
-          "Total": Number(r.quantity) * Number(r.unitPrice)
-      }));
-
-      const ws = XLSX.utils.json_to_sheet(data);
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "Pedido");
-      const fname = `PO_${selectedSupplier.name.substring(0,10).trim()}_${Date.now()}.xlsx`;
-      XLSX.writeFile(wb, fname);
-  };
-
   const handleSave = async () => {
-      if (!selectedSupplier) return alert("Selecione fornecedor.");
-      if (hasUnverifiedItems) return alert("Verifique todos os itens (clique na lupa).");
-      if (hasInvalidPrices) return alert("Preços devem ser maior que 0.");
-
-      if (!window.confirm("Salvar pedido?")) return;
+      if (!isFormValid) return alert("Preencha todos os campos obrigatórios em vermelho e verifique os itens.");
 
       const newPO: PurchaseOrder = {
           id: orderId || Math.random().toString(36).substr(2, 9),
           displayId: displayId,
           dateCreated: orderId ? orderDate : new Date().toISOString(),
-          supplier: selectedSupplier,
+          supplier: selectedSupplier!,
           pep,
           items: rows.map(r => ({
               sku: r.sku,
@@ -501,13 +467,40 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           status: 'SENT'
       };
 
+      setLoading(true);
       try {
-          await StorageService.savePurchaseOrder(newPO);
-          alert("Sucesso!");
+          const saved = await StorageService.savePurchaseOrder(newPO);
+          
+          setOrderId(saved.id);
+          setDisplayId(saved.displayId);
+          setSavedOrders(prev => {
+              const idx = prev.findIndex(o => o.id === saved.id);
+              if (idx >= 0) {
+                  const copy = [...prev];
+                  copy[idx] = saved;
+                  return copy;
+              }
+              return [saved, ...prev];
+          });
+
+          // Stop loading to ensure UI updates before alert
+          setLoading(false);
+          
+          // Force a microtask delay to allow React to paint the 'not loading' state
+          await new Promise(resolve => setTimeout(resolve, 10));
+
+          // Post-save workflow
+          if (window.confirm("Pedido gravado com sucesso!\n\nDeseja visualizar o PDF agora?")) {
+              handlePrintOrder(saved);
+          }
+          
+          // Return to menu
           setViewMode('LIST');
           setOrderId(null);
           loadData();
+
       } catch (e: any) {
+          setLoading(false);
           alert("Erro: " + e.message);
       }
   };
@@ -517,7 +510,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setDisplayId(po.displayId);
       setOrderDate(po.dateCreated);
       setSelectedSupplier(po.supplier);
-      setPep(po.pep);
+      setPep(po.pep || '');
       setRows(po.items.map(i => ({
           sku: i.sku,
           description: i.description,
@@ -700,7 +693,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Supplier */}
                   <div className="relative">
-                      <label className="block text-xs font-bold uppercase text-slate-500 mb-1">Fornecedor</label>
+                      <label className={`block text-xs font-bold uppercase mb-1 ${!selectedSupplier ? 'text-red-500' : 'text-slate-500'}`}>Fornecedor *</label>
                       {!selectedSupplier ? (
                           <>
                             <input 
@@ -708,7 +701,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                 value={supplierSearch} 
                                 onChange={e => setSupplierSearch(e.target.value)} 
                                 placeholder="Buscar fornecedor..."
-                                className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600"
+                                className="w-full p-2 border border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded dark:text-white"
                             />
                             {supplierSearch && (
                                 <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border mt-1 max-h-40 overflow-y-auto shadow-lg">
@@ -734,12 +727,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
                   {/* PEP */}
                   <div>
-                      <label className="block text-xs font-bold uppercase text-slate-500 mb-1">PEP / Projeto</label>
+                      <label className={`block text-xs font-bold uppercase mb-1 ${!pep.trim() ? 'text-red-500' : 'text-slate-500'}`}>PEP / Projeto *</label>
                       <input 
                         type="text" 
                         value={pep} 
                         onChange={e => setPep(e.target.value)}
-                        className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600"
+                        className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!pep.trim() ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                        placeholder="Obrigatório"
                       />
                   </div>
               </div>
@@ -749,9 +743,16 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                   {rows.map((row, idx) => {
                       const matches = getMaterialMatches(row.description);
                       const isExpanded = idx === expandedRow;
+                      
+                      // Row specific validation states
+                      const isDescMissing = !row.description || row.description.trim().length === 0;
+                      const isUnverified = !row.similarityChecked;
+                      const isQtyInvalid = Number(row.quantity) <= 0;
+                      const isPriceInvalid = Number(row.unitPrice) <= 0;
+                      const hasRowError = isDescMissing || isUnverified || isQtyInvalid || isPriceInvalid;
 
                       return (
-                          <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'} ${!row.similarityChecked && !isExpanded ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/10' : ''}`}>
+                          <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'} ${(hasRowError) && !isExpanded ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : ''}`}>
                               {/* Header Row (Summary) */}
                               <div 
                                 onClick={() => setExpandedRow(isExpanded ? -1 : idx)}
@@ -761,10 +762,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                     <span className="font-bold text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded whitespace-nowrap">Item {idx + 1}</span>
                                     {!isExpanded && (
                                         <div className="text-sm truncate flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                                            <span className="font-bold">{row.quantity}x</span>
-                                            <span className="truncate">{row.description || '(Sem descrição)'}</span>
+                                            <span className={`font-bold ${isQtyInvalid ? 'text-red-500' : ''}`}>{row.quantity}x</span>
+                                            <span className={`truncate ${isDescMissing ? 'text-red-500 italic' : ''}`}>{row.description || '(Sem descrição)'}</span>
                                             {row.isCustom && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">Novo</span>}
-                                            {!row.similarityChecked && <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />}
+                                            {hasRowError && <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                                         </div>
                                     )}
                                 </div>
@@ -781,12 +782,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                 <div className="p-4 border-t border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/50">
                                     <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                                         <div className="md:col-span-6 relative">
-                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Descrição</label>
+                                            <label className={`block text-[10px] font-bold uppercase ${isDescMissing || isUnverified ? 'text-red-500' : 'text-slate-400'}`}>Descrição *</label>
                                             <input 
                                                 type="text" 
                                                 value={row.description} 
                                                 onChange={e => updateRow(idx, 'description', e.target.value)}
-                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!row.similarityChecked ? 'border-amber-400 ring-1 ring-amber-200' : 'border-slate-300 dark:border-slate-600'}`}
+                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${isDescMissing || isUnverified ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600'}`}
                                             />
                                             {row.showSuggestions && matches.length > 0 && (
                                                 <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border shadow-lg mt-1 rounded">
@@ -802,7 +803,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                 <div className="text-xs text-slate-400 font-mono">{row.sku || '-'}</div>
                                                 {!row.similarityChecked ? (
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] text-amber-600 animate-pulse font-bold">Verificação Pendente</span>
+                                                        <span className="text-[10px] text-red-600 font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Verificação Pendente</span>
                                                         <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded font-bold flex items-center gap-1 hover:bg-amber-600 shadow-sm">
                                                             <Search className="w-3 h-3"/> Verificar
                                                         </button>
@@ -814,8 +815,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                         </div>
                                         
                                         <div className="md:col-span-2">
-                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Qtd</label>
-                                            <input type="number" value={row.quantity} onChange={e => updateRow(idx, 'quantity', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600" />
+                                            <label className={`block text-[10px] font-bold uppercase ${isQtyInvalid ? 'text-red-500' : 'text-slate-400'}`}>Qtd *</label>
+                                            <input 
+                                                type="number" 
+                                                value={row.quantity} 
+                                                onChange={e => updateRow(idx, 'quantity', e.target.value)} 
+                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${isQtyInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                                            />
                                         </div>
 
                                         <div className="md:col-span-2">
@@ -826,8 +832,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                         </div>
 
                                         <div className="md:col-span-2">
-                                            <label className="block text-[10px] font-bold uppercase text-slate-400">Preço</label>
-                                            <input type="number" value={row.unitPrice} onChange={e => updateRow(idx, 'unitPrice', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600" />
+                                            <label className={`block text-[10px] font-bold uppercase ${isPriceInvalid ? 'text-red-500' : 'text-slate-400'}`}>Preço *</label>
+                                            <input 
+                                                type="number" 
+                                                value={row.unitPrice} 
+                                                onChange={e => updateRow(idx, 'unitPrice', e.target.value)} 
+                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${isPriceInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -856,36 +867,21 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                   </div>
                   
                   <div className="flex items-center gap-4 w-full md:w-auto">
-                      {hasUnverifiedItems && (
-                          <div className="text-xs text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-lg border border-amber-200 dark:border-amber-800">
+                      {!isFormValid && (
+                          <div className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
                               <AlertCircle className="w-4 h-4" />
-                              Itens pendentes de verificação
+                              Preencha os campos obrigatórios
                           </div>
                       )}
                       
-                      <div className="flex gap-2 flex-1">
-                          <button 
-                            onClick={() => handlePrintOrder()} 
-                            disabled={!isFormValid}
-                            className={`flex-1 px-4 py-2 border rounded flex items-center justify-center gap-2 transition-colors ${!isFormValid ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50 dark:border-slate-700 dark:bg-slate-800' : 'border-blue-600 text-blue-600 hover:bg-blue-50'}`}
-                          >
-                              <FileText className="w-4 h-4"/> PDF
-                          </button>
-                          
-                          <button 
-                            onClick={generateExcel} 
-                            disabled={!isFormValid}
-                            className={`flex-1 px-4 py-2 border rounded flex items-center justify-center gap-2 transition-colors ${!isFormValid ? 'border-slate-200 text-slate-300 cursor-not-allowed bg-slate-50 dark:border-slate-700 dark:bg-slate-800' : 'border-green-600 text-green-600 hover:bg-green-50'}`}
-                          >
-                              <FileSpreadsheet className="w-4 h-4"/> Excel
-                          </button>
-                          
+                      <div className="flex gap-2 flex-1 justify-end">
                           <button 
                             onClick={handleSave} 
                             disabled={!isFormValid}
-                            className={`flex-1 px-6 py-2 rounded flex items-center justify-center gap-2 font-bold transition-colors ${!isFormValid ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                            className={`px-6 py-2 rounded flex items-center justify-center gap-2 font-bold transition-colors shadow-sm w-full md:w-auto ${!isFormValid ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
                           >
-                              <Save className="w-4 h-4"/> Salvar
+                              {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+                              Salvar Pedido
                           </button>
                       </div>
                   </div>

@@ -263,7 +263,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                               <FilePlus className="w-6 h-6 text-green-700 dark:text-green-300" />
                           </div>
                           <div className="text-left">
-                              <span className="block font-bold text-green-800 dark:text-green-300">Acrescentar (Merge)</span>
+                              <span className="block font-bold text-green-800 dark:text-green-300">Acrescentar</span>
                               <span className="text-xs text-green-700 dark:text-green-400">Mantém os atuais e adiciona apenas os novos códigos encontrados.</span>
                           </div>
                       </button>
@@ -276,7 +276,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                               <RefreshCw className="w-6 h-6 text-amber-700 dark:text-amber-300" />
                           </div>
                           <div className="text-left">
-                              <span className="block font-bold text-amber-800 dark:text-amber-300">Substituir (Replace)</span>
+                              <span className="block font-bold text-amber-800 dark:text-amber-300">Substituir</span>
                               <span className="text-xs text-amber-700 dark:text-amber-400">Apaga a lista atual e substitui totalmente pelo novo arquivo.</span>
                           </div>
                       </button>

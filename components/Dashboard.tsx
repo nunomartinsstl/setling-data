@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Order, StockItem, UserRole, ViewState } from '../types';
-import { ShoppingCart, CheckCircle, Activity, PlusCircle, ShoppingBag, ArrowDownCircle, AlertTriangle, Search } from 'lucide-react';
+import { ShoppingCart, CheckCircle, Activity, PlusCircle, ShoppingBag, ArrowDownCircle, AlertTriangle, Search, Clock } from 'lucide-react';
 
 interface DashboardProps {
   orders: Order[];
@@ -96,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
                 className="bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-slate-700 dark:text-slate-300"
               >
                   <Search className="w-6 h-6" />
-                  <span className="font-semibold">Busca Geral</span>
+                  <span className="font-semibold">Pesquisa</span>
               </button>
           </div>
       )}
@@ -105,7 +105,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, onNaviga
         <StatCard 
             title="Pedidos Abertos" 
             value={stats.totalOpenCount} 
-            icon={ShoppingCart} 
+            icon={Clock} 
             color="bg-blue-500" 
             onClick={() => onNavigate('OPEN_ORDERS')}
         >

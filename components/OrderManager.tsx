@@ -1442,6 +1442,9 @@ TUBO 20MM, 2"
                                                                     <Check className="w-4 h-4" /> Verificado
                                                                 </div>
                                                             )}
+</div>
+                                                        <div className={`text-right text-[10px] mt-1 ${row.customDesc.length >= 40 ? 'text-red-500 font-bold' : row.customDesc.length >= 30 ? 'text-amber-500' : 'text-slate-400'}`}>
+                                                            {row.customDesc.length}/40
                                                         </div>
                                                         
                                                         {/* Category Select using Dynamic Categories */}
