@@ -718,20 +718,10 @@ export const StorageService = {
                         // Mark parent as handled
                         item.backorderCreated = true;
                         parentUpdated = true;
-                    } else if (item.isCustom) {
-                        // If it's pure custom and no match found, we still backorder it immediately
-                        // because we can't track its stock level anyway
-                        const reopenItem: OrderLineItem = {
-                            ...item,
-                            quantity: qtyMissing, 
-                            backorderCreated: false, 
-                        };
-                        delete reopenItem.fulfilledInOrderId;
-                        delete reopenItem.quantityPicked; // Explicitly remove
-                        itemsToReopen.push(reopenItem);
-                        item.backorderCreated = true;
-                        parentUpdated = true;
-                    }
+                    } 
+                    // REMOVED LOGIC: Do NOT reopen pure custom items that haven't been matched.
+                    // If the item doesn't exist in stock (or master list matched via desc), 
+                    // we assume the completion of the main order finalizes it.
                 }
             }
 

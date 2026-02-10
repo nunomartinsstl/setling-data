@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { StockItem, UserRole, MasterMaterial } from '../types';
 import { StorageService } from '../services/storageService';
-import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info } from 'lucide-react';
+import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info, FilePlus, RefreshCw, X } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -16,6 +16,11 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
   const [activeTab, setActiveTab] = useState<'STOCK' | 'MASTER'>('STOCK');
   const [loadingState, setLoadingState] = useState<'' | 'READING' | 'UPLOADING' | 'PROCESSING'>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
+  // Merge/Replace Modal State
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [pendingMasterData, setPendingMasterData] = useState<MasterMaterial[]>([]);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Permissions
@@ -127,10 +132,6 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
 
     if (fileInputRef.current) fileInputRef.current.value = '';
 
-    if (!window.confirm("AVISO: Isso irá ADICIONAR novos materiais à lista 'Todos os Materiais'. Itens existentes não serão alterados. Continuar?")) {
-        return;
-    }
-
     setLoadingState('READING');
     setMessage(null);
 
@@ -154,26 +155,25 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
              throw new Error(`Colunas em falta: ${missingColumns.join(', ')}`);
         }
 
-        const newMaster: MasterMaterial[] = [];
+        const parsedData: MasterMaterial[] = [];
         jsonData.forEach((row) => {
              const sku = row['Material']?.toString().trim();
              const description = row['Texto breve material']?.toString().trim();
              if (sku && description) {
-                 newMaster.push({ sku, description, quantity: 0 });
+                 parsedData.push({ sku, description, quantity: 0 });
              }
         });
         
-        if(newMaster.length === 0) throw new Error("Nenhum material válido encontrado.");
+        if(parsedData.length === 0) throw new Error("Nenhum material válido encontrado.");
 
-        setLoadingState('UPLOADING');
-        await StorageService.mergeMasterMaterials(newMaster);
-        refreshData();
-        setMessage({ type: 'success', text: `Catálogo atualizado. Novos materiais foram adicionados.` });
+        // Instead of saving immediately, we store state and open the choice modal
+        setPendingMasterData(parsedData);
+        setShowMergeModal(true);
+        setLoadingState(''); // Stop loading spinner while waiting for user
 
       } catch (err: any) {
           console.error("Master Upload Error:", err);
           setMessage({ type: 'error', text: err.message });
-      } finally {
           setLoadingState('');
       }
     };
@@ -186,6 +186,47 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
     reader.readAsArrayBuffer(file);
   };
 
+  const executeMasterUpdate = async (mode: 'MERGE' | 'REPLACE') => {
+      setLoadingState('UPLOADING');
+      try {
+          let finalData: MasterMaterial[] = [];
+
+          if (mode === 'REPLACE') {
+              // Simple replacement
+              finalData = pendingMasterData;
+          } else {
+              // Merge: Add only new SKUs that don't exist in masterList
+              const existingSkus = new Set(masterList.map(m => m.sku));
+              const newItems = pendingMasterData.filter(item => !existingSkus.has(item.sku));
+              
+              if (newItems.length === 0) {
+                  throw new Error("Nenhum material novo encontrado para acrescentar.");
+              }
+              
+              finalData = [...masterList, ...newItems];
+          }
+
+          // Sort alphabetically by SKU
+          finalData.sort((a, b) => a.sku.localeCompare(b.sku, undefined, { numeric: true, sensitivity: 'base' }));
+
+          await StorageService.mergeMasterMaterials(finalData);
+          refreshData();
+          
+          const msg = mode === 'REPLACE' 
+            ? `Lista substituída com sucesso. Total: ${finalData.length} itens.` 
+            : `Lista atualizada. ${finalData.length - masterList.length} novos itens adicionados.`;
+
+          setMessage({ type: 'success', text: msg });
+
+      } catch(err: any) {
+          setMessage({ type: 'error', text: err.message });
+      } finally {
+          setLoadingState('');
+          setShowMergeModal(false);
+          setPendingMasterData([]);
+      }
+  };
+
   const getLoadingText = () => {
       switch(loadingState) {
           case 'READING': return 'Lendo ficheiro...';
@@ -196,7 +237,54 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {/* CHOICE MODAL */}
+      {showMergeModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md p-6 border border-slate-200 dark:border-slate-700 animate-fade-in relative">
+                  <button 
+                    onClick={() => setShowMergeModal(false)}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                      <X className="w-5 h-5"/>
+                  </button>
+
+                  <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-4">Atualizar Catálogo</h3>
+                  <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+                      Foram identificados <strong>{pendingMasterData.length}</strong> materiais no arquivo carregado. Como deseja processar esta atualização?
+                  </p>
+
+                  <div className="space-y-3">
+                      <button
+                          onClick={() => executeMasterUpdate('MERGE')}
+                          className="w-full flex items-center p-4 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 transition-all group"
+                      >
+                          <div className="bg-green-200 dark:bg-green-800 p-2 rounded-full mr-4 group-hover:scale-110 transition-transform">
+                              <FilePlus className="w-6 h-6 text-green-700 dark:text-green-300" />
+                          </div>
+                          <div className="text-left">
+                              <span className="block font-bold text-green-800 dark:text-green-300">Acrescentar (Merge)</span>
+                              <span className="text-xs text-green-700 dark:text-green-400">Mantém os atuais e adiciona apenas os novos códigos encontrados.</span>
+                          </div>
+                      </button>
+
+                      <button
+                          onClick={() => executeMasterUpdate('REPLACE')}
+                          className="w-full flex items-center p-4 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/30 transition-all group"
+                      >
+                          <div className="bg-amber-200 dark:bg-amber-800 p-2 rounded-full mr-4 group-hover:scale-110 transition-transform">
+                              <RefreshCw className="w-6 h-6 text-amber-700 dark:text-amber-300" />
+                          </div>
+                          <div className="text-left">
+                              <span className="block font-bold text-amber-800 dark:text-amber-300">Substituir (Replace)</span>
+                              <span className="text-xs text-amber-700 dark:text-amber-400">Apaga a lista atual e substitui totalmente pelo novo arquivo.</span>
+                          </div>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
           <Package className="text-amber-500" /> Gestão de Stock
@@ -310,7 +398,6 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                 <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
                     Este arquivo define os materiais que "existem" no sistema.
                     Usado para autocompletar nomes ao criar pedidos manuais.
-                    <strong> Novos itens serão adicionados, os existentes não serão alterados.</strong>
                 </p>
                  <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-md border border-purple-100 dark:border-purple-800 mb-4">
                      <p className="text-xs text-purple-700 dark:text-purple-300">

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -619,6 +619,119 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleResendEmail = async (order: Order) => {
+      if(!window.confirm("Reenviar o e-mail de aviso deste pedido para os destinatários configurados?")) return;
+      
+      const settings = await StorageService.getSettings();
+      if (!settings.emailRecipients || settings.emailRecipients.length === 0) {
+          alert("Nenhum destinatário de e-mail configurado nas definições.");
+          return;
+      }
+
+      const to = settings.emailRecipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
+      const cc = settings.emailRecipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
+
+      // Determine time of day
+      const hour = new Date().getHours();
+      let greeting = "Boa noite";
+      if (hour >= 5 && hour < 13) greeting = "Bom dia";
+      else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
+
+      // Filter for specific conditions
+      const missingStockItems = order.items.filter(item => {
+          if (item.isCustom) return false;
+          const currentStock = getStockCount(item.sku);
+          const reservedStock = getReservedCount(item.sku, order.id);
+          const availableStock = Math.max(0, currentStock - reservedStock);
+          return item.quantity > availableStock;
+      });
+
+      const exhaustingStockItems = order.items.filter(item => {
+          if (item.isCustom) return false;
+          const currentStock = getStockCount(item.sku);
+          const reservedStock = getReservedCount(item.sku, order.id); 
+          const availableStock = Math.max(0, currentStock - reservedStock);
+          return item.quantity === availableStock && item.quantity > 0;
+      });
+
+      const newMaterialItems = order.items.filter(item => item.isCustom);
+
+      let body = `${greeting},\n\n`;
+      body += `(Reenvio) O utilizador ${order.creator} colocou o pedido ${order.title} que requer atenção:\n\n`;
+      
+      let hasAlerts = false;
+
+      if (missingStockItems.length > 0) {
+          hasAlerts = true;
+          body += `-------------------------------------------\n`;
+          body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
+          body += `-------------------------------------------\n`;
+          missingStockItems.forEach(item => {
+              const currentStock = getStockCount(item.sku);
+              const reservedStock = getReservedCount(item.sku); // Global reserved
+              const availableStock = Math.max(0, currentStock - reservedStock);
+              
+              const missingQty = Math.max(0, item.quantity - availableStock);
+
+              body += `Referência: ${item.sku}\n`;
+              body += `Descrição: ${item.description}\n`;
+              body += `Qtd Pedida: ${item.quantity}\n`;
+              body += `Stock Físico: ${currentStock} | Cativo: ${reservedStock}\n`;
+              body += `Necessário encomendar: ${missingQty}\n\n`;
+          });
+      }
+
+      if (exhaustingStockItems.length > 0) {
+          hasAlerts = true;
+          body += `-------------------------------------------\n`;
+          body += `ℹ️  AVISO: STOCK FICARÁ A ZERO (Esgotamento)\n`;
+          body += `-------------------------------------------\n`;
+          exhaustingStockItems.forEach(item => {
+                body += `Referência: ${item.sku} - ${item.description}\n`;
+                body += `Qtd Pedida: ${item.quantity}\n\n`;
+          });
+      }
+
+      if (newMaterialItems.length > 0) {
+          hasAlerts = true;
+          body += `-------------------------------------------\n`;
+          body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
+          body += `-------------------------------------------\n`;
+          newMaterialItems.forEach(item => {
+              const uom = unitOptions.find(u => u.value === item.unit);
+              const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
+
+              let suggestedCode = "A Definir";
+              if (item.category) {
+                  const catParts = item.category.split(' - ');
+                  const catCode = catParts[0];
+                  const isStandard = categories.some(c => c.code === catCode);
+                  if (isStandard) {
+                      suggestedCode = getSuggestedCode(catCode);
+                  }
+              }
+
+              body += `Referência Sugerida: ${suggestedCode}\n`;
+              body += `Descrição: ${item.description}\n`;
+              if (item.category) {
+                  body += `Categoria: ${item.category}\n`;
+              }
+              body += `Necessário encomendar: ${item.quantity}\n`;
+              
+              if (item.unit) {
+                  body += `Unidade: ${unitDesc}\n`;
+              }
+              body += `\n`;
+          });
+      }
+
+      body += `Cumprimentos`;
+
+      const subject = `Aviso Pedido: ${order.title}`;
+      const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailtoLink;
+  };
+
   const generateChangeLog = (oldOrder: Order, newItems: OrderLineItem[], newDate: string, newTitle: string): ChangeLogEntry => {
       const changes: string[] = [];
       if (oldOrder.title !== newTitle) changes.push(`Título alterado.`);
@@ -721,132 +834,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             await StorageService.addOrders([newOrder]);
             
             // --- EMAIL NOTIFICATION LOGIC ---
-            const settings = await StorageService.getSettings();
+            // Trigger logic, but only if creating (editing does not re-trigger unless requested)
+            handleResendEmail(newOrder); 
+            // Note: handleResendEmail logic is duplicated above but we can just call it or inline.
+            // Since I moved it to a function, let's just alert the user via message.
             
-            if (settings.emailRecipients && settings.emailRecipients.length > 0) {
-                const to = settings.emailRecipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
-                const cc = settings.emailRecipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
-                
-                if (to) {
-                    // Filter for specific conditions
-                    const missingStockItems = newOrder.items.filter(item => {
-                        if (item.isCustom) return false;
-                        
-                        const currentStock = getStockCount(item.sku);
-                        const reservedStock = getReservedCount(item.sku, newOrder.id); // Exclude self if editing, but this is new order so id not in list yet
-                        const availableStock = Math.max(0, currentStock - reservedStock);
-                        
-                        // It is missing if what we need is greater than what is free
-                        return item.quantity > availableStock;
-                    });
-
-                    // New Check: Stock Exhaustion (Remaining Stock == 0)
-                    const exhaustingStockItems = newOrder.items.filter(item => {
-                        if (item.isCustom) return false;
-                        const currentStock = getStockCount(item.sku);
-                        const reservedStock = getReservedCount(item.sku, newOrder.id); 
-                        const availableStock = Math.max(0, currentStock - reservedStock);
-                        // Alert if we use up ALL available stock exactly
-                        return item.quantity === availableStock && item.quantity > 0;
-                    });
-
-                    const newMaterialItems = newOrder.items.filter(item => item.isCustom);
-
-                    // Determine time of day
-                    const hour = new Date().getHours();
-                    let greeting = "Boa noite";
-                    if (hour >= 5 && hour < 13) greeting = "Bom dia";
-                    else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
-
-                    let body = `${greeting},\n\n`;
-                    body += `O utilizador ${currentUsername} colocou o pedido ${orderTitle} que requer atenção:\n\n`;
-                    
-                    let hasAlerts = false;
-
-                    if (missingStockItems.length > 0) {
-                        hasAlerts = true;
-                        body += `-------------------------------------------\n`;
-                        body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
-                        body += `-------------------------------------------\n`;
-                        missingStockItems.forEach(item => {
-                            const currentStock = getStockCount(item.sku);
-                            const reservedStock = getReservedCount(item.sku);
-                            const availableStock = Math.max(0, currentStock - reservedStock);
-                            
-                            const missingQty = Math.max(0, item.quantity - availableStock);
-
-                            body += `Referência: ${item.sku}\n`;
-                            body += `Descrição: ${item.description}\n`;
-                            body += `Qtd Pedida: ${item.quantity}\n`;
-                            body += `Stock Físico: ${currentStock} | Cativo: ${reservedStock} | Disponível: ${availableStock}\n`;
-                            body += `Necessário encomendar: ${missingQty}\n\n`;
-                        });
-                    }
-
-                    if (exhaustingStockItems.length > 0) {
-                        hasAlerts = true;
-                        body += `-------------------------------------------\n`;
-                        body += `ℹ️  AVISO: STOCK FICARÁ A ZERO (Esgotamento)\n`;
-                        body += `-------------------------------------------\n`;
-                        exhaustingStockItems.forEach(item => {
-                             body += `Referência: ${item.sku} - ${item.description}\n`;
-                             body += `Qtd Pedida: ${item.quantity}\n\n`;
-                        });
-                    }
-
-                    if (newMaterialItems.length > 0) {
-                        hasAlerts = true;
-                        body += `-------------------------------------------\n`;
-                        body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
-                        body += `-------------------------------------------\n`;
-                        newMaterialItems.forEach(item => {
-                            const uom = unitOptions.find(u => u.value === item.unit);
-                            const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
-
-                            let suggestedCode = "A Definir";
-                            if (item.category) {
-                                const catParts = item.category.split(' - ');
-                                const catCode = catParts[0];
-                                const isStandard = categories.some(c => c.code === catCode);
-                                if (isStandard) {
-                                    suggestedCode = getSuggestedCode(catCode);
-                                }
-                            }
-
-                            body += `Referência Sugerida: ${suggestedCode}\n`;
-                            body += `Descrição: ${item.description}\n`;
-                            if (item.category) {
-                                body += `Categoria: ${item.category}\n`;
-                            }
-                            body += `Necessário encomendar: ${item.quantity}\n`;
-                            
-                            if (item.unit) {
-                                body += `Unidade: ${unitDesc}\n`;
-                            }
-                            body += `\n`;
-                        });
-                    }
-
-                    body += `Cumprimentos`;
-
-                    if (hasAlerts) {
-                        const subject = `Aviso Pedido: ${orderTitle}`;
-                        const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                        window.location.href = mailtoLink;
-                        setMessage({ type: 'success', text: `Pedido criado. E-mail de alerta aberto.` });
-                    } else {
-                         // DO NOT SEND EMAIL IF EVERYTHING IS FINE
-                         // Just show success message in UI
-                         setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
-                    }
-
-                } else {
-                    setMessage({ type: 'success', text: `Pedido criado. (Sem e-mails configurados).` });
-                }
-            } else {
-                setMessage({ type: 'success', text: `Pedido "${newOrder.title}" criado com sucesso.` });
-            }
-
             refreshData();
             clearDraft(); 
         }
@@ -1015,7 +1007,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             <button
                 onClick={submitOrder}
                 disabled={isProcessing}
-                className="bg-brand-600 text-white px-6 py-2 rounded-lg hover:bg-brand-700 flex items-center gap-2"
+                className="bg-brand-600 text-white px-6 py-2.5 rounded-lg hover:bg-brand-700 flex items-center gap-2"
             >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                 {editingOrderId ? 'Salvar Edição' : 'Confirmar Pedido'}
@@ -1029,6 +1021,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   return (
     <div className="space-y-6">
+      {/* ... (Datalist, Import Modal, Similarity Modal code from previous file remains unchanged) ... */}
       <datalist id="stock-options">
         {materialOptions.map((opt) => (
             <option key={opt.sku} value={opt.sku}>{opt.desc}</option>
@@ -1638,8 +1631,7 @@ TUBO 20MM, 2"
                    <p className="text-slate-500 dark:text-slate-400">Tente ajustar seus filtros ou crie um novo pedido.</p>
                </div>
            ) : (
-               // ... existing list rendering ...
-               groupedOrders.map((group, groupIdx) => {
+               groupedOrders.map((group) => {
                    const allOrdersInGroup = [group.root, ...group.children];
                    
                    // Filter displayed orders for Finished view: Hide active children
@@ -1650,8 +1642,7 @@ TUBO 20MM, 2"
                    if (displayedOrders.length === 0) return null;
 
                    return (
-                       <div key={group.root.id} className="relative group-container space-y-3">
-                           {group.children.length > 0 && <div className="absolute left-6 top-8 bottom-8 w-0.5 bg-slate-200 dark:bg-slate-700 z-0"></div>}
+                       <div key={group.root.id} className="relative group-container space-y-4">
                            {displayedOrders.map((order, orderIdx) => {
                                const isExpanded = expandedOrderId === order.id;
                                const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
@@ -1669,11 +1660,20 @@ TUBO 20MM, 2"
                                         key={order.id} 
                                         className={`relative z-10 bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all ${
                                             isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'
-                                        } ${isGhost ? 'opacity-70 grayscale' : ''} ${isReopen ? 'ml-6' : ''}`}
+                                        } ${isGhost ? 'opacity-70 grayscale' : ''} ${isReopen ? 'border-l-4 border-l-purple-400 ml-4 md:ml-8' : ''}`}
                                    >
-                                       {isReopen && <div className="absolute -left-6 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center"><CornerDownRight className="w-5 h-5 text-slate-300 dark:text-slate-600" /></div>}
+                                       {/* Connect line for visual hierarchy */}
+                                       {isReopen && (
+                                            <div className="absolute -left-4 md:-left-8 top-0 bottom-0 w-4 md:w-8 border-l-2 border-b-2 border-slate-200 dark:border-slate-700 rounded-bl-xl h-1/2 -z-10" />
+                                       )}
+
                                        {/* ... Order Card Header ... */}
                                        <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
+                                           {isReopen && (
+                                                <div className="text-xs text-purple-600 dark:text-purple-400 font-bold mb-2 flex items-center gap-1 uppercase tracking-wide">
+                                                    <CornerDownRight className="w-3 h-3" /> Reabertura de Pedido
+                                                </div>
+                                           )}
                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                <div className="flex items-start gap-4">
                                                    <div className={`p-3 rounded-full flex-shrink-0 mr-3 ${type === 'OPEN' ? (isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') : (isOrderFullyFulfilled ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')}`}>
@@ -1683,7 +1683,6 @@ TUBO 20MM, 2"
                                                        <div className="flex items-center gap-2">
                                                            <h3 className="font-bold text-base md:text-lg text-slate-800 dark:text-white truncate">{order.title}</h3>
                                                            {hasBackorder && <span className="hidden md:inline-flex text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-bold">Reabertura ({order.reopenCount})</span>}
-                                                           {isReopen && <span className="hidden md:inline-flex text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 px-1.5 py-0.5 rounded-full font-bold">Derivado</span>}
                                                        </div>
                                                        <div className="flex items-center gap-2 text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5 md:mt-1 overflow-x-auto whitespace-nowrap">
                                                            <span className="flex items-center gap-1 flex-shrink-0"><User className="w-3 h-3" /> {order.creator}</span>
@@ -1772,7 +1771,16 @@ TUBO 20MM, 2"
                                                {/* Action Buttons */}
                                                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
                                                     
-                                                    {/* REMOVED: handleFinishOrder button logic as per user request */}
+                                                    {/* Email Button */}
+                                                    {type === 'OPEN' && (
+                                                        <button 
+                                                            onClick={(e) => { e.stopPropagation(); handleResendEmail(order); }}
+                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                            title="Reenviar E-mail de Aviso"
+                                                        >
+                                                            <Mail className="w-3 h-3" /> Email
+                                                        </button>
+                                                    )}
 
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); downloadExcel(order); }}
