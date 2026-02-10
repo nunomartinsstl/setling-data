@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Receipt, MasterMaterial, ReceiptItem } from '../types';
-import { Search, Download, ArrowDownCircle, X, Image as ImageIcon, Calendar, ChevronDown, ChevronUp, User, Package } from 'lucide-react';
+import { Search, Download, ArrowDownCircle, X, Image as ImageIcon, Calendar, ChevronDown, ChevronUp, User, Package, FileSpreadsheet } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -46,36 +46,37 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
       setExpandedId(prev => prev === id ? null : id);
   };
 
-  const handleExportExcel = () => {
-    if (filteredReceipts.length === 0) {
-        alert("Sem dados para exportar.");
+  const handleExportSingleExcel = (receipt: Receipt) => {
+    const items: ReceiptItem[] = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items as any)) : [];
+    
+    if (items.length === 0) {
+        alert("Esta entrada não tem itens para exportar.");
         return;
     }
 
     // Flatten for Excel
     const flatData: any[] = [];
 
-    filteredReceipts.forEach(receipt => {
-        const items: ReceiptItem[] = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items as any)) : [];
-        items.forEach(item => {
-            flatData.push({
-                "Centro": "1700",
-                "Depósito": "0004",
-                "Data": new Date(receipt.date).toLocaleDateString(),
-                "Nº Encomenda": receipt.poNumber || '-',
-                "Material": item.material,
-                "Descrição": getDescription(item.material),
-                "Quantidade": item.qty,
-                "Localização": item.bin || '-',
-                // User ID Removed as per request
-            });
+    items.forEach(item => {
+        flatData.push({
+            "Centro": "1700",
+            "Depósito": "0004",
+            "Data": new Date(receipt.date).toLocaleDateString(),
+            "Nº Encomenda": receipt.poNumber || '-',
+            "Material": item.material,
+            "Descrição": getDescription(item.material),
+            "Quantidade": item.qty,
+            "Localização": item.bin || '-',
         });
     });
 
     const ws = XLSX.utils.json_to_sheet(flatData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Entradas");
-    XLSX.writeFile(wb, `Entradas_${new Date().toISOString().split('T')[0]}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Entrada");
+    
+    const safePO = (receipt.poNumber || 'S_N').replace(/[^a-z0-9]/gi, '_');
+    const dateStr = new Date(receipt.date).toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Entrada_${safePO}_${dateStr}.xlsx`);
   };
 
   return (
@@ -120,12 +121,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
                 </div>
             </div>
             
-            <button 
-                onClick={handleExportExcel}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors w-full md:w-auto justify-center"
-            >
-                <Download className="w-4 h-4" /> Exportar Excel
-            </button>
+            {/* Global export removed */}
         </div>
 
         {/* Search Bar */}
@@ -195,6 +191,13 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
                                 </div>
 
                                 <div className="flex items-center gap-2 pl-4 border-l border-slate-100 dark:border-slate-700 ml-4">
+                                    <button 
+                                        onClick={(e) => { e.stopPropagation(); handleExportSingleExcel(receipt); }}
+                                        className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors"
+                                        title="Exportar Excel"
+                                    >
+                                        <FileSpreadsheet className="w-5 h-5" /> 
+                                    </button>
                                     {receipt.documentImage && (
                                         <button 
                                             onClick={(e) => { e.stopPropagation(); setSelectedImage(receipt.documentImage || null); }}

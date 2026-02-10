@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -279,11 +279,32 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (isAdmin) setTargetCompanyId('');
   };
 
-  const getMinDate = () => {
-    const d = new Date();
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().split('T')[0];
-  };
+  // --- DYNAMIC DUE DATE LOGIC ---
+  const minDateValue = useMemo(() => {
+        // Calculate Total Active Items (Backlog)
+        // Only count line items from orders that are OPEN or IN_PROCESS
+        const activeOrders = orders.filter(o => o.status === 'OPEN' || o.status === 'IN_PROCESS' || o.status === 'IN PROCESS');
+        const totalPendingLines = activeOrders.reduce((sum, order) => sum + (order.items ? order.items.length : 0), 0);
+
+        // Base rule: Tomorrow (1 day)
+        // Dynamic rule: Add delay based on total backlog
+        let daysToAdd = 1;
+        
+        // Slightly change logic: If many items exist, push date further
+        if (totalPendingLines > 100) daysToAdd = 5;
+        else if (totalPendingLines > 60) daysToAdd = 4;
+        else if (totalPendingLines > 30) daysToAdd = 3;
+        else if (totalPendingLines > 10) daysToAdd = 2;
+
+        const d = new Date();
+        d.setDate(d.getDate() + daysToAdd);
+        
+        return { 
+            dateStr: d.toISOString().split('T')[0], 
+            daysAdded: daysToAdd, 
+            backlog: totalPendingLines 
+        };
+  }, [orders]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -301,9 +322,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
         return;
     }
 
-    const todayStr = new Date().toISOString().split('T')[0];
-    if (val <= todayStr) {
-        alert("Pedidos devem ser agendados com pelo menos 1 dia de antecedência.");
+    // Validate against dynamic min date
+    if (val < minDateValue.dateStr) {
+        alert(`Devido ao volume atual de pedidos (${minDateValue.backlog} linhas em espera), a data mínima é ${new Date(minDateValue.dateStr).toLocaleDateString()}.`);
         setDueDate('');
         return;
     }
@@ -330,6 +351,30 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           });
       });
       return reserved;
+  };
+
+  // Helper to check if an order triggers alerts (missing stock, exhausting, or new material)
+  const hasOrderAlerts = (order: Order) => {
+      // 1. Check for New Materials
+      if (order.items.some(i => i.isCustom)) return true;
+
+      // 2. Check for Stock Issues
+      // Iterate order items to check availability against reserved stock
+      for (const item of order.items) {
+          if (!item.isCustom && item.sku) {
+              const currentStock = getStockCount(item.sku);
+              // We exclude this order itself from reservation to check "if I fulfill this order, what happens"
+              // Wait, if the order IS already in the system, its quantity is counted in getReservedCount unless excluded.
+              // Logic: Compare requested Qty vs (Physical - ReservedByOthers)
+              const reservedByOthers = getReservedCount(item.sku, order.id);
+              const availableForOrder = Math.max(0, currentStock - reservedByOthers);
+              
+              // Trigger if we need more than available (Missing) OR if we take exactly what's left (Exhausting)
+              // Exhausting implies taking > 0 and leaving 0.
+              if (item.quantity >= availableForOrder && item.quantity > 0) return true;
+          }
+      }
+      return false;
   };
 
   const getMaterialDescription = (sku: string): string => {
@@ -619,17 +664,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleResendEmail = async (order: Order) => {
-      if(!window.confirm("Reenviar o e-mail de aviso deste pedido para os destinatários configurados?")) return;
+  const handleResendEmail = async (order: Order, skipConfirm = false) => {
+      if (!skipConfirm) {
+          if(!window.confirm("Reenviar o e-mail de aviso deste pedido para os destinatários configurados?")) return;
+      }
       
       const settings = await StorageService.getSettings();
       if (!settings.emailRecipients || settings.emailRecipients.length === 0) {
-          alert("Nenhum destinatário de e-mail configurado nas definições.");
+          if (!skipConfirm) alert("Nenhum destinatário de e-mail configurado nas definições.");
           return;
       }
 
-      const to = settings.emailRecipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
+      let to = settings.emailRecipients.filter(r => r.type === 'TO').map(r => r.email).join(',');
       const cc = settings.emailRecipients.filter(r => r.type === 'CC').map(r => r.email).join(',');
+
+      // Ensure 'to' is not empty for mailto compatibility
+      if (!to && cc) {
+          to = cc.split(',')[0]; 
+      }
 
       // Determine time of day
       const hour = new Date().getHours();
@@ -657,43 +709,36 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       const newMaterialItems = order.items.filter(item => item.isCustom);
 
       let body = `${greeting},\n\n`;
-      body += `(Reenvio) O utilizador ${order.creator} colocou o pedido ${order.title} que requer atenção:\n\n`;
+      body += `O utilizador ${order.creator} colocou o pedido ${order.title} que requer atenção:\n\n`;
       
-      let hasAlerts = false;
-
       if (missingStockItems.length > 0) {
-          hasAlerts = true;
           body += `-------------------------------------------\n`;
           body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
           body += `-------------------------------------------\n`;
           missingStockItems.forEach(item => {
               const currentStock = getStockCount(item.sku);
-              const reservedStock = getReservedCount(item.sku); // Global reserved
+              const reservedStock = getReservedCount(item.sku, order.id); // Fixed: Pass order.id to ignore self in reservation calculation
               const availableStock = Math.max(0, currentStock - reservedStock);
-              
               const missingQty = Math.max(0, item.quantity - availableStock);
 
-              body += `Referência: ${item.sku}\n`;
-              body += `Descrição: ${item.description}\n`;
-              body += `Qtd Pedida: ${item.quantity}\n`;
-              body += `Stock Físico: ${currentStock} | Cativo: ${reservedStock}\n`;
-              body += `Necessário encomendar: ${missingQty}\n\n`;
+              body += `Ref: ${item.sku}\n`;
+              body += `Desc: ${item.description}\n`;
+              body += `Pedida: ${item.quantity} | Stock Disp: ${availableStock}\n`;
+              body += `Necessário: ${missingQty}\n\n`;
           });
       }
 
       if (exhaustingStockItems.length > 0) {
-          hasAlerts = true;
           body += `-------------------------------------------\n`;
-          body += `ℹ️  AVISO: STOCK FICARÁ A ZERO (Esgotamento)\n`;
+          body += `ℹ️  AVISO: STOCK FICARÁ A ZERO\n`;
           body += `-------------------------------------------\n`;
           exhaustingStockItems.forEach(item => {
-                body += `Referência: ${item.sku} - ${item.description}\n`;
+                body += `Ref: ${item.sku} - ${item.description}\n`;
                 body += `Qtd Pedida: ${item.quantity}\n\n`;
           });
       }
 
       if (newMaterialItems.length > 0) {
-          hasAlerts = true;
           body += `-------------------------------------------\n`;
           body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
           body += `-------------------------------------------\n`;
@@ -711,17 +756,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                   }
               }
 
-              body += `Referência Sugerida: ${suggestedCode}\n`;
-              body += `Descrição: ${item.description}\n`;
-              if (item.category) {
-                  body += `Categoria: ${item.category}\n`;
-              }
-              body += `Necessário encomendar: ${item.quantity}\n`;
-              
-              if (item.unit) {
-                  body += `Unidade: ${unitDesc}\n`;
-              }
-              body += `\n`;
+              body += `Ref Sugerida: ${suggestedCode}\n`;
+              body += `Desc: ${item.description}\n`;
+              if (item.category) body += `Cat: ${item.category}\n`;
+              body += `Qtd: ${item.quantity} ${unitDesc}\n\n`;
           });
       }
 
@@ -729,7 +767,17 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
       const subject = `Aviso Pedido: ${order.title}`;
       const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      window.location.href = mailtoLink;
+      
+      // Use window.open for better reliability, or fall back to location.href
+      // We check for 'hasOrderAlerts' outside, but here we construct the body unconditionally if called.
+      // However, if called automatically on create, we only want to open if there IS content.
+      const hasContent = missingStockItems.length > 0 || exhaustingStockItems.length > 0 || newMaterialItems.length > 0;
+      
+      if (hasContent) {
+          window.location.href = mailtoLink;
+      } else if (!skipConfirm) {
+          alert("Este pedido não tem alertas de stock ou novos materiais para enviar.");
+      }
   };
 
   const generateChangeLog = (oldOrder: Order, newItems: OrderLineItem[], newDate: string, newTitle: string): ChangeLogEntry => {
@@ -834,10 +882,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             await StorageService.addOrders([newOrder]);
             
             // --- EMAIL NOTIFICATION LOGIC ---
-            // Trigger logic, but only if creating (editing does not re-trigger unless requested)
-            handleResendEmail(newOrder); 
-            // Note: handleResendEmail logic is duplicated above but we can just call it or inline.
-            // Since I moved it to a function, let's just alert the user via message.
+            // Trigger logic automatically without confirmation for new orders
+            // IMPORTANT: We need to wait for Firebase to confirm (awaited above), but props 'orders' is stale.
+            // handleResendEmail handles stale props by accepting 'order' obj and excluding it from 'other reservations'.
+            handleResendEmail(newOrder, true); 
             
             refreshData();
             clearDraft(); 
@@ -890,7 +938,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
   };
 
   const downloadExcel = (order: Order) => {
-      // ... (existing logic)
       const pickedList = toArray(order.pickedItems);
       if (pickedList.length === 0) {
           alert("Este pedido não tem itens processados para exportar.");
@@ -931,7 +978,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   const FinalizeOrderForm = () => (
     <div className="space-y-4 animate-fade-in bg-slate-50 dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
-        {/* ... (existing form) ... */}
         <h4 className="font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
             {editingOrderId ? 'Salvar Alterações' : 'Finalizar Pedido'}
         </h4>
@@ -1021,7 +1067,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   return (
     <div className="space-y-6">
-      {/* ... (Datalist, Import Modal, Similarity Modal code from previous file remains unchanged) ... */}
+      {/* ... (Keep Datalist, Import Modal, Similarity Modal - No changes needed here, they are huge so I assume they are kept) ... */}
+      
+      {/* (Previous Modals Code Omitted for brevity as per instructions, only changed parts above. 
+           Wait, user instructions say "FULL content of file". I must include full file content.) 
+      */}
       <datalist id="stock-options">
         {materialOptions.map((opt) => (
             <option key={opt.sku} value={opt.sku}>{opt.desc}</option>
@@ -1069,7 +1119,6 @@ TUBO 20MM, 2"
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
-                {/* ... existing modal code ... */}
                 {similarityStep === 'LIST' && (
                     <>
                         <div className="p-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
@@ -1082,7 +1131,7 @@ TUBO 20MM, 2"
                         </div>
                         <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
                             <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
-                                Encontramos materiais semelhantes ao que você digitou. Selecione um se for o que procura:
+                                Encontramos materiais semelhantes ao que digitou. Selecione um se for o que procura:
                             </p>
                             <div className="space-y-2">
                                 {similarityResults.length > 0 ? (
@@ -1158,7 +1207,7 @@ TUBO 20MM, 2"
                         </div>
                         <div className="p-6 flex-1 text-center">
                             <p className="text-slate-600 dark:text-slate-300 mb-6">
-                                Você indicou que o material não está na lista. Deseja prosseguir com a criação de um item novo (Personalizado)?
+                                Indicou que o material não está na lista. Deseja prosseguir com a criação de um item novo (Personalizado)?
                             </p>
                             <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg border border-amber-200 dark:border-amber-800 mb-6 text-left">
                                 <p className="text-xs text-amber-800 dark:text-amber-400 font-bold flex items-center gap-1">
@@ -1215,7 +1264,6 @@ TUBO 20MM, 2"
       {/* CREATION/EDIT AREA */}
       {showForm && (
         <div className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100 dark:ring-amber-900' : 'border-brand-200 dark:border-slate-700'}`}>
-          {/* ... (existing form body) ... */}
           {editingOrderId && (
             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                 <Edit className="w-5 h-5 text-amber-600 dark:text-amber-400" /> 
@@ -1253,7 +1301,7 @@ TUBO 20MM, 2"
                     )}
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                        {/* Title and Date Inputs (Same as before) */}
+                        {/* Title and Date Inputs */}
                         <div className="md:col-span-2">
                             <label className={`block text-xs font-semibold mb-1 ${formErrors.title ? 'text-red-600' : 'text-slate-500 dark:text-slate-400'}`}>
                                 Título do Pedido {formErrors.title && '*'}
@@ -1280,10 +1328,15 @@ TUBO 20MM, 2"
                             <input 
                                 type="date"
                                 value={dueDate}
-                                min={getMinDate()}
+                                min={minDateValue.dateStr}
                                 onChange={handleDateChange}
                                 className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white dark:[color-scheme:dark] ${formErrors.date ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                             />
+                            {minDateValue.daysAdded > 1 && (
+                                <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
+                                    <Info className="w-3 h-3"/> Data ajustada pelo volume ({minDateValue.backlog} linhas).
+                                </p>
+                            )}
                         </div>
                     </div>
 
@@ -1325,7 +1378,6 @@ TUBO 20MM, 2"
                             const isMissingCat = formErrors.missingCategory && formErrors.missingCategory.includes(idx);
                             const stockQty = getStockCount(row.sku);
                             
-                            // Get Custom Suggestions for current input
                             const suggestions = !row.isCustom && row.sku ? getSuggestions(row.sku) : [];
 
                             return (
@@ -1336,7 +1388,7 @@ TUBO 20MM, 2"
                                         isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-md ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                     }`}
                                 >
-                                    {/* ... Header ... */}
+                                    {/* Header */}
                                     <div 
                                         onClick={() => setExpandedRowIndex(isExpanded ? -1 : idx)}
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
@@ -1369,7 +1421,7 @@ TUBO 20MM, 2"
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
-                                            {/* ... Toggle Buttons ... */}
+                                            {/* Toggle Buttons */}
                                             <div className="flex justify-end mb-2">
                                                 {!row.isCustom ? (
                                                     <button 
@@ -1410,7 +1462,7 @@ TUBO 20MM, 2"
                                             <div className="mb-3">
                                                 {row.isCustom ? (
                                                     <div>
-                                                        {/* Custom Input ... */}
+                                                        {/* Custom Input */}
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Descrição do Novo Material</label>
                                                         <div className="relative flex items-center gap-2">
                                                             <input 
@@ -1442,12 +1494,12 @@ TUBO 20MM, 2"
                                                                     <Check className="w-4 h-4" /> Verificado
                                                                 </div>
                                                             )}
-</div>
+                                                        </div>
                                                         <div className={`text-right text-[10px] mt-1 ${row.customDesc.length >= 40 ? 'text-red-500 font-bold' : row.customDesc.length >= 30 ? 'text-amber-500' : 'text-slate-400'}`}>
                                                             {row.customDesc.length}/40
                                                         </div>
                                                         
-                                                        {/* Category Select using Dynamic Categories */}
+                                                        {/* Category Select */}
                                                         <div className="mt-3">
                                                             <label className={`block text-xs font-bold uppercase mb-1 ${isMissingCat ? 'text-red-500' : 'text-slate-400'}`}>Categoria Obrigatória</label>
                                                             <div className="relative">
@@ -1485,13 +1537,12 @@ TUBO 20MM, 2"
                                                                 />
                                                             )}
                                                         </div>
-                                                        {/* Error messages */}
                                                         {isDuplicate && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Este material já existe na lista. Por favor, desmarque "Novo" e busque pelo nome.</p>}
                                                         {isUnchecked && <p className="text-xs text-red-600 mt-1 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Validação obrigatória. Clique em "Verificar".</p>}
                                                     </div>
                                                 ) : (
                                                     <div className="relative">
-                                                        {/* Standard Input ... */}
+                                                        {/* Standard Input */}
                                                         <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Buscar Material Existente</label>
                                                         <div className="relative">
                                                             <input 
@@ -1590,7 +1641,7 @@ TUBO 20MM, 2"
                         })}
                     </div>
 
-                    {/* ... Action Buttons ... */}
+                    {/* Action Buttons */}
                     <div className="flex gap-3">
                         <button
                             onClick={addManualRow}
@@ -1607,7 +1658,7 @@ TUBO 20MM, 2"
                         </button>
                     </div>
 
-                    {/* ... Submit Button ... */}
+                    {/* Submit Button */}
                     <div className="pt-4 flex justify-end">
                          <button
                             onClick={handleManualNext}
@@ -1622,7 +1673,7 @@ TUBO 20MM, 2"
         </div>
       )}
 
-      {/* ... List Area ... */}
+      {/* List Area */}
       {showList && (
         <div className="space-y-6 animate-fade-in">
            {groupedOrders.length === 0 ? (
@@ -1637,7 +1688,6 @@ TUBO 20MM, 2"
                groupedOrders.map((group) => {
                    const allOrdersInGroup = [group.root, ...group.children];
                    
-                   // Filter displayed orders for Finished view: Hide active children
                    const displayedOrders = type === 'FINISHED' 
                         ? allOrdersInGroup.filter(o => o.status === 'COMPLETED')
                         : allOrdersInGroup;
@@ -1670,7 +1720,7 @@ TUBO 20MM, 2"
                                             <div className="absolute -left-4 md:-left-8 top-0 bottom-0 w-4 md:w-8 border-l-2 border-b-2 border-slate-200 dark:border-slate-700 rounded-bl-xl h-1/2 -z-10" />
                                        )}
 
-                                       {/* ... Order Card Header ... */}
+                                       {/* Order Card Header */}
                                        <div className="p-4 cursor-pointer" onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}>
                                            {isReopen && (
                                                 <div className="text-xs text-purple-600 dark:text-purple-400 font-bold mb-2 flex items-center gap-1 uppercase tracking-wide">
@@ -1775,7 +1825,7 @@ TUBO 20MM, 2"
                                                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
                                                     
                                                     {/* Email Button */}
-                                                    {type === 'OPEN' && (
+                                                    {type === 'OPEN' && hasOrderAlerts(order) && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleResendEmail(order); }}
                                                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
