@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
 import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag } from 'lucide-react';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -23,6 +24,7 @@ const Settings: React.FC = () => {
   const [newCatName, setNewCatName] = useState('');
 
   const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
   
   const supplierFileRef = useRef<HTMLInputElement>(null);
@@ -78,6 +80,18 @@ const Settings: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSyncUsernames = async () => {
+      setSyncing(true);
+      try {
+          const count = await StorageService.syncUsernames();
+          alert(`Sincronização concluída! ${count} logins reparados.`);
+      } catch(e: any) {
+          alert("Erro: " + e.message);
+      } finally {
+          setSyncing(false);
+      }
   };
 
   const addRecipient = () => {
@@ -192,6 +206,24 @@ const Settings: React.FC = () => {
         Configurações do Sistema
       </h2>
 
+      {/* REPAIR TOOLS CARD - Prominent at Top */}
+      <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
+        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-amber-800 dark:text-amber-400">
+            <Wrench className="w-5 h-5"/> Manutenção de Acessos
+        </h3>
+        <p className="text-sm text-amber-700 dark:text-amber-500 mb-4">
+            Se os utilizadores não conseguirem entrar usando o <strong>Nome de Utilizador</strong> (Erro: Permission Denied), clique abaixo para regenerar o índice de busca pública.
+        </p>
+        <button 
+            onClick={handleSyncUsernames}
+            disabled={syncing}
+            className="w-full flex items-center justify-center gap-2 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 p-3 rounded-lg transition-colors shadow-sm"
+        >
+            {syncing ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
+            Reparar/Sincronizar Logins por Nome
+        </button>
+      </div>
+
       {/* ADMIN CODE */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-800 dark:text-purple-400">
@@ -201,7 +233,7 @@ const Settings: React.FC = () => {
             Defina o código necessário para criar novas contas de Administrador.
         </p>
         
-        <div>
+        <div className="mb-4">
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Código de Acesso Mestre</label>
             <input 
                 type="text" 

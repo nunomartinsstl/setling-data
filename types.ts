@@ -3,6 +3,7 @@ export enum UserRole {
   ADMIN = 'ADMIN',
   MANAGEMENT = 'MANAGEMENT',
   WAREHOUSE = 'WAREHOUSE',
+  TECHNICAL = 'TECHNICAL',
   VIEWER = 'VIEWER'
 }
 
@@ -14,6 +15,7 @@ export interface User {
   lastName?: string;
   role: UserRole;
   companyId?: string;
+  supervisorId?: string; // Link to the Coordinator responsible for this Technician
 }
 
 export interface Company {
@@ -67,6 +69,7 @@ export interface OrderLineItem {
   quantityPicked?: number;
   backorderCreated?: boolean;
   fulfilledInOrderId?: string;
+  image?: string; // Base64 string for photo requisitions
 }
 
 export interface PickedItem {
@@ -88,7 +91,7 @@ export interface Order {
   pep?: string;
   address?: string;
   creator: string;
-  status: 'OPEN' | 'IN_PROCESS' | 'IN PROCESS' | 'COMPLETED';
+  status: 'OPEN' | 'IN_PROCESS' | 'IN PROCESS' | 'COMPLETED' | 'PENDING' | 'PENDING_APPROVAL';
   dateCreated: string;
   dueDate: string;
   items: OrderLineItem[];
@@ -97,7 +100,7 @@ export interface Order {
   pickedItems?: PickedItem[];
   originalOrderId?: string;
   reopenCount?: number;
-  stockProcessed?: boolean; // New flag to track if stock has been deducted
+  stockProcessed?: boolean; 
 }
 
 export interface PurchaseOrderItem {

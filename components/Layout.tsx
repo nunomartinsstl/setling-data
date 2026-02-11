@@ -226,7 +226,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               <NavItem 
                 view="QUERY" 
                 icon={Search} 
-                label="Busca" 
+                label="Pesquisa" 
                 isActive={currentView === 'QUERY'} 
                 onClick={() => handleNavClick('QUERY')} 
               />

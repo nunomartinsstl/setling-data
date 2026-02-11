@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle, Moon, Sun } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle, Moon, Sun, Wrench, RefreshCw, X, Loader2 } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
@@ -11,6 +11,7 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [isRegistering, setIsRegistering] = useState(false);
+  const [showRepairModal, setShowRepairModal] = useState(false);
   
   // Login State
   const [loginIdentifier, setLoginIdentifier] = useState(''); // Email OR Username
@@ -24,6 +25,11 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [regPassword, setRegPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
+
+  // Repair State
+  const [repairEmail, setRepairEmail] = useState('');
+  const [repairPassword, setRepairPassword] = useState('');
+  const [isRepairing, setIsRepairing] = useState(false);
 
   const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
   const [adminCode, setAdminCode] = useState('');
@@ -188,6 +194,36 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     }
   };
 
+  const handleRepairSystem = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if(!repairEmail || !repairPassword) return;
+      
+      setIsRepairing(true);
+      setError(''); // Clear main error
+      
+      try {
+          // 1. Authenticate (Must use email)
+          if (!repairEmail.includes('@')) throw new Error("Use o EMAIL de Administrador.");
+          const user = await StorageService.authenticateUser(repairEmail, repairPassword);
+          
+          if (user.role !== UserRole.ADMIN) {
+              throw new Error("Apenas Administradores podem realizar reparos.");
+          }
+          
+          // 2. Run Sync
+          const count = await StorageService.syncUsernames();
+          alert(`Sistema Sincronizado! ${count} nomes de utilizador foram restaurados.\n\nAgora o login por nome deve funcionar.`);
+          
+          // 3. Login normally
+          onLogin(user);
+          
+      } catch (err: any) {
+          alert("Erro na reparação: " + err.message);
+      } finally {
+          setIsRepairing(false);
+      }
+  };
+
   // Helper for input validation classes
   const inputClass = (value: string) => `w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm transition-colors dark:bg-slate-900 dark:text-white ${touched && !value ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 focus:ring-brand-500 dark:border-slate-600'}`;
   const labelClass = (value: string) => `block text-xs font-semibold mb-1 ${touched && !value ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`;
@@ -224,6 +260,54 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
 
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-100 dark:bg-slate-950 transition-colors duration-200 relative">
+      
+      {/* Repair Modal */}
+      {showRepairModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-700 relative">
+                  <button onClick={() => setShowRepairModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
+                  <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
+                      <Wrench className="w-5 h-5 text-amber-500"/> Reparar Sistema
+                  </h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+                      Se o login por nome de utilizador não funciona, um Administrador deve usar esta ferramenta para sincronizar a base de dados.
+                  </p>
+                  
+                  <form onSubmit={handleRepairSystem} className="space-y-3">
+                      <div>
+                          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Email de Admin</label>
+                          <input 
+                            type="email" 
+                            required
+                            value={repairEmail}
+                            onChange={e => setRepairEmail(e.target.value)}
+                            placeholder="admin@empresa.com"
+                            className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500 border-slate-300 dark:border-slate-600"
+                          />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Senha</label>
+                          <input 
+                            type="password" 
+                            required
+                            value={repairPassword}
+                            onChange={e => setRepairPassword(e.target.value)}
+                            className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500 border-slate-300 dark:border-slate-600"
+                          />
+                      </div>
+                      <button 
+                        type="submit" 
+                        disabled={isRepairing}
+                        className="w-full bg-amber-600 text-white py-2 rounded font-bold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                          {isRepairing ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
+                          Sincronizar e Entrar
+                      </button>
+                  </form>
+              </div>
+          </div>
+      )}
+
       <div className="absolute top-4 right-4">
         <button 
             onClick={toggleTheme}
@@ -323,21 +407,29 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
 
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Função</label>
-                        <div className="grid grid-cols-3 gap-2">
-                            <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                <input type="radio" name="role" className="hidden" checked={role === UserRole.ADMIN} onChange={() => setRole(UserRole.ADMIN)} />
-                                <ShieldCheck className={`w-3 h-3 ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-[9px] ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`}>Admin</span>
-                            </label>
-                            <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
-                                <UserIcon className={`w-3 h-3 ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-[9px] ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`}>Coordenador</span>
-                            </label>
-                            <label className={`cursor-pointer border rounded-md p-1 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                        <div className="grid grid-cols-2 gap-2">
+                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
                                 <input type="radio" name="role" className="hidden" checked={role === UserRole.WAREHOUSE} onChange={() => setRole(UserRole.WAREHOUSE)} />
-                                <Lock className={`w-3 h-3 ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-[9px] ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`}>Logística</span>
+                                <Lock className={`w-4 h-4 ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                                <span className={`font-semibold text-xs ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`}>Logística</span>
+                            </label>
+                            
+                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.TECHNICAL ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                                <input type="radio" name="role" className="hidden" checked={role === UserRole.TECHNICAL} onChange={() => setRole(UserRole.TECHNICAL)} />
+                                <Wrench className={`w-4 h-4 ${role !== UserRole.TECHNICAL ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                                <span className={`font-semibold text-xs ${role !== UserRole.TECHNICAL ? 'text-slate-500 dark:text-slate-400' : ''}`}>Técnico</span>
+                            </label>
+
+                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                                <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
+                                <UserIcon className={`w-4 h-4 ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                                <span className={`font-semibold text-xs ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`}>Coordenador</span>
+                            </label>
+
+                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
+                                <input type="radio" name="role" className="hidden" checked={role === UserRole.ADMIN} onChange={() => setRole(UserRole.ADMIN)} />
+                                <ShieldCheck className={`w-4 h-4 ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                                <span className={`font-semibold text-xs ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`}>Admin</span>
                             </label>
                         </div>
                     </div>
@@ -362,7 +454,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                                 </div>
                             </div>
                             {companies.length === 0 && (
-                                <p className="text-[10px] text-red-500 mt-1">Nenhuma empresa cadastrada. Contacte o administrador.</p>
+                                <p className="text-[10px] text-red-500 mt-1">Nenhuma empresa cadastrada no sistema. Peça ao Administrador para adicionar em Configurações.</p>
                             )}
                         </div>
                     )}
@@ -455,7 +547,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                                 value={loginIdentifier}
                                 onChange={(e) => setLoginIdentifier(e.target.value)}
                                 className={`pl-10 ${inputClass(loginIdentifier)}`}
-                                placeholder="Email/Username (primeiro login com email)"
+                                placeholder="Email ou Nome de Utilizador"
                             />
                         </div>
                     </div>
@@ -493,14 +585,36 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
             {error && (
                 <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded-md border border-red-200 dark:border-red-800 flex items-start gap-2 animate-pulse">
                     <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                    {error}
+                    <div className="flex-1">
+                        <p>{error}</p>
+                        {(error.includes('Acesso Negado') || error.includes('utilizador')) && (
+                            <button 
+                                onClick={() => setShowRepairModal(true)}
+                                className="mt-2 text-xs font-bold underline hover:text-red-900 dark:hover:text-red-100"
+                            >
+                                Sincronizar Sistema (Admin)
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+            
+            {/* Simple repair link always available */}
+            {!isRegistering && !error && (
+                <div className="mt-4 text-center">
+                    <button 
+                        onClick={() => setShowRepairModal(true)}
+                        className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex items-center justify-center gap-1 mx-auto transition-colors"
+                    >
+                        <Wrench className="w-3 h-3"/> Problemas no login? (Admin)
+                    </button>
                 </div>
             )}
         </div>
       </div>
       
       <div className="absolute bottom-4 left-0 right-0 text-center">
-        <span className="text-[10px] text-slate-400 dark:text-slate-600 font-mono">v1.1.1</span>
+        <span className="text-[10px] text-slate-400 dark:text-slate-600 font-mono">v1.1.2</span>
       </div>
     </div>
   );

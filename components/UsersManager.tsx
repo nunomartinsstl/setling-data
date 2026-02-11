@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown } from 'lucide-react';
-import { getAuth } from 'firebase/auth';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, Briefcase } from 'lucide-react';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -27,6 +28,8 @@ const UsersManager: React.FC = () => {
 
     const fetchData = async () => {
         try {
+            // We fetch both, but catch potential errors if user has restricted access
+            // though UsersManager is typically admin-only anyway.
             const [usersData, settings] = await Promise.all([
                 StorageService.getUsers(),
                 StorageService.getSettings()
@@ -39,6 +42,10 @@ const UsersManager: React.FC = () => {
             setLoading(false);
         }
     };
+
+    // Filter potential supervisors (Coordinators and Admins)
+    // Used to populate the dropdown for Technicians
+    const availableSupervisors = users.filter(u => u.role === UserRole.MANAGEMENT || u.role === UserRole.ADMIN);
 
     const handleCreateInvite = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -84,9 +91,27 @@ const UsersManager: React.FC = () => {
         }
     };
 
+    const handleChangeSupervisor = async (user: User, newSupervisorId: string) => {
+        if (!user.uid) return;
+        setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
+        try {
+            await StorageService.updateUserSupervisor(user.uid, newSupervisorId);
+            await fetchData();
+        } catch(err: any) {
+            alert(err.message);
+        } finally {
+            setProcessingUsers(prev => ({ ...prev, [user.uid!]: false }));
+        }
+    };
+
     const handleDeleteUser = async (user: User) => {
         if (!user.uid) return;
-        if (!window.confirm(`Tem certeza que deseja EXCLUIR o acesso de ${user.username}? O histórico de login será perdido, mas os registros criados por ele permanecerão.`)) return;
+        
+        const confirmMsg = `Tem certeza que deseja EXCLUIR os dados de ${user.username}?\n\n` +
+                           `⚠️ IMPORTANTE: Como esta aplicação não possui servidor dedicado, esta ação apaga apenas os DADOS do utilizador.\n\n` +
+                           `Para reutilizar este EMAIL (${user.email}), você precisará acessar o Console do Firebase > Authentication e excluir o utilizador manualmente lá também.`;
+                           
+        if (!window.confirm(confirmMsg)) return;
 
         setProcessingUsers(prev => ({ ...prev, [user.uid!]: true }));
         try {
@@ -105,7 +130,7 @@ const UsersManager: React.FC = () => {
         
         setIsResetting(true);
         try {
-            const auth = getAuth();
+            const auth = firebase.auth();
             if (auth.currentUser) {
                 await StorageService.resetAllUsers(auth.currentUser.uid);
                 alert("Todos os utilizadores foram resetados com sucesso.");
@@ -119,7 +144,7 @@ const UsersManager: React.FC = () => {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in">
+        <div className="space-y-6 animate-fade-in pb-24">
             <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <Users className="text-purple-600 dark:text-purple-400" /> Gestão de Utilizadores
             </h2>
@@ -148,6 +173,7 @@ const UsersManager: React.FC = () => {
                             className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                          >
                              <option value={UserRole.WAREHOUSE}>Logística</option>
+                             <option value={UserRole.TECHNICAL}>Técnico</option>
                              <option value={UserRole.MANAGEMENT}>Coordenação</option>
                              <option value={UserRole.ADMIN}>Administrador</option>
                          </select>
@@ -187,73 +213,117 @@ const UsersManager: React.FC = () => {
                 {loading ? (
                     <div className="p-8 text-center text-slate-500 dark:text-slate-400">Carregando utilizadores...</div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                    <div className="overflow-x-auto pb-4">
+                        {/* 
+                           Added min-w-[1200px] to enforce wider horizontal scroll on mobile 
+                           and ensure columns have enough room for dropdowns
+                        */}
+                        <table className="w-full min-w-[1200px] text-left text-sm text-slate-600 dark:text-slate-300">
                             <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
                                 <tr>
-                                    <th className="p-4">Utilizador</th>
-                                    <th className="p-4">Email</th>
-                                    <th className="p-4">Empresa</th>
-                                    <th className="p-4">Nome Completo</th>
-                                    <th className="p-4">Função</th>
-                                    <th className="p-4 text-center">Ações</th>
+                                    <th className="p-4 w-[20%]">Utilizador</th>
+                                    <th className="p-4 w-[20%]">Email</th>
+                                    <th className="p-4 w-[15%]">Empresa</th>
+                                    <th className="p-4 w-[15%]">Função</th>
+                                    <th className="p-4 w-[20%]">
+                                        <div className="flex items-center gap-1">
+                                            <Briefcase className="w-3 h-3"/> Supervisor (Chefia)
+                                        </div>
+                                    </th>
+                                    <th className="p-4 text-center w-[10%]">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                                 {users.map((user, idx) => {
                                     const isProcessing = user.uid && processingUsers[user.uid];
+                                    const isTechnical = user.role === UserRole.TECHNICAL;
                                     
                                     return (
                                         <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                            <td className="p-4 font-medium text-slate-800 dark:text-white flex items-center gap-2">
-                                                <div className="bg-slate-100 dark:bg-slate-700 p-1.5 rounded-full">
-                                                    <UserIcon className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+                                            <td className="p-4">
+                                                <div className="font-medium text-slate-800 dark:text-white flex items-center gap-2">
+                                                    <div className="bg-slate-100 dark:bg-slate-700 p-1.5 rounded-full flex-shrink-0">
+                                                        <UserIcon className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+                                                    </div>
+                                                    <span className="truncate">{user.username}</span>
                                                 </div>
-                                                {user.username}
+                                                <div className="text-xs text-slate-400 mt-1 pl-8 truncate">
+                                                    {user.firstName} {user.lastName}
+                                                </div>
                                             </td>
-                                            <td className="p-4 font-mono text-xs">{user.email}</td>
+                                            <td className="p-4 font-mono text-xs text-slate-500 truncate max-w-[200px]" title={user.email}>{user.email}</td>
                                             <td className="p-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
                                                 {user.role === UserRole.ADMIN ? (
                                                     <span className="text-purple-600 dark:text-purple-400 italic">Global</span>
                                                 ) : (
-                                                    <div className="relative group">
+                                                    <div className="relative group w-full">
                                                         <select
                                                             value={user.companyId || ''}
                                                             onChange={(e) => handleChangeCompany(user, e.target.value)}
                                                             disabled={isProcessing}
-                                                            className="appearance-none bg-transparent py-1 pl-1 pr-6 cursor-pointer focus:outline-none hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-slate-600 dark:text-slate-300 max-w-[150px] truncate"
+                                                            className="w-full appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 py-1.5 pl-2 pr-6 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 rounded text-slate-600 dark:text-slate-300 text-xs truncate"
                                                             title="Clique para alterar a empresa"
                                                         >
                                                             <option value="" disabled>Selecione...</option>
                                                             {companies.map(c => (
-                                                                <option key={c.id} value={c.id} className="dark:bg-slate-800 text-slate-900 dark:text-slate-200">{c.name}</option>
+                                                                <option key={c.id} value={c.id}>{c.name}</option>
                                                             ))}
                                                         </select>
-                                                        <div className="absolute right-1 top-1.5 pointer-events-none text-slate-400">
+                                                        <div className="absolute right-1 top-2 pointer-events-none text-slate-400">
                                                             <Building className="w-3 h-3" />
                                                         </div>
                                                     </div>
                                                 )}
                                             </td>
                                             <td className="p-4">
-                                                {user.firstName} {user.lastName}
-                                            </td>
-                                            <td className="p-4">
                                                 <select
                                                     value={user.role}
                                                     onChange={(e) => handleChangeRole(user, e.target.value)}
                                                     disabled={isProcessing}
-                                                    className={`bg-transparent text-xs font-bold px-2 py-1 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none ${
+                                                    className={`appearance-none text-xs font-bold px-2 py-1.5 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none w-full truncate ${
                                                         user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
                                                         user.role === UserRole.MANAGEMENT ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30' :
+                                                        user.role === UserRole.TECHNICAL ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/30' :
                                                         'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30'
                                                     }`}
                                                 >
-                                                    <option value={UserRole.WAREHOUSE} className="dark:bg-slate-800">Logística</option>
-                                                    <option value={UserRole.MANAGEMENT} className="dark:bg-slate-800">Coordenação</option>
-                                                    <option value={UserRole.ADMIN} className="dark:bg-slate-800">Admin</option>
+                                                    <option value={UserRole.WAREHOUSE} className="bg-white dark:bg-slate-800">Logística</option>
+                                                    <option value={UserRole.TECHNICAL} className="bg-white dark:bg-slate-800">Técnico</option>
+                                                    <option value={UserRole.MANAGEMENT} className="bg-white dark:bg-slate-800">Coordenação</option>
+                                                    <option value={UserRole.ADMIN} className="bg-white dark:bg-slate-800">Admin</option>
                                                 </select>
                                             </td>
+                                            
+                                            {/* SUPERVISOR SELECTOR (Only for Technical) */}
+                                            <td className="p-4">
+                                                {isTechnical ? (
+                                                    <div className="relative w-full">
+                                                        <select
+                                                            value={user.supervisorId || ''}
+                                                            onChange={(e) => handleChangeSupervisor(user, e.target.value)}
+                                                            disabled={isProcessing}
+                                                            className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded bg-white dark:bg-slate-800 focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
+                                                                !user.supervisorId 
+                                                                ? 'border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-900/10' 
+                                                                : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                                                            }`}
+                                                        >
+                                                            <option value="">-- Selecione Chefia --</option>
+                                                            {availableSupervisors.map(m => (
+                                                                <option key={m.uid} value={m.uid}>
+                                                                    {m.firstName} {m.lastName} ({m.username})
+                                                                </option>
+                                                            ))}
+                                                        </select>
+                                                        <div className="absolute right-2 top-2 pointer-events-none text-slate-400">
+                                                            <ChevronDown className="w-3 h-3" />
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-300 text-xs italic pl-2">N/A</span>
+                                                )}
+                                            </td>
+
                                             <td className="p-4 text-center">
                                                 {isProcessing ? (
                                                     <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
@@ -261,7 +331,7 @@ const UsersManager: React.FC = () => {
                                                     <button 
                                                         onClick={() => handleDeleteUser(user)}
                                                         className="text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors"
-                                                        title="Remover Acesso"
+                                                        title="Remover Acesso (Atenção: Não apaga Auth)"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>

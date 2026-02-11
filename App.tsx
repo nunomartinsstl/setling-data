@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]); // Store companies
   const [categories, setCategories] = useState<CategoryOption[]>(DEFAULT_CATEGORIES);
+  const [allUsers, setAllUsers] = useState<User[]>([]); // Store all users for lookups
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   
@@ -79,17 +80,35 @@ const App: React.FC = () => {
 
   const refreshData = async () => {
     try {
-      // 1. Fetch current data
-      const [fetchedStock, fetchedMaster, fetchedCompanies, fetchedSettings, fetchedReceipts] = await Promise.all([
+      // 1. Fetch public/shared data (Safe to fail individually if needed, but usually open)
+      const [fetchedStock, fetchedMaster, fetchedCompanies, fetchedSettings] = await Promise.all([
         StorageService.getStock(),
         StorageService.getMasterMaterials(),
         StorageService.getCompanies(),
         StorageService.getSettings(),
-        StorageService.getReceipts()
       ]);
+      
+      // 2. Fetch sensitive data independently (Receipts, Users)
+      // If the current user (e.g. Technician) lacks permission, we catch the error 
+      // instead of breaking the entire application load.
+      let fetchedReceipts: Receipt[] = [];
+      let fetchedUsers: User[] = [];
+
+      try {
+          fetchedReceipts = await StorageService.getReceipts();
+      } catch (e) {
+          console.warn("Receipts access restricted or failed.", e);
+      }
+
+      try {
+          fetchedUsers = await StorageService.getUsers();
+      } catch (e) {
+          console.warn("Users list access restricted or failed.", e);
+      }
       
       setCompanies(fetchedCompanies);
       setReceipts(fetchedReceipts);
+      setAllUsers(fetchedUsers);
       
       if (fetchedSettings.categories && fetchedSettings.categories.length > 0) {
           setCategories(fetchedSettings.categories);
@@ -118,45 +137,47 @@ const App: React.FC = () => {
           }
       }
       
-      // 2. AUTO-PROCESS COMPLETED ORDERS (Force check on refresh)
-      // Only execute for roles that can potentially affect stock or manage orders, though technically safe for all
+      // 3. AUTO-PROCESS COMPLETED ORDERS (Force check on refresh)
       if (user && (user.role === UserRole.ADMIN || user.role === UserRole.WAREHOUSE || user.role === UserRole.MANAGEMENT)) {
-         // Step A: Deduct stock for any new completed orders
-         await StorageService.deductStockForCompletedOrders();
-         
-         // Step B: Re-read stock (because step A might have changed it)
-         const updatedStock = await StorageService.getStock();
-         
-         // Step C: Check for Backorders (using updated stock)
-         await StorageService.processBackorders(updatedStock);
-         
-         // Update local stock state
-         setStock(updatedStock);
+         try {
+             // Step A: Deduct stock for any new completed orders
+             await StorageService.deductStockForCompletedOrders();
+             
+             // Step B: Re-read stock (because step A might have changed it)
+             const updatedStock = await StorageService.getStock();
+             
+             // Step C: Check for Backorders (using updated stock)
+             await StorageService.processBackorders(updatedStock);
+             
+             // Update local stock state
+             setStock(updatedStock);
+         } catch(e) {
+             console.error("Error during auto-process stock routine", e);
+             setStock(fetchedStock); // Fallback
+         }
       } else {
          setStock(fetchedStock);
       }
 
-      // 3. Reconcile Custom Items
-      // This checks if any "Custom" items in orders now exist in the master list, and links them via SKU
+      // 4. Reconcile Custom Items
       await StorageService.reconcileCustomItems(fetchedMaster);
 
-      // 4. Sync Custom Materials (Legacy placeholder logic)
+      // 5. Sync Custom Materials (Legacy placeholder logic)
       await StorageService.syncCustomMaterials(fetchedMaster);
 
-      // 5. Fetch Orders (now updated)
+      // 6. Fetch Orders (now updated)
       const fetchedOrders = await StorageService.getOrders();
 
       setOrders(fetchedOrders);
       setMasterList(fetchedMaster);
     } catch (error) {
-      console.error("Failed to fetch data", error);
+      console.error("Critical failure during data refresh", error);
     }
   };
 
   // --- FILTERED ORDERS LOGIC ---
-  // Admins see all. Users see only their company's orders or legacy orders (undefined companyId).
   const visibleOrders = orders.filter(o => {
-      if (user?.role === UserRole.ADMIN || user?.role === UserRole.WAREHOUSE) return true; // Warehouse sees all to pick
+      if (user?.role === UserRole.ADMIN || user?.role === UserRole.WAREHOUSE || user?.role === UserRole.MANAGEMENT) return true;
       return !o.companyId || o.companyId === user?.companyId;
   });
 
@@ -182,7 +203,7 @@ const App: React.FC = () => {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-600"></div>
         </div>
       );
-  }
+    }
 
   if (!user || view === 'LOGIN') {
     return <Login onLogin={handleLogin} toggleTheme={toggleTheme} isDarkMode={darkMode} />;
@@ -214,6 +235,8 @@ const App: React.FC = () => {
               userCompanyId={user.companyId}
               companies={companies}
               categories={categories}
+              currentUser={user} // Pass full user object
+              allUsers={allUsers} // Pass all users for lookup
             />
           );
       case 'OPEN_ORDERS':
@@ -230,6 +253,8 @@ const App: React.FC = () => {
             userCompanyId={user.companyId}
             companies={companies}
             categories={categories}
+            currentUser={user}
+            allUsers={allUsers}
           />
         );
       case 'FINISHED_ORDERS':
@@ -246,6 +271,8 @@ const App: React.FC = () => {
             userCompanyId={user.companyId}
             companies={companies}
             categories={categories}
+            currentUser={user}
+            allUsers={allUsers}
           />
         );
       case 'PURCHASE_ORDERS':

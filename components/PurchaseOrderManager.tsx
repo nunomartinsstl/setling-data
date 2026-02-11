@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MasterMaterial, Supplier, UnitOption, PurchaseOrder } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2 } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2, Hash } from 'lucide-react';
 
 // Explicitly declare global types to avoid TS errors without imports
 declare const window: any;
@@ -45,6 +45,16 @@ const calculateRelevance = (target: string, query: string): number => {
         }
     });
     return matches > 0 ? score : 0;
+};
+
+// PEP Formatter
+const formatPEP = (value: string) => {
+    const clean = value.replace(/[^0-9]/g, '');
+    let formatted = clean;
+    if (clean.length > 4) formatted = `${clean.slice(0, 4)}.${clean.slice(4)}`;
+    if (clean.length > 7) formatted = `${clean.slice(0, 4)}.${clean.slice(4, 7)}/${clean.slice(7)}`;
+    if (clean.length > 10) formatted = `${clean.slice(0, 4)}.${clean.slice(4, 7)}/${clean.slice(7, 10)}/${clean.slice(10, 14)}`;
+    return formatted;
 };
 
 const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList, currentUsername, logoUrl }) => {
@@ -114,10 +124,22 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
 
+  const validatePep = () => {
+      if (!pep) return true; 
+      const clean = pep.replace(/[^0-9]/g, '');
+      // Expect at least Prefix (4) + Code (3) + Element (3) = 10 digits
+      if (clean.length < 10) return false;
+      
+      const prefix = clean.slice(0, 4);
+      if (prefix !== '1700' && prefix !== '2200') return false;
+      
+      return true;
+  };
+
   // Validation Flags
   const isFormValid = useMemo(() => {
       if (!selectedSupplier) return false;
-      if (!pep || pep.trim().length === 0) return false;
+      if (!pep || pep.trim().length === 0 || !validatePep()) return false;
       if (rows.length === 0) return false;
       
       return rows.every(r => 
@@ -185,6 +207,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           similarityChecked: true
       };
       setRows(newRows);
+  };
+
+  const handlePepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const formatted = formatPEP(e.target.value);
+      setPep(formatted);
   };
 
   // Similarity Handlers
@@ -483,18 +510,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               return [saved, ...prev];
           });
 
-          // Stop loading to ensure UI updates before alert
           setLoading(false);
-          
-          // Force a microtask delay to allow React to paint the 'not loading' state
           await new Promise(resolve => setTimeout(resolve, 10));
 
-          // Post-save workflow
           if (window.confirm("Pedido gravado com sucesso!\n\nDeseja visualizar o PDF agora?")) {
               handlePrintOrder(saved);
           }
           
-          // Return to menu
           setViewMode('LIST');
           setOrderId(null);
           loadData();
@@ -538,6 +560,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
   return (
     <div className="pb-48 md:pb-24">
+      {/* ... (Modal logic same as before) ... */}
       {/* Modal */}
       {similarityModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -727,14 +750,19 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
                   {/* PEP */}
                   <div>
-                      <label className={`block text-xs font-bold uppercase mb-1 ${!pep.trim() ? 'text-red-500' : 'text-slate-500'}`}>PEP / Projeto *</label>
+                      <label className={`block text-xs font-bold uppercase mb-1 flex items-center gap-1 ${!pep.trim() || !validatePep() ? 'text-red-500' : 'text-slate-500'}`}>
+                          <Hash className="w-3 h-3" /> PEP / Projeto *
+                      </label>
                       <input 
                         type="text" 
                         value={pep} 
-                        onChange={e => setPep(e.target.value)}
-                        className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!pep.trim() ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
-                        placeholder="Obrigatório"
+                        onChange={handlePepChange}
+                        className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!pep.trim() || !validatePep() ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                        placeholder="1700.000/000/0000"
                       />
+                      <p className="text-[10px] text-slate-400 mt-1 pl-1">
+                          Formato: 1700.xxx/xxx... (AVAC) ou 2200.xxx/xxx... (Hotelaria)
+                      </p>
                   </div>
               </div>
 
@@ -744,7 +772,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       const matches = getMaterialMatches(row.description);
                       const isExpanded = idx === expandedRow;
                       
-                      // Row specific validation states
                       const isDescMissing = !row.description || row.description.trim().length === 0;
                       const isUnverified = !row.similarityChecked;
                       const isQtyInvalid = Number(row.quantity) <= 0;
@@ -753,7 +780,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
                       return (
                           <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'} ${(hasRowError) && !isExpanded ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : ''}`}>
-                              {/* Header Row (Summary) */}
+                              {/* Header Row */}
                               <div 
                                 onClick={() => setExpandedRow(isExpanded ? -1 : idx)}
                                 className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
