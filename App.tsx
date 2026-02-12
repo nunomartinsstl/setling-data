@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption, Receipt } from './types';
 import Login from './components/Login';
@@ -225,6 +226,7 @@ const App: React.FC = () => {
         return (
             <OrderManager 
               orders={orders} // Pass all orders so reservation logic works correctly
+              allActiveOrders={orders} // Pass Full List for FIFO
               stock={stock}
               masterList={masterList}
               type="OPEN"
@@ -243,6 +245,7 @@ const App: React.FC = () => {
         return (
           <OrderManager 
             orders={visibleOrders} 
+            allActiveOrders={orders} // Pass Full List for FIFO
             stock={stock}
             masterList={masterList}
             type="OPEN" 
@@ -261,6 +264,7 @@ const App: React.FC = () => {
         return (
           <OrderManager 
             orders={visibleOrders} 
+            allActiveOrders={orders} 
             stock={stock}
             masterList={masterList}
             type="FINISHED" 

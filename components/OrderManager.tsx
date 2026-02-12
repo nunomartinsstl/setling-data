@@ -3,12 +3,13 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck } from 'lucide-react';
 
 declare const XLSX: any;
 
 interface OrderManagerProps {
-  orders: Order[];
+  orders: Order[]; // The displayed list of orders (filtered by user access)
+  allActiveOrders?: Order[]; // Full list of ALL orders for global FIFO calculation
   stock: StockItem[];
   masterList: MasterMaterial[];
   type: 'OPEN' | 'FINISHED';
@@ -113,7 +114,7 @@ const resizeImage = (file: File): Promise<string> => {
     });
 };
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [], currentUser, allUsers = [] }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [], currentUser, allUsers = [] }) => {
   // ... (existing state)
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -158,6 +159,74 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  // --- FIFO ALLOCATION LOGIC ---
+  const allocationMap = useMemo(() => {
+        // Use Global list if provided (for correct FIFO across companies), else fall back to local list
+        const processingOrders = allActiveOrders || orders;
+        
+        // 1. Snapshot Stock
+        const stockState = new Map<string, number>();
+        stock.forEach(s => stockState.set(s.sku, s.quantity));
+
+        // 2. Filter Active Orders & Sort Oldest -> Newest
+        const active = processingOrders
+            .filter(o => ['OPEN', 'IN_PROCESS', 'IN PROCESS', 'PENDING', 'PENDING_APPROVAL'].includes(o.status))
+            .sort((a, b) => new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime());
+
+        // 3. Output Maps
+        const orderStatus = new Map<string, 'FULL' | 'PARTIAL' | 'NONE'>();
+        const itemAllocations = new Map<string, number>(); // Key: orderId_sku -> qty
+
+        active.forEach(order => {
+            let fullyCovered = true;
+            let partiallyCovered = false;
+            let hasRequirements = false;
+
+            order.items.forEach(item => {
+                if (item.isCustom || !item.sku) return;
+                
+                hasRequirements = true;
+                const needed = item.quantity;
+                const currentStock = stockState.get(item.sku) || 0;
+
+                if (currentStock >= needed) {
+                    // Fully allocated
+                    stockState.set(item.sku, currentStock - needed);
+                    itemAllocations.set(`${order.id}_${item.sku}`, needed);
+                    partiallyCovered = true;
+                } else if (currentStock > 0) {
+                    // Partial allocation
+                    stockState.set(item.sku, 0);
+                    itemAllocations.set(`${order.id}_${item.sku}`, currentStock);
+                    fullyCovered = false;
+                    partiallyCovered = true;
+                } else {
+                    // No allocation
+                    itemAllocations.set(`${order.id}_${item.sku}`, 0);
+                    fullyCovered = false;
+                }
+            });
+
+            if (!hasRequirements) {
+                // If only custom items, treat as OK/FULL for stock purposes? 
+                // Or maybe 'NONE'? Let's assume FULL if no stock items block it.
+                orderStatus.set(order.id, 'FULL');
+            } else if (fullyCovered) {
+                orderStatus.set(order.id, 'FULL');
+            } else if (partiallyCovered) {
+                orderStatus.set(order.id, 'PARTIAL');
+            } else {
+                orderStatus.set(order.id, 'NONE');
+            }
+        });
+
+        return { orderStatus, itemAllocations };
+  }, [orders, allActiveOrders, stock]);
+
+  const getAllocatedQty = (orderId: string, sku: string) => {
+      return allocationMap.itemAllocations.get(`${orderId}_${sku}`) || 0;
+  };
 
   // ... (groupedOrders logic)
   const groupedOrders = useMemo(() => {
@@ -451,32 +520,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   const getStockCount = (sku: string) => {
     return stock.filter(s => s.sku === sku).reduce((total, item) => total + item.quantity, 0);
-  };
-
-  const getReservedCount = (sku: string, excludeOrderId?: string) => {
-      let reserved = 0;
-      orders.forEach(order => {
-          if (order.id === excludeOrderId || order.status === 'COMPLETED') return;
-          order.items.forEach(item => {
-              if (item.sku === sku && !item.isCustom) {
-                  reserved += item.quantity;
-              }
-          });
-      });
-      return reserved;
-  };
-
-  const hasOrderAlerts = (order: Order) => {
-      if (order.items.some(i => i.isCustom)) return true;
-      for (const item of order.items) {
-          if (!item.isCustom && item.sku) {
-              const currentStock = getStockCount(item.sku);
-              const reservedByOthers = getReservedCount(item.sku, order.id);
-              const availableForOrder = Math.max(0, currentStock - reservedByOthers);
-              if (item.quantity >= availableForOrder && item.quantity > 0) return true;
-          }
-      }
-      return false;
   };
 
   const getMaterialDescription = (sku: string): string => {
@@ -858,23 +901,17 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       if (hour >= 5 && hour < 13) greeting = "Bom dia";
       else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
 
-      // If approved order, send simplified "Approved" email or standard alert
-      
+      // Calculate missing stock based on FIFO allocation
       const missingStockItems = order.items.filter(item => {
-          if (item.isCustom) return false;
-          const currentStock = getStockCount(item.sku);
-          const reservedStock = getReservedCount(item.sku, order.id);
-          const availableStock = Math.max(0, currentStock - reservedStock);
-          return item.quantity > availableStock;
+          if (item.isCustom || !item.sku) return false;
+          const allocated = getAllocatedQty(order.id, item.sku);
+          return allocated < item.quantity;
       });
 
-      const exhaustingStockItems = order.items.filter(item => {
-          if (item.isCustom) return false;
-          const currentStock = getStockCount(item.sku);
-          const reservedStock = getReservedCount(item.sku, order.id); 
-          const availableStock = Math.max(0, currentStock - reservedStock);
-          return item.quantity === availableStock && item.quantity > 0;
-      });
+      // Pure FIFO logic: if allocated < qty, it is effectively missing for this order, 
+      // even if physical stock > 0 (because older orders took it).
+      
+      const exhaustingStockItems: any[] = []; // Deprecated logic, simplified to just Missing vs New
 
       const newMaterialItems = order.items.filter(item => item.isCustom);
 
@@ -892,25 +929,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
           body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
           body += `-------------------------------------------\n`;
           missingStockItems.forEach(item => {
-              const currentStock = getStockCount(item.sku);
-              const reservedStock = getReservedCount(item.sku, order.id); 
-              const availableStock = Math.max(0, currentStock - reservedStock);
-              const missingQty = Math.max(0, item.quantity - availableStock);
+              // Recalculate allocated for email display
+              const allocated = getAllocatedQty(order.id, item.sku);
+              const missingQty = item.quantity - allocated;
 
               body += `Ref: ${item.sku}\n`;
               body += `Desc: ${item.description}\n`;
-              body += `Pedida: ${item.quantity} | Stock Disp: ${availableStock}\n`;
-              body += `Necessário: ${missingQty}\n\n`;
-          });
-      }
-
-      if (exhaustingStockItems.length > 0) {
-          body += `-------------------------------------------\n`;
-          body += `ℹ️  AVISO: STOCK FICARÁ A ZERO\n`;
-          body += `-------------------------------------------\n`;
-          exhaustingStockItems.forEach(item => {
-                body += `Ref: ${item.sku} - ${item.description}\n`;
-                body += `Qtd Pedida: ${item.quantity}\n\n`;
+              body += `Pedida: ${item.quantity} | Alocado (FIFO): ${allocated}\n`;
+              body += `Em falta para este pedido: ${missingQty}\n\n`;
           });
       }
 
@@ -1467,40 +1493,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             <input 
                                 type="text"
                                 value={pep}
-                                onChange={(e) => {
-                                    const prefix = (companies.find(c => c.id === targetCompanyId)?.name.toLowerCase().includes('hotelaria')) ? '2200' : '1700';
-                                    let val = e.target.value;
-                                    let digits = val.replace(/[^0-9]/g, '');
-
-                                    // Enforce prefix logic
-                                    if (digits.length < 4) {
-                                        // User tried to delete prefix, reset to prefix
-                                        digits = prefix;
-                                    } else if (!digits.startsWith(prefix)) {
-                                        // User pasted or typed something at start - append to prefix
-                                        digits = prefix + digits;
-                                    }
-
-                                    // Max length 14 digits
-                                    if (digits.length > 14) digits = digits.slice(0, 14);
-
-                                    // Format: 1700.000/000/0000
-                                    let formatted = digits.slice(0, 4);
-                                    if (digits.length > 4) formatted += '.' + digits.slice(4, 7);
-                                    if (digits.length > 7) formatted += '/' + digits.slice(7, 10);
-                                    if (digits.length > 10) formatted += '/' + digits.slice(10, 14);
-
-                                    setPep(formatted);
-                                    if(formErrors.pep) setFormErrors({...formErrors, pep: false});
-                                }}
-                                // Auto-init on focus if empty
+                                onChange={handlePepChange}
                                 onFocus={() => {
                                     if (!pep) {
                                         const prefix = (companies.find(c => c.id === targetCompanyId)?.name.toLowerCase().includes('hotelaria')) ? '2200' : '1700';
                                         setPep(prefix);
                                     }
                                 }}
-                                placeholder={`${(companies.find(c => c.id === targetCompanyId)?.name.toLowerCase().includes('hotelaria')) ? '2200' : '1700'}.000/000/0000`}
+                                placeholder={getPepPlaceholder()}
                                 className={`w-full p-3 border rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 ${formErrors.pep ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-300 dark:border-slate-600'}`}
                             />
                             <p className="text-[10px] text-slate-400 mt-1 pl-1">
@@ -1925,6 +1925,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                // Check for pending photos
                                const hasPendingPhotos = order.items.some(i => i.image && (!i.sku || i.sku === 'FOTO_PENDENTE'));
 
+                               // FIFO Status
+                               const allocationStatus = allocationMap.orderStatus.get(order.id) || 'FULL'; // Default full for completed/untracked
+                               const isFullAlloc = allocationStatus === 'FULL';
+                               const isPartialAlloc = allocationStatus === 'PARTIAL';
+
                                return (
                                    <div 
                                         key={order.id} 
@@ -1951,10 +1956,17 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                        ? (isPending ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' 
                                                           : isPendingApproval ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
                                                           : isInProcess ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400' 
-                                                          : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400') 
+                                                          : (isFullAlloc ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' 
+                                                                         : 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400')) 
                                                        : (isOrderFullyFulfilled ? 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400')
                                                    }`}>
-                                                       {type === 'OPEN' ? (isCompleted ? <CheckCircle className="w-6 h-6"/> : isPending ? <ShoppingBag className="w-6 h-6"/> : isPendingApproval ? <FileText className="w-6 h-6"/> : <Clock className="w-6 h-6" />) : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)}
+                                                       {type === 'OPEN' ? (
+                                                            isCompleted ? <CheckCircle className="w-6 h-6"/> : 
+                                                            isPending ? <ShoppingBag className="w-6 h-6"/> : 
+                                                            isPendingApproval ? <FileText className="w-6 h-6"/> : 
+                                                            isFullAlloc ? <PackageCheck className="w-6 h-6"/> : 
+                                                            <AlertTriangle className="w-6 h-6" /> // Red if Partial/None
+                                                       ) : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)}
                                                    </div>
                                                    <div className="flex-1 min-w-0">
                                                        <div className="flex items-center gap-2">
@@ -2016,6 +2028,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                     <th className="p-3 whitespace-nowrap">Material</th>
                                                                     <th className="p-3 whitespace-nowrap">Descrição</th>
                                                                     <th className="p-3 text-right whitespace-nowrap">Qtd</th>
+                                                                    {type === 'OPEN' && !isCompleted && <th className="p-3 text-right whitespace-nowrap">Stock Alloc</th>}
                                                                     {(type === 'FINISHED' || isGhost) && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
                                                                     {(type === 'FINISHED' || isGhost) && <th className="p-3 whitespace-nowrap">Status</th>}
                                                                 </tr>
@@ -2024,6 +2037,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                 {order.items.map((item, idx) => {
                                                                     const picked = (type === 'FINISHED' || isGhost) ? getTotalPickedQuantity(order, orders, item.sku) : 0;
                                                                     const isFullyPicked = picked >= item.quantity;
+                                                                    const allocated = getAllocatedQty(order.id, item.sku);
+                                                                    const isAllocOK = allocated >= item.quantity;
+
                                                                     return (
                                                                         <tr key={idx}>
                                                                             <td className="p-3 font-mono text-xs whitespace-nowrap">{item.sku}</td>
@@ -2040,6 +2056,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                                                 )}
                                                                             </td>
                                                                             <td className="p-3 text-right font-bold whitespace-nowrap">{item.quantity}</td>
+                                                                            
+                                                                            {/* FIFO Allocation Column for Open Orders */}
+                                                                            {type === 'OPEN' && !isCompleted && (
+                                                                                <td className="p-3 text-right font-mono text-xs whitespace-nowrap">
+                                                                                    {item.isCustom ? (
+                                                                                        <span className="text-slate-400">N/A</span>
+                                                                                    ) : (
+                                                                                        <span className={`${isAllocOK ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
+                                                                                            {allocated} / {item.quantity}
+                                                                                        </span>
+                                                                                    )}
+                                                                                </td>
+                                                                            )}
+
                                                                             {(type === 'FINISHED' || isGhost) && (
                                                                                 <>
                                                                                 <td className="p-3 text-right font-bold whitespace-nowrap">{picked}</td>
@@ -2085,7 +2115,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                                     )}
 
                                                     {/* Email Button */}
-                                                    {type === 'OPEN' && hasOrderAlerts(order) && !isPendingApproval && (
+                                                    {type === 'OPEN' && !isPendingApproval && !isFullAlloc && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleResendEmail(order); }}
                                                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
