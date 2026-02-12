@@ -74,28 +74,6 @@ const calculateRelevance = (target: string, query: string): number => {
     return matches > 0 ? score : 0;
 };
 
-// PEP Formatter
-const formatPEP = (value: string) => {
-    // 1. Remove everything that isn't a digit
-    const clean = value.replace(/[^0-9]/g, '');
-
-    // 2. Reconstruct with separators
-    // Format: 0000.000/000/0000
-    let formatted = clean;
-    
-    if (clean.length > 4) {
-        formatted = `${clean.slice(0, 4)}.${clean.slice(4)}`;
-    }
-    if (clean.length > 7) {
-        formatted = `${clean.slice(0, 4)}.${clean.slice(4, 7)}/${clean.slice(7)}`;
-    }
-    if (clean.length > 10) {
-        formatted = `${clean.slice(0, 4)}.${clean.slice(4, 7)}/${clean.slice(7, 10)}/${clean.slice(10, 14)}`;
-    }
-    
-    return formatted;
-};
-
 // Image Compression Helper
 const resizeImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
@@ -397,41 +375,78 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
     if(formErrors.date) setFormErrors({...formErrors, date: false});
   };
 
-  const handlePepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const val = e.target.value;
-      // Allow user to type freely (digits, separators) but block letters/symbols
-      const clean = val.replace(/[^0-9./-]/g, '');
-      setPep(clean);
-      if(formErrors.pep) setFormErrors({...formErrors, pep: false});
-  };
-
-  const handlePepBlur = () => {
-      const formatted = formatPEP(pep);
-      setPep(formatted);
-  };
-
   const getTargetCompany = () => {
       return companies.find(c => c.id === targetCompanyId);
   };
 
-  const getPepPlaceholder = () => {
+  // --- STRICT PEP LOGIC ---
+  const pepPrefix = useMemo(() => {
       const comp = getTargetCompany();
-      if (!comp) return "1700.000/000 (AVAC) ou 2200... (Hotelaria)";
-      
-      const isHotelaria = comp.name.toLowerCase().includes('hotelaria');
-      return isHotelaria ? "2200.000/000/0000" : "1700.000/000/0000";
+      if (!comp) return '1700'; // Default
+      return comp.name.toLowerCase().includes('hotelaria') ? '2200' : '1700';
+  }, [targetCompanyId, companies]);
+
+  const getPepPlaceholder = () => {
+      return `${pepPrefix}.000/000/0000`;
+  };
+
+  // Auto-set PEP prefix when company changes
+  useEffect(() => {
+      if (!pep) {
+          setPep(pepPrefix);
+      } else {
+          // Switch prefix if company type changed
+          const currentClean = pep.replace(/[^0-9]/g, '');
+          if (currentClean.startsWith('1700') && pepPrefix === '2200') {
+               setPep(pep.replace('1700', '2200'));
+          } else if (currentClean.startsWith('2200') && pepPrefix === '1700') {
+               setPep(pep.replace('2200', '1700'));
+          }
+      }
+  }, [pepPrefix]);
+
+  const handlePepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      let val = e.target.value;
+      let digits = val.replace(/[^0-9]/g, '');
+
+      // FORCE PREFIX Logic
+      // If user deletes part of prefix, restore it
+      if (digits.length < 4) {
+          digits = pepPrefix; 
+      } else if (!digits.startsWith(pepPrefix)) {
+          // If user pastes/types "123", make it "1700123"
+          // We assume input is the "tail" if it doesn't match head
+          digits = pepPrefix + digits;
+      }
+
+      // Max Length: 4 (prefix) + 3 + 3 + 4 = 14 digits
+      if (digits.length > 14) digits = digits.slice(0, 14);
+
+      // Auto-Formatting
+      let formatted = digits.slice(0, 4); // Prefix
+      if (digits.length > 4) formatted += '.' + digits.slice(4, 7);
+      if (digits.length > 7) formatted += '/' + digits.slice(7, 10);
+      if (digits.length > 10) formatted += '/' + digits.slice(10, 14);
+
+      setPep(formatted);
+      if(formErrors.pep) setFormErrors({...formErrors, pep: false});
   };
 
   const validatePep = () => {
-      if (!pep) return true; // Let optional? No, usually required.
+      if (!pep) return true; 
       const clean = pep.replace(/[^0-9]/g, '');
-      // Expect at least Prefix (4) + Code (3) + Element (3) = 10 digits
-      if (clean.length < 10) return false;
       
-      const prefix = clean.slice(0, 4);
-      if (prefix !== '1700' && prefix !== '2200') return false;
-      
-      return true;
+      // Must start with correct prefix
+      if (!clean.startsWith(pepPrefix)) return false;
+
+      // Must follow structure (though prompt says "can be shorter")
+      // We check if it matches the generated format for its length
+      let expectedFormat = clean.slice(0, 4);
+      if (clean.length > 4) expectedFormat += '.' + clean.slice(4, 7);
+      if (clean.length > 7) expectedFormat += '/' + clean.slice(7, 10);
+      if (clean.length > 10) expectedFormat += '/' + clean.slice(10, 14);
+
+      return pep === expectedFormat;
   };
 
   const getStockCount = (sku: string) => {
@@ -529,7 +544,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       let isCompanyValid = !!targetCompanyId;
       let isDateValid = !!dueDate;
       
-      // Strict PEP Validation if entered
+      // Strict PEP Validation
       let isPepValid = true;
       if (pep) {
           isPepValid = validatePep();
@@ -1452,13 +1467,44 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                             <input 
                                 type="text"
                                 value={pep}
-                                onChange={handlePepChange}
-                                onBlur={handlePepBlur}
-                                placeholder={getPepPlaceholder()}
+                                onChange={(e) => {
+                                    const prefix = (companies.find(c => c.id === targetCompanyId)?.name.toLowerCase().includes('hotelaria')) ? '2200' : '1700';
+                                    let val = e.target.value;
+                                    let digits = val.replace(/[^0-9]/g, '');
+
+                                    // Enforce prefix logic
+                                    if (digits.length < 4) {
+                                        // User tried to delete prefix, reset to prefix
+                                        digits = prefix;
+                                    } else if (!digits.startsWith(prefix)) {
+                                        // User pasted or typed something at start - append to prefix
+                                        digits = prefix + digits;
+                                    }
+
+                                    // Max length 14 digits
+                                    if (digits.length > 14) digits = digits.slice(0, 14);
+
+                                    // Format: 1700.000/000/0000
+                                    let formatted = digits.slice(0, 4);
+                                    if (digits.length > 4) formatted += '.' + digits.slice(4, 7);
+                                    if (digits.length > 7) formatted += '/' + digits.slice(7, 10);
+                                    if (digits.length > 10) formatted += '/' + digits.slice(10, 14);
+
+                                    setPep(formatted);
+                                    if(formErrors.pep) setFormErrors({...formErrors, pep: false});
+                                }}
+                                // Auto-init on focus if empty
+                                onFocus={() => {
+                                    if (!pep) {
+                                        const prefix = (companies.find(c => c.id === targetCompanyId)?.name.toLowerCase().includes('hotelaria')) ? '2200' : '1700';
+                                        setPep(prefix);
+                                    }
+                                }}
+                                placeholder={`${(companies.find(c => c.id === targetCompanyId)?.name.toLowerCase().includes('hotelaria')) ? '2200' : '1700'}.000/000/0000`}
                                 className={`w-full p-3 border rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 ${formErrors.pep ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-300 dark:border-slate-600'}`}
                             />
                             <p className="text-[10px] text-slate-400 mt-1 pl-1">
-                                Formato: {getTargetCompany()?.name.toLowerCase().includes('hotelaria') ? '2200.000/000/0000' : '1700.000/000/0000'}
+                                Prefixo Fixo: {getTargetCompany()?.name.toLowerCase().includes('hotelaria') ? '2200' : '1700'}
                             </p>
                         </div>
                         <div>
