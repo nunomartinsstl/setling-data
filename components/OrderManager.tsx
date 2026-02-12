@@ -901,17 +901,33 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       if (hour >= 5 && hour < 13) greeting = "Bom dia";
       else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
 
-      // Calculate missing stock based on FIFO allocation
-      const missingStockItems = order.items.filter(item => {
-          if (item.isCustom || !item.sku) return false;
-          const allocated = getAllocatedQty(order.id, item.sku);
-          return allocated < item.quantity;
-      });
+      // IMPORTANT FIX: Calculate "Missing" vs "Exhausting" based on ACTUAL PHYSICAL STOCK for this email
+      // We don't rely on the 'allocationMap' hook here because it might be stale if called immediately after creation.
+      // Instead we use the 'stock' prop directly.
+      const missingStockItems: any[] = [];
+      const exhaustingStockItems: any[] = [];
 
-      // Pure FIFO logic: if allocated < qty, it is effectively missing for this order, 
-      // even if physical stock > 0 (because older orders took it).
-      
-      const exhaustingStockItems: any[] = []; // Deprecated logic, simplified to just Missing vs New
+      order.items.forEach(item => {
+          if (item.isCustom || !item.sku) return;
+          
+          const stockItem = stock.find(s => s.sku === item.sku);
+          const currentPhysicalStock = stockItem ? stockItem.quantity : 0;
+          
+          if (currentPhysicalStock < item.quantity) {
+              // True shortage
+              missingStockItems.push({
+                  ...item,
+                  physicalStock: currentPhysicalStock,
+                  missingQty: item.quantity - currentPhysicalStock
+              });
+          } else if (currentPhysicalStock === item.quantity) {
+              // Exhaustion (Stock becomes 0)
+              exhaustingStockItems.push({
+                  ...item,
+                  physicalStock: currentPhysicalStock
+              });
+          }
+      });
 
       const newMaterialItems = order.items.filter(item => item.isCustom);
 
@@ -929,14 +945,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
           body += `-------------------------------------------\n`;
           missingStockItems.forEach(item => {
-              // Recalculate allocated for email display
-              const allocated = getAllocatedQty(order.id, item.sku);
-              const missingQty = item.quantity - allocated;
-
               body += `Ref: ${item.sku}\n`;
               body += `Desc: ${item.description}\n`;
-              body += `Pedida: ${item.quantity} | Alocado (FIFO): ${allocated}\n`;
-              body += `Em falta para este pedido: ${missingQty}\n\n`;
+              body += `Pedida: ${item.quantity} | Stock Físico: ${item.physicalStock}\n`;
+              body += `Em falta para este pedido: ${item.missingQty}\n\n`;
+          });
+      }
+
+      if (exhaustingStockItems.length > 0) {
+          body += `-------------------------------------------\n`;
+          body += `ℹ️  AVISO: STOCK FICARÁ A ZERO\n`;
+          body += `-------------------------------------------\n`;
+          exhaustingStockItems.forEach(item => {
+                body += `Ref: ${item.sku}\n`;
+                body += `Desc: ${item.description}\n`;
+                body += `Qtd Pedida: ${item.quantity} (Igual ao Stock Físico)\n\n`;
           });
       }
 

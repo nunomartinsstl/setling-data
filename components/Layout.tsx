@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { User, ViewState, UserRole } from '../types';
 import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle, ArrowDownCircle } from 'lucide-react';
@@ -44,13 +45,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   const isAdmin = user.role === UserRole.ADMIN;
   const isManagement = user.role === UserRole.MANAGEMENT;
   const isWarehouse = user.role === UserRole.WAREHOUSE;
+  const isTechnical = user.role === UserRole.TECHNICAL;
   
-  // Auto-expand if active view is a child
+  // Auto-expand if active view is a child or if Technical (they have few options)
   React.useEffect(() => {
-    if (['CREATE_ORDER', 'OPEN_ORDERS', 'FINISHED_ORDERS'].includes(currentView)) {
+    if (['CREATE_ORDER', 'OPEN_ORDERS', 'FINISHED_ORDERS'].includes(currentView) || isTechnical) {
         setIsWarehouseGroupOpen(true);
     }
-  }, [currentView]);
+  }, [currentView, isTechnical]);
 
   // Logic to determine logo styling
   const isGenericLogo = logoUrl.includes('setling-logo-white');
@@ -78,16 +80,18 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   const getRoleLabel = () => {
     if (isAdmin) return 'Administrador';
     if (isManagement) return 'Coordenador';
+    if (isTechnical) return 'Técnico';
     return 'Logística';
   };
 
   const getRoleColor = () => {
      if (isAdmin) return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
      if (isManagement) return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+     if (isTechnical) return 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-300';
      return 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300';
   };
 
-  const canCreate = isAdmin || isManagement;
+  const canCreate = isAdmin || isManagement || isTechnical;
   const isWarehouseActive = ['CREATE_ORDER', 'OPEN_ORDERS', 'FINISHED_ORDERS'].includes(currentView);
 
   return (
@@ -105,8 +109,9 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
         {/* Header - Fixed */}
         <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex-shrink-0">
             <button 
-              onClick={() => { onNavigate('DASHBOARD'); setMobileMenuOpen(false); }}
+              onClick={() => { if(!isTechnical) onNavigate('DASHBOARD'); setMobileMenuOpen(false); }}
               className="text-left focus:outline-none w-full group"
+              disabled={isTechnical}
             >
                 <img 
                     src={logoUrl} 
@@ -128,13 +133,15 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </div>
 
             <nav className="space-y-1">
-              <NavItem 
-                view="DASHBOARD" 
-                icon={LayoutDashboard} 
-                label="Painel" 
-                isActive={currentView === 'DASHBOARD'} 
-                onClick={() => handleNavClick('DASHBOARD')} 
-              />
+              {!isTechnical && (
+                  <NavItem 
+                    view="DASHBOARD" 
+                    icon={LayoutDashboard} 
+                    label="Painel" 
+                    isActive={currentView === 'DASHBOARD'} 
+                    onClick={() => handleNavClick('DASHBOARD')} 
+                  />
+              )}
               
               {/* Nested Warehouse Group */}
               <div className="space-y-1">
@@ -148,7 +155,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                   >
                     <div className="flex items-center space-x-3">
                       <Package className={`w-5 h-5 transition-colors ${isWarehouseActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'}`} />
-                      <span>Pedidos ao Armazém</span>
+                      <span>{isTechnical ? 'Requisições' : 'Pedidos ao Armazém'}</span>
                     </div>
                     <div className={`transition-transform duration-200 ${isWarehouseGroupOpen ? 'rotate-180' : ''}`}>
                          <ChevronDown className="w-4 h-4 text-slate-400" />
@@ -161,33 +168,41 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                             <NavItem 
                                 view="CREATE_ORDER" 
                                 icon={PlusCircle} 
-                                label="Criar Pedido" 
+                                label={isTechnical ? "Criar Requisição" : "Criar Pedido"}
                                 isActive={currentView === 'CREATE_ORDER'} 
                                 onClick={() => handleNavClick('CREATE_ORDER')}
                                 isChild={true}
                             />
                         )}
-                        <NavItem 
-                            view="OPEN_ORDERS" 
-                            icon={ShoppingCart} 
-                            label="Pedidos Abertos" 
-                            isActive={currentView === 'OPEN_ORDERS'} 
-                            onClick={() => handleNavClick('OPEN_ORDERS')}
-                            isChild={true}
-                        />
-                        <NavItem 
-                            view="FINISHED_ORDERS" 
-                            icon={CheckCircle} 
-                            label="Pedidos Finalizados" 
-                            isActive={currentView === 'FINISHED_ORDERS'} 
-                            onClick={() => handleNavClick('FINISHED_ORDERS')}
-                            isChild={true}
-                        />
+                        {!isTechnical && (
+                            <>
+                                <NavItem 
+                                    view="OPEN_ORDERS" 
+                                    icon={ShoppingCart} 
+                                    label="Pedidos Abertos" 
+                                    isActive={currentView === 'OPEN_ORDERS'} 
+                                    onClick={() => handleNavClick('OPEN_ORDERS')}
+                                    isChild={true}
+                                />
+                                <NavItem 
+                                    view="FINISHED_ORDERS" 
+                                    icon={CheckCircle} 
+                                    label="Pedidos Finalizados" 
+                                    isActive={currentView === 'FINISHED_ORDERS'} 
+                                    onClick={() => handleNavClick('FINISHED_ORDERS')}
+                                    isChild={true}
+                                />
+                            </>
+                        )}
+                        {/* Technical users just need create, but maybe they want to see their own open orders? 
+                            The requirement said "can only place Requisição and search for stock".
+                            We will hide the list for now based on strict interpretation.
+                        */}
                     </div>
                   )}
               </div>
 
-              {canCreate && (
+              {!isTechnical && canCreate && (
                  <NavItem 
                     view="PURCHASE_ORDERS" 
                     icon={ShoppingBag} 
@@ -205,13 +220,15 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                 onClick={() => handleNavClick('STOCK')} 
               />
 
-              <NavItem 
-                view="RECEIPTS" 
-                icon={ArrowDownCircle} 
-                label="Entradas" 
-                isActive={currentView === 'RECEIPTS'} 
-                onClick={() => handleNavClick('RECEIPTS')} 
-              />
+              {!isTechnical && (
+                  <NavItem 
+                    view="RECEIPTS" 
+                    icon={ArrowDownCircle} 
+                    label="Entradas" 
+                    isActive={currentView === 'RECEIPTS'} 
+                    onClick={() => handleNavClick('RECEIPTS')} 
+                  />
+              )}
 
               {(isAdmin || isWarehouse) && (
                   <NavItem 
@@ -223,13 +240,15 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                   />
               )}
               
-              <NavItem 
-                view="QUERY" 
-                icon={Search} 
-                label="Pesquisa" 
-                isActive={currentView === 'QUERY'} 
-                onClick={() => handleNavClick('QUERY')} 
-              />
+              {!isTechnical && (
+                  <NavItem 
+                    view="QUERY" 
+                    icon={Search} 
+                    label="Pesquisa" 
+                    isActive={currentView === 'QUERY'} 
+                    onClick={() => handleNavClick('QUERY')} 
+                  />
+              )}
               
               {isAdmin && (
                 <>
@@ -278,8 +297,9 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
         {/* ... Header and desktop nav (unchanged) ... */}
         <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 flex-shrink-0">
           <button 
-            onClick={() => onNavigate('DASHBOARD')}
+            onClick={() => { if(!isTechnical) onNavigate('DASHBOARD'); }}
             className="focus:outline-none"
+            disabled={isTechnical}
           >
             <img 
                 src={logoUrl} 

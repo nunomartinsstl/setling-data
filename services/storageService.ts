@@ -655,12 +655,82 @@ export const StorageService = {
       }
   },
 
-  // Logic Placeholders
+  // ----------------------------------------------------------------
+  // REOPEN ORDERS LOGIC (Fixing Issue #1)
+  // ----------------------------------------------------------------
   processBackorders: async (newStock: StockItem[]): Promise<number> => {
-      // Placeholder: In a real app this would check pending orders against new stock
-      // and create sub-orders or update status.
-      // For now, return 0 to satisfy type safety and prevent crash.
-      return 0;
+      if (!db) return 0;
+      
+      try {
+          // 1. Map New Stock for fast lookup
+          const stockMap = new Map<string, number>();
+          newStock.forEach(s => stockMap.set(s.sku, s.quantity));
+
+          // 2. Fetch Orders (we need fresh list)
+          const allOrders = await StorageService.getOrders();
+          
+          // 3. Filter for candidates: COMPLETED orders
+          const candidates = allOrders.filter(o => o.status === 'COMPLETED');
+          
+          let updatedCount = 0;
+          const updates: any = {};
+
+          for (const order of candidates) {
+              let shouldReopen = false;
+              let hasUnfulfilledItems = false;
+
+              // Helper to check picked qty
+              const getPickedQty = (sku: string) => {
+                  const pickedList = toArray(order.pickedItems);
+                  return pickedList
+                      .filter((p: any) => (p.material || '').trim() === sku.trim())
+                      .reduce((acc: number, p: any) => acc + (Number(p.pickedQty) || 0), 0);
+              };
+
+              for (const item of order.items) {
+                  if (item.isCustom) continue; // Skip custom items for now
+                  
+                  const picked = getPickedQty(item.sku);
+                  if (picked < item.quantity) {
+                      hasUnfulfilledItems = true;
+                      const missing = item.quantity - picked;
+                      const available = stockMap.get(item.sku) || 0;
+                      
+                      // If we have ANY stock for a missing item, we reopen the order
+                      if (available > 0) {
+                          shouldReopen = true;
+                      }
+                  }
+              }
+
+              if (shouldReopen && hasUnfulfilledItems) {
+                  // Reopen Order
+                  order.status = 'OPEN'; // Or 'IN_PROCESS'
+                  order.reopenCount = (order.reopenCount || 0) + 1;
+                  
+                  if (!order.changeLog) order.changeLog = [];
+                  order.changeLog.push({
+                      date: new Date().toISOString(),
+                      actor: 'SYSTEM',
+                      details: `Reaberto automaticamente: Stock reposto (${order.reopenCount}ª vez).`
+                  });
+
+                  updates[`${KEYS.ORDERS}/${order.id}`] = order;
+                  updatedCount++;
+                  console.log(`[BACKORDER] Reopening Order ${order.id} due to stock arrival.`);
+              }
+          }
+
+          if (updatedCount > 0) {
+              await db.ref().update(updates);
+          }
+
+          return updatedCount;
+
+      } catch (e) {
+          console.error("Error processing backorders:", e);
+          return 0;
+      }
   },
 
   reconcileCustomItems: async (masterList: MasterMaterial[]) => {
