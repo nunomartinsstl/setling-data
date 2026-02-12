@@ -165,9 +165,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         // Use Global list if provided (for correct FIFO across companies), else fall back to local list
         const processingOrders = allActiveOrders || orders;
         
-        // 1. Snapshot Stock
+        // 1. Snapshot Stock (SUMMED UP)
         const stockState = new Map<string, number>();
-        stock.forEach(s => stockState.set(s.sku, s.quantity));
+        stock.forEach(s => {
+            const current = stockState.get(s.sku) || 0;
+            stockState.set(s.sku, current + s.quantity);
+        });
 
         // 2. Filter Active Orders & Sort Oldest -> Newest
         const active = processingOrders
@@ -910,8 +913,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       order.items.forEach(item => {
           if (item.isCustom || !item.sku) return;
           
-          const stockItem = stock.find(s => s.sku === item.sku);
-          const currentPhysicalStock = stockItem ? stockItem.quantity : 0;
+          // SUM ALL BATCHES/LOCATIONS for this SKU
+          const currentPhysicalStock = stock
+              .filter(s => s.sku === item.sku)
+              .reduce((sum, s) => sum + s.quantity, 0);
           
           if (currentPhysicalStock < item.quantity) {
               // True shortage

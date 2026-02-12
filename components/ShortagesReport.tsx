@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Order, StockItem, OrderLineItem } from '../types';
 import { AlertTriangle, Package, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
@@ -55,14 +56,21 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
             });
         });
 
-        // 3. Compare with Stock
-        const stockMap = new Map<string, StockItem>();
-        stock.forEach(s => stockMap.set(s.sku, s));
+        // 3. Compare with Stock (Summing duplicate SKUs if multiple locations exist)
+        const stockMap = new Map<string, { totalQty: number, desc: string }>();
+        
+        stock.forEach(s => {
+            if (!stockMap.has(s.sku)) {
+                stockMap.set(s.sku, { totalQty: 0, desc: s.description });
+            }
+            const current = stockMap.get(s.sku)!;
+            current.totalQty += s.quantity;
+        });
 
         demandMap.forEach((data, sku) => {
-            const stockItem = stockMap.get(sku);
-            const physicalStock = stockItem ? stockItem.quantity : 0;
-            const description = stockItem ? stockItem.description : data.desc;
+            const stockEntry = stockMap.get(sku);
+            const physicalStock = stockEntry ? stockEntry.totalQty : 0;
+            const description = stockEntry ? stockEntry.desc : data.desc;
 
             if (data.total > physicalStock) {
                 result.push({
