@@ -399,9 +399,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
 
   const handlePepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = e.target.value;
-      const formatted = formatPEP(val);
-      setPep(formatted);
+      // Allow user to type freely (digits, separators) but block letters/symbols
+      const clean = val.replace(/[^0-9./-]/g, '');
+      setPep(clean);
       if(formErrors.pep) setFormErrors({...formErrors, pep: false});
+  };
+
+  const handlePepBlur = () => {
+      const formatted = formatPEP(pep);
+      setPep(formatted);
   };
 
   const getTargetCompany = () => {
@@ -775,39 +781,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // TRIGGER EMAIL FOR SUPERVISOR
-  const triggerSupervisorEmail = (order: Order, isTechnicalUser: boolean) => {
-      if (!isTechnicalUser || !currentUser || !currentUser.supervisorId) return;
-
-      const supervisor = allUsers.find(u => u.uid === currentUser.supervisorId);
-      if (!supervisor || !supervisor.email) {
-          alert("Supervisor não encontrado ou sem e-mail configurado. Avise a coordenação.");
-          return;
-      }
-
-      const hour = new Date().getHours();
-      let greeting = "Bom dia";
-      if (hour >= 13) greeting = "Boa tarde";
-
-      let body = `${greeting} ${supervisor.firstName || 'Coordenador'},\n\n`;
-      body += `O técnico ${currentUsername} criou uma nova requisição que necessita da sua validação.\n\n`;
-      body += `Projeto/PEP: ${order.pep || 'N/A'}\n`;
-      body += `Obra: ${order.title}\n`;
-      body += `Data Desejada: ${new Date(order.dueDate).toLocaleDateString()}\n\n`;
-      body += `Resumo dos Materiais:\n`;
-      
-      order.items.forEach(item => {
-          body += `- ${item.quantity} x ${item.description} ${item.isCustom ? '(Novo)' : ''}\n`;
-      });
-
-      body += `\nPor favor, aceda à plataforma para aprovar ou corrigir este pedido.\n\nCumprimentos,\n${currentUsername}`;
-
-      const subject = `Validação Necessária: ${order.title}`;
-      const mailtoLink = `mailto:${supervisor.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      
-      window.location.href = mailtoLink;
-  };
-
   // TRIGGER APPROVAL AND EMAIL TO LOGISTICS
   const handleApproveOrder = async (order: Order) => {
       // CHECK FOR UNRESOLVED PHOTOS
@@ -1007,6 +980,27 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
        return `${prefix}${String(max + 1).padStart(4, '0')}`;
   };
 
+  const triggerSupervisorEmail = (order: Order, isNew: boolean) => {
+      if (!currentUser?.supervisorId) return; // No supervisor assigned
+
+      // Find supervisor email
+      const supervisor = allUsers.find(u => u.uid === currentUser.supervisorId);
+      if (!supervisor || !supervisor.email) return;
+
+      const subject = isNew 
+          ? `Aprovação Necessária: Nova Requisição - ${order.title}` 
+          : `Requisição Editada - ${order.title}`;
+          
+      const body = `Olá ${supervisor.firstName || 'Coordenador'},\n\n` +
+          `O técnico ${currentUser.username} registou uma requisição (PEP: ${order.pep || 'N/A'}) que aguarda aprovação.\n` +
+          `Itens: ${order.items.length}\n\n` +
+          `Por favor, aceda à plataforma para validar e aprovar o pedido.\n\n` +
+          `Cumprimentos,\nSetling Pedidos`;
+
+      const mailto = `mailto:${supervisor.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      window.location.href = mailto;
+  };
+
   const submitOrder = async () => {
     // ... (Keep existing implementation)
     if (!dueDate) {
@@ -1040,6 +1034,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
             };
 
             await StorageService.updateOrder(updatedOrder);
+            
+            // If editing a pending approval order, notify supervisor again
+            if (isTechnical && existingOrder.status === 'PENDING_APPROVAL') {
+                triggerSupervisorEmail(updatedOrder, false);
+            }
+
             refreshData();
             resetForm();
             setMessage({ type: 'success', text: "Pedido atualizado com sucesso." });
@@ -1453,6 +1453,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, stock, masterList, 
                                 type="text"
                                 value={pep}
                                 onChange={handlePepChange}
+                                onBlur={handlePepBlur}
                                 placeholder={getPepPlaceholder()}
                                 className={`w-full p-3 border rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 ${formErrors.pep ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-300 dark:border-slate-600'}`}
                             />
