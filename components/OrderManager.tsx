@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -229,6 +229,32 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
   const getAllocatedQty = (orderId: string, sku: string) => {
       return allocationMap.itemAllocations.get(`${orderId}_${sku}`) || 0;
+  };
+
+  // --- ORDER ISSUES CALCULATOR ---
+  const getOrderIssues = (order: Order) => {
+      const missing: any[] = [];
+      const exhausting: any[] = [];
+      const custom: any[] = [];
+
+      order.items.forEach(item => {
+          if (item.isCustom) {
+              custom.push(item);
+              return;
+          }
+          if (!item.sku) return;
+
+          // Use current physical stock from props
+          const phys = stock.filter(s => s.sku === item.sku).reduce((a,b) => a + b.quantity, 0);
+          
+          if (phys < item.quantity) {
+              missing.push({ ...item, physical: phys, diff: item.quantity - phys });
+          } else if (phys === item.quantity) {
+              exhausting.push({ ...item, physical: phys });
+          }
+      });
+
+      return { missing, exhausting, custom, hasIssues: missing.length > 0 || custom.length > 0 || exhausting.length > 0 };
   };
 
   // ... (groupedOrders logic)
@@ -869,11 +895,19 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           
           await StorageService.updateOrder(updatedOrder);
           
-          // 2. Trigger Email to Logistics (reuse existing logic but force send)
-          await handleResendEmail(updatedOrder, true);
-          
           refreshData();
-          setMessage({ type: 'success', text: "Pedido aprovado e enviado para logística." });
+          
+          // 2. Trigger Emails (Logic split for Alerts vs Standard)
+          const issues = getOrderIssues(updatedOrder);
+          if (issues.hasIssues) {
+              // Prioritize Alert if there are issues
+              await handleSendEmail(updatedOrder, 'ALERT', true);
+              alert("Email de Alerta (Faltas/Novos) enviado.\n\nPor favor, envie também o email para a Logística manualmente (botão azul na lista).");
+          } else {
+              // Standard perfect order
+              await handleSendEmail(updatedOrder, 'LOGISTICS', true);
+              setMessage({ type: 'success', text: "Pedido aprovado e enviado para logística." });
+          }
 
       } catch(err: any) {
           alert("Erro ao aprovar: " + err.message);
@@ -882,12 +916,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       }
   };
 
-  const handleResendEmail = async (order: Order, skipConfirm = false) => {
-      // ... (Existing implementation)
-      if (!skipConfirm) {
-          if(!window.confirm("Reenviar o e-mail de aviso deste pedido para os destinatários configurados?")) return;
-      }
-      
+  const handleSendEmail = async (order: Order, type: 'LOGISTICS' | 'ALERT', skipConfirm = false) => {
+      // 1. Get Recipients
       const settings = await StorageService.getSettings();
       if (!settings.emailRecipients || settings.emailRecipients.length === 0) {
           if (!skipConfirm) alert("Nenhum destinatário de e-mail configurado nas definições.");
@@ -904,106 +934,84 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       if (hour >= 5 && hour < 13) greeting = "Bom dia";
       else if (hour >= 13 && hour < 20) greeting = "Boa tarde";
 
-      // IMPORTANT FIX: Calculate "Missing" vs "Exhausting" based on ACTUAL PHYSICAL STOCK for this email
-      // We don't rely on the 'allocationMap' hook here because it might be stale if called immediately after creation.
-      // Instead we use the 'stock' prop directly.
-      const missingStockItems: any[] = [];
-      const exhaustingStockItems: any[] = [];
+      let subject = "";
+      let body = "";
 
-      order.items.forEach(item => {
-          if (item.isCustom || !item.sku) return;
+      if (type === 'LOGISTICS') {
+          // STANDARD LOGISTICS EMAIL
+          subject = `Novo Pedido: ${order.title}`;
+          body = `${greeting},\n\n`;
+          body += `O pedido "${order.title}" (PEP: ${order.pep || 'N/A'}) foi registado por ${order.creator} e está disponível para preparação.\n\n`;
+          body += `Data Levantamento: ${new Date(order.dueDate).toLocaleDateString()}\n`;
+          body += `Local: ${order.address || 'Armazém'}\n\n`;
+          body += `Cumprimentos`;
+      } else {
+          // ALERT EMAIL (STOCK SHORTAGE / NEW ITEMS)
+          const issues = getOrderIssues(order);
           
-          // SUM ALL BATCHES/LOCATIONS for this SKU
-          const currentPhysicalStock = stock
-              .filter(s => s.sku === item.sku)
-              .reduce((sum, s) => sum + s.quantity, 0);
-          
-          if (currentPhysicalStock < item.quantity) {
-              // True shortage
-              missingStockItems.push({
-                  ...item,
-                  physicalStock: currentPhysicalStock,
-                  missingQty: item.quantity - currentPhysicalStock
-              });
-          } else if (currentPhysicalStock === item.quantity) {
-              // Exhaustion (Stock becomes 0)
-              exhaustingStockItems.push({
-                  ...item,
-                  physicalStock: currentPhysicalStock
+          if (!issues.hasIssues) {
+              if(!skipConfirm) alert("Este pedido não tem alertas de stock ou novos materiais.");
+              return;
+          }
+
+          subject = `ALERTA FALTAS: ${order.title}`;
+          body = `${greeting},\n\n`;
+          body += `O pedido "${order.title}" requer atenção para os seguintes itens:\n\n`;
+
+          if (issues.missing.length > 0) {
+              body += `-------------------------------------------\n`;
+              body += `⚠️  ALERTA: FALTA DE STOCK\n`;
+              body += `-------------------------------------------\n`;
+              issues.missing.forEach((item: any) => {
+                  body += `Ref: ${item.sku}\n`;
+                  body += `Desc: ${item.description}\n`;
+                  body += `Pedida: ${item.quantity} | Stock Físico: ${item.physical}\n`;
+                  body += `Em falta: ${item.diff}\n\n`;
               });
           }
-      });
 
-      const newMaterialItems = order.items.filter(item => item.isCustom);
+          if (issues.exhausting.length > 0) {
+              body += `-------------------------------------------\n`;
+              body += `ℹ️  AVISO: STOCK FICARÁ A ZERO\n`;
+              body += `-------------------------------------------\n`;
+              issues.exhausting.forEach((item: any) => {
+                    body += `Ref: ${item.sku} - ${item.description}\n`;
+                    body += `Qtd Pedida: ${item.quantity} (Igual ao Stock Físico)\n\n`;
+              });
+          }
 
-      let body = `${greeting},\n\n`;
-      body += `O utilizador ${order.creator} colocou o pedido ${order.title} que requer atenção:\n\n`;
-      
-      // If it was just approved by someone else
-      if (order.status === 'OPEN' && order.changeLog?.slice(-1)[0]?.details.includes('Aprovado')) {
-           body = `${greeting},\n\n`;
-           body += `O pedido ${order.title} (PEP: ${order.pep}) foi APROVADO por ${currentUsername} e está pronto para preparação.\n\n`;
-      }
-      
-      if (missingStockItems.length > 0) {
-          body += `-------------------------------------------\n`;
-          body += `⚠️  ALERTA: FALTA DE STOCK (Parcial ou Total)\n`;
-          body += `-------------------------------------------\n`;
-          missingStockItems.forEach(item => {
-              body += `Ref: ${item.sku}\n`;
-              body += `Desc: ${item.description}\n`;
-              body += `Pedida: ${item.quantity} | Stock Físico: ${item.physicalStock}\n`;
-              body += `Em falta para este pedido: ${item.missingQty}\n\n`;
-          });
-      }
+          if (issues.custom.length > 0) {
+              body += `-------------------------------------------\n`;
+              body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
+              body += `-------------------------------------------\n`;
+              issues.custom.forEach((item: any) => {
+                  const uom = unitOptions.find(u => u.value === item.unit);
+                  const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
 
-      if (exhaustingStockItems.length > 0) {
-          body += `-------------------------------------------\n`;
-          body += `ℹ️  AVISO: STOCK FICARÁ A ZERO\n`;
-          body += `-------------------------------------------\n`;
-          exhaustingStockItems.forEach(item => {
-                body += `Ref: ${item.sku}\n`;
-                body += `Desc: ${item.description}\n`;
-                body += `Qtd Pedida: ${item.quantity} (Igual ao Stock Físico)\n\n`;
-          });
-      }
-
-      if (newMaterialItems.length > 0) {
-          body += `-------------------------------------------\n`;
-          body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
-          body += `-------------------------------------------\n`;
-          newMaterialItems.forEach(item => {
-              const uom = unitOptions.find(u => u.value === item.unit);
-              const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;
-
-              let suggestedCode = "A Definir";
-              if (item.category) {
-                  const catParts = item.category.split(' - ');
-                  const catCode = catParts[0];
-                  const isStandard = categories.some(c => c.code === catCode);
-                  if (isStandard) {
-                      suggestedCode = getSuggestedCode(catCode);
+                  let suggestedCode = "A Definir";
+                  if (item.category) {
+                      const catParts = item.category.split(' - ');
+                      const catCode = catParts[0];
+                      const isStandard = categories.some(c => c.code === catCode);
+                      if (isStandard) {
+                          suggestedCode = getSuggestedCode(catCode);
+                      }
                   }
-              }
 
-              body += `Ref Sugerida: ${suggestedCode}\n`;
-              body += `Desc: ${item.description}\n`;
-              if (item.category) body += `Cat: ${item.category}\n`;
-              body += `Qtd: ${item.quantity} ${unitDesc}\n\n`;
-          });
+                  body += `Ref Sugerida: ${suggestedCode}\n`;
+                  body += `Desc: ${item.description}\n`;
+                  if (item.category) body += `Cat: ${item.category}\n`;
+                  body += `Qtd: ${item.quantity} ${unitDesc}\n\n`;
+              });
+          }
+          body += `Cumprimentos`;
       }
 
-      body += `Cumprimentos`;
-
-      const subject = `Aviso Pedido: ${order.title}`;
       const mailtoLink = `mailto:${to}?cc=${cc}&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       
-      const hasContent = missingStockItems.length > 0 || exhaustingStockItems.length > 0 || newMaterialItems.length > 0 || body.includes('APROVADO');
-      
-      if (hasContent) {
+      // Open Email Client
+      if (skipConfirm || window.confirm(`Abrir cliente de email para enviar ${type === 'LOGISTICS' ? 'Notificação à Logística' : 'Alerta de Faltas'}?`)) {
           window.location.href = mailtoLink;
-      } else if (!skipConfirm) {
-          alert("Este pedido não tem alertas de stock ou novos materiais para enviar.");
       }
   };
 
@@ -1152,7 +1160,15 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 // Trigger Supervisor Email
                 triggerSupervisorEmail(newOrder, true);
             } else {
-                handleResendEmail(newOrder, true); 
+                // Determine which email to trigger first
+                const issues = getOrderIssues(newOrder);
+                if (issues.hasIssues) {
+                    handleSendEmail(newOrder, 'ALERT', true);
+                    // We don't trigger logistics immediately to avoid popup blocker
+                    alert("Email de Alerta enviado. Por favor, envie também o email para a Logística manualmente.");
+                } else {
+                    handleSendEmail(newOrder, 'LOGISTICS', true);
+                }
             }
             
             refreshData();
@@ -1600,29 +1616,31 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
-                                            {/* Type Toggle */}
-                                            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-1 mb-4 w-fit">
-                                                <button
-                                                    onClick={() => {
-                                                        const newRows = [...manualRows];
-                                                        newRows[idx].inputType = 'TEXT';
-                                                        setManualRows(newRows);
-                                                    }}
-                                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${row.inputType === 'TEXT' ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
-                                                >
-                                                    Texto / Lista
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        const newRows = [...manualRows];
-                                                        newRows[idx].inputType = 'PHOTO';
-                                                        setManualRows(newRows);
-                                                    }}
-                                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${row.inputType === 'PHOTO' ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
-                                                >
-                                                    <Camera className="w-3 h-3"/> Fotografia
-                                                </button>
-                                            </div>
+                                            {/* Type Toggle - ONLY FOR TECHNICAL USERS */}
+                                            {isTechnical && (
+                                                <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-1 mb-4 w-fit">
+                                                    <button
+                                                        onClick={() => {
+                                                            const newRows = [...manualRows];
+                                                            newRows[idx].inputType = 'TEXT';
+                                                            setManualRows(newRows);
+                                                        }}
+                                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${row.inputType === 'TEXT' ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                                                    >
+                                                        Texto / Lista
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const newRows = [...manualRows];
+                                                            newRows[idx].inputType = 'PHOTO';
+                                                            setManualRows(newRows);
+                                                        }}
+                                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${row.inputType === 'PHOTO' ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                                                    >
+                                                        <Camera className="w-3 h-3"/> Fotografia
+                                                    </button>
+                                                </div>
+                                            )}
 
                                             {/* Photo Input Area */}
                                             {row.inputType === 'PHOTO' ? (
@@ -1958,6 +1976,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                const isFullAlloc = allocationStatus === 'FULL';
                                const isPartialAlloc = allocationStatus === 'PARTIAL';
 
+                               // CHECK ISSUES FOR BUTTONS
+                               const issues = getOrderIssues(order);
+
                                return (
                                    <div 
                                         key={order.id} 
@@ -2129,7 +2150,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                )}
                                                
                                                {/* Action Buttons */}
-                                               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700">
+                                               <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700 flex-wrap">
                                                     
                                                     {isPendingApproval && canApprove && (
                                                         <button
@@ -2142,15 +2163,27 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                         </button>
                                                     )}
 
-                                                    {/* Email Button */}
-                                                    {type === 'OPEN' && !isPendingApproval && !isFullAlloc && (
-                                                        <button 
-                                                            onClick={(e) => { e.stopPropagation(); handleResendEmail(order); }}
-                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                                                            title="Reenviar E-mail de Aviso"
-                                                        >
-                                                            <Mail className="w-3 h-3" /> Email
-                                                        </button>
+                                                    {/* Email Buttons - SEPARATE LOGISTICS and ALERTS */}
+                                                    {type === 'OPEN' && !isPendingApproval && (
+                                                        <>
+                                                            <button 
+                                                                onClick={(e) => { e.stopPropagation(); handleSendEmail(order, 'LOGISTICS'); }}
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                                title="Notificar Logística"
+                                                            >
+                                                                <Mail className="w-3 h-3" /> Email Logística
+                                                            </button>
+
+                                                            {issues.hasIssues && (
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleSendEmail(order, 'ALERT'); }}
+                                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                                                    title="Enviar Alerta de Faltas"
+                                                                >
+                                                                    <AlertTriangle className="w-3 h-3" /> Email Alerta
+                                                                </button>
+                                                            )}
+                                                        </>
                                                     )}
 
                                                     <button 
