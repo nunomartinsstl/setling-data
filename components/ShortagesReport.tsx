@@ -1,7 +1,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { Order, StockItem, OrderLineItem } from '../types';
-import { AlertTriangle, Package, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertTriangle, Package, ExternalLink, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 
 interface ShortagesReportProps {
   orders: Order[];
@@ -15,6 +15,7 @@ interface ShortageItem {
     totalRequired: number;
     physicalStock: number;
     missing: number;
+    status: 'MISSING' | 'EXHAUSTED';
     orders: {
         id: string;
         title: string;
@@ -73,18 +74,35 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
             const description = stockEntry ? stockEntry.desc : data.desc;
 
             if (data.total > physicalStock) {
+                // Critical: Missing Stock
                 result.push({
                     sku,
                     description,
                     totalRequired: data.total,
                     physicalStock,
                     missing: data.total - physicalStock,
+                    status: 'MISSING',
+                    orders: data.orders
+                });
+            } else if (data.total === physicalStock && physicalStock > 0) {
+                // Warning: Stock will be exhausted (0)
+                result.push({
+                    sku,
+                    description,
+                    totalRequired: data.total,
+                    physicalStock,
+                    missing: 0,
+                    status: 'EXHAUSTED',
                     orders: data.orders
                 });
             }
         });
 
-        return result.sort((a, b) => b.missing - a.missing);
+        // Sort: MISSING first, then EXHAUSTED. Within group, sort by volume.
+        return result.sort((a, b) => {
+            if (a.status !== b.status) return a.status === 'MISSING' ? -1 : 1;
+            return b.totalRequired - a.totalRequired;
+        });
     }, [orders, stock]);
 
     return (
@@ -95,7 +113,7 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                 </div>
                 <div>
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Relatório de Faltas</h2>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Materiais com pedidos acima do stock físico disponível.</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">Materiais com pedidos acima do stock físico ou que esgotarão o stock.</p>
                 </div>
             </div>
 
@@ -109,8 +127,15 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                 <div className="grid gap-4">
                     {shortages.map((item) => {
                         const isExpanded = expandedSku === item.sku;
+                        const isMissing = item.status === 'MISSING';
+                        
+                        const borderClass = isMissing ? 'border-red-100 dark:border-red-900/50' : 'border-orange-100 dark:border-orange-900/50';
+                        const badgeClass = isMissing 
+                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800' 
+                            : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800';
+                        
                         return (
-                            <div key={item.sku} className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-red-100 dark:border-red-900/50 overflow-hidden">
+                            <div key={item.sku} className={`bg-white dark:bg-slate-800 rounded-lg shadow-sm border ${borderClass} overflow-hidden`}>
                                 <div 
                                     className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                                     onClick={() => setExpandedSku(isExpanded ? null : item.sku)}
@@ -126,8 +151,16 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                                                 <span className="text-xs font-bold px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800" title="Total Necessário nos Pedidos">
                                                     Qtd. Pedida: {item.totalRequired}
                                                 </span>
-                                                <span className="text-xs font-bold px-2 py-1 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800" title="Quantidade em Falta">
-                                                    Falta: {item.missing}
+                                                <span className={`text-xs font-bold px-2 py-1 rounded ${badgeClass} flex items-center gap-1`}>
+                                                    {isMissing ? (
+                                                        <>
+                                                            <AlertCircle className="w-3 h-3" /> Falta: {item.missing}
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <AlertTriangle className="w-3 h-3" /> Vai Esgotar (0)
+                                                        </>
+                                                    )}
                                                 </span>
                                             </div>
                                         </div>
