@@ -285,6 +285,9 @@ const App: React.FC = () => {
                 masterList={masterList}
                 currentUsername={user.username}
                 logoUrl={logoUrl}
+                companies={companies}
+                userRole={user.role}
+                userCompanyId={user.companyId}
              />
          );
       case 'STOCK':

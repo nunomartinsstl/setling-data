@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, ApprovalRule, UserRole } from '../types';
+import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, ApprovalRule, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2, Hash, ShieldCheck, XCircle } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2, Hash, ShieldCheck, XCircle, Building } from 'lucide-react';
 
 // Explicitly declare global types to avoid TS errors without imports
 declare const window: any;
@@ -12,6 +12,9 @@ interface PurchaseOrderManagerProps {
   masterList: MasterMaterial[];
   currentUsername: string;
   logoUrl: string;
+  companies?: Company[];
+  userRole?: UserRole;
+  userCompanyId?: string;
 }
 
 interface PORow {
@@ -58,7 +61,7 @@ const formatPEP = (value: string) => {
     return formatted;
 };
 
-const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList, currentUsername, logoUrl }) => {
+const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList, currentUsername, logoUrl, companies = [], userRole = UserRole.VIEWER, userCompanyId }) => {
   // State
   const [viewMode, setViewMode] = useState<'LIST' | 'CREATE'>('LIST');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -66,7 +69,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(false);
-  const [currentUserRole, setCurrentUserRole] = useState<UserRole>(UserRole.VIEWER);
 
   // Form State
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -75,6 +77,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [supplierSearch, setSupplierSearch] = useState('');
   const [pep, setPep] = useState('');
+  const [targetCompanyId, setTargetCompanyId] = useState('');
   
   const [rows, setRows] = useState<PORow[]>([]);
   const [expandedRow, setExpandedRow] = useState<number>(0);
@@ -92,9 +95,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   // Initial Load
   useEffect(() => {
       loadData();
-      StorageService.subscribeToAuth(user => {
-          if (user) setCurrentUserRole(user.role);
-      });
   }, [viewMode]);
 
   const loadData = async () => {
@@ -139,7 +139,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
 
-  const canApprove = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.MANAGEMENT;
+  const canApprove = userRole === UserRole.ADMIN || userRole === UserRole.MANAGEMENT;
+  const isAdmin = userRole === UserRole.ADMIN;
 
   const validatePep = () => {
       if (!pep) return true; 
@@ -158,6 +159,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       if (!selectedSupplier) return false;
       if (!pep || pep.trim().length === 0 || !validatePep()) return false;
       if (rows.length === 0) return false;
+      if (isAdmin && !targetCompanyId) return false;
       
       return rows.every(r => 
           r.description && r.description.trim().length > 0 &&
@@ -165,7 +167,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           Number(r.quantity) > 0 &&
           Number(r.unitPrice) > 0
       );
-  }, [selectedSupplier, pep, rows]);
+  }, [selectedSupplier, pep, rows, isAdmin, targetCompanyId]);
 
   // Handlers
   const handleSupplierSelect = (s: Supplier) => {
@@ -563,7 +565,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           creator: currentUsername,
           status: status,
           // FIX: Do not assign undefined directly to a property that will be sent to Firebase
-          ...(matchedRule ? { approvalMetadata: { approverEmail: matchedRule.approverEmail } } : {})
+          ...(matchedRule ? { approvalMetadata: { approverEmail: matchedRule.approverEmail } } : {}),
+          companyId: targetCompanyId || undefined
       };
 
       setLoading(true);
@@ -622,6 +625,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setOrderDate(po.dateCreated);
       setSelectedSupplier(po.supplier);
       setPep(po.pep || '');
+      setTargetCompanyId(po.companyId || (isAdmin ? '' : (userCompanyId || '')));
       setRows(po.items.map(i => ({
           sku: i.sku,
           description: i.description,
@@ -642,6 +646,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setOrderDate('');
       setSelectedSupplier(null);
       setPep('');
+      setTargetCompanyId(isAdmin ? '' : (userCompanyId || ''));
       setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
       setExpandedRow(0);
       setViewMode('CREATE');
@@ -846,6 +851,25 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                   <h2 className="text-xl font-bold">{orderId ? `Editar #${displayId}` : 'Novo Pedido'}</h2>
               </div>
 
+              {/* ADMIN COMPANY SELECTOR */}
+              {isAdmin && (
+                  <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 shadow-sm">
+                      <label className="block text-xs font-bold uppercase mb-1 flex items-center gap-1 text-purple-800 dark:text-purple-300">
+                          <Building className="w-3 h-3" /> Selecionar Empresa (Admin) *
+                      </label>
+                      <select 
+                          value={targetCompanyId}
+                          onChange={(e) => setTargetCompanyId(e.target.value)}
+                          className={`w-full p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${!targetCompanyId ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-purple-200 dark:border-purple-700'}`}
+                      >
+                          <option value="">Selecione a empresa...</option>
+                          {companies.map(c => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                      </select>
+                  </div>
+              )}
+
               <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Supplier */}
                   <div className="relative">
@@ -1022,7 +1046,33 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       </div>
                       <div className="pl-6 border-l">
                           <div className="text-xs uppercase text-brand-600 font-bold">Total</div>
-                          <div className="text-xl font-bold">{grandTotal.toFixed(2)} €</div>
+                          <div className="text-xl font-bold flex items-center gap-2">
+                              {grandTotal.toFixed(2)} €
+                              {/* Live Approval Indicator */}
+                              {grandTotal > 0 && approvalRules.length > 0 && (
+                                (() => {
+                                    // Use same logic as handleSave to preview status
+                                    const sortedRules = [...approvalRules].sort((a,b) => a.amount - b.amount);
+                                    let matched = false;
+                                    const gteMatches = sortedRules.filter(r => r.operator === 'GTE' && grandTotal >= r.amount);
+                                    if (gteMatches.length > 0) matched = true;
+                                    else {
+                                        const lteMatch = sortedRules.find(r => r.operator === 'LTE' && grandTotal <= r.amount);
+                                        if (lteMatch) matched = true;
+                                        else {
+                                            const hasGte = sortedRules.some(r => r.operator === 'GTE');
+                                            if (!hasGte) matched = true; // Fallback to highest LTE if no GTE exists
+                                        }
+                                    }
+
+                                    return matched ? (
+                                        <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold border border-amber-200">Requer Aprovação</span>
+                                    ) : (
+                                        <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold border border-green-200">Aprovação Automática</span>
+                                    );
+                                })()
+                              )}
+                          </div>
                       </div>
                   </div>
                   

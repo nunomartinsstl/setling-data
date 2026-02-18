@@ -140,6 +140,7 @@ export interface PurchaseOrder {
   creator: string;
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SENT';
   approvalMetadata?: ApprovalMetadata;
+  companyId?: string;
 }
 
 export interface ReceiptItem {
