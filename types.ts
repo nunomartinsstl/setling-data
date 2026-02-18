@@ -29,8 +29,9 @@ export interface EmailRecipient {
 }
 
 export interface ApprovalRule {
-  maxAmount: number;
+  amount: number; // Replaces maxAmount
   approverEmail: string;
+  operator: 'LTE' | 'GTE'; // LTE = <= (Até), GTE = >= (Maior ou Igual)
 }
 
 export interface UnitOption {

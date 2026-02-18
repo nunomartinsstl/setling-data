@@ -106,7 +106,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           ]);
           setSuppliers(settings.suppliers || []);
           setUnitOptions(settings.unitOptions || [{ value: 'UN', description: 'Unidade' }]);
-          setApprovalRules(settings.approvalRules || []);
+          
+          // Migrate old maxAmount rules to new structure if needed
+          const rules = (settings.approvalRules || []).map((r: any) => ({
+              amount: r.amount !== undefined ? r.amount : r.maxAmount,
+              approverEmail: r.approverEmail,
+              operator: r.operator || 'LTE'
+          }));
+          setApprovalRules(rules);
+          
           setSavedOrders(orders.sort((a,b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()));
           
           // Initialize empty row if needed
@@ -503,19 +511,30 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       let matchedRule: ApprovalRule | undefined;
 
       if (approvalRules.length > 0) {
-          // Find first rule where total <= maxAmount
-          // Rules should be sorted by maxAmount ASC
-          const sortedRules = [...approvalRules].sort((a,b) => a.maxAmount - b.maxAmount);
-          matchedRule = sortedRules.find(r => grandTotal <= r.maxAmount);
+          // New Logic for Operators:
+          // 1. Try to match explicit GTE (Greater Than or Equal) rules first, picking the highest threshold passed.
+          // 2. If no GTE, try to match LTE (Less Than or Equal), picking the lowest threshold sufficient.
           
-          // If no rule matches, assume it needs the highest level approval OR default to approval?
-          // Usually strict systems require approval for anything above max.
-          // Let's assume if it exceeds all rules, we take the highest rule or flag it.
-          // For now, if match found, it's PENDING. If not found (meaning > max rule), also PENDING with highest.
+          const sortedRules = [...approvalRules].sort((a,b) => a.amount - b.amount);
           
-          if (!matchedRule && grandTotal > 0) {
-              // Exceeds all configured limits -> Use the highest authority
-              matchedRule = sortedRules[sortedRules.length - 1];
+          // Strategy: Find GTE match with max Amount (Highest authority trigger)
+          const gteMatches = sortedRules.filter(r => r.operator === 'GTE' && grandTotal >= r.amount);
+          if (gteMatches.length > 0) {
+              matchedRule = gteMatches[gteMatches.length - 1]; // Pick the highest amount passed
+          } else {
+              // Strategy: Find LTE match with min Amount (First sufficient tier)
+              const lteMatch = sortedRules.find(r => r.operator === 'LTE' && grandTotal <= r.amount);
+              if (lteMatch) {
+                  matchedRule = lteMatch;
+              } else {
+                  // Fallback: If only LTE rules exist and total > all of them, use the highest LTE rule?
+                  // Or assume it needs "Board" approval (not defined).
+                  // For safety, if it exceeds all LTE rules and no GTE rules exist, we use the highest rule available.
+                  const hasGte = sortedRules.some(r => r.operator === 'GTE');
+                  if (!hasGte && grandTotal > 0) {
+                      matchedRule = sortedRules[sortedRules.length - 1];
+                  }
+              }
           }
 
           if (matchedRule) {

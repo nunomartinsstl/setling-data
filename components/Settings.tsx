@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
 import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench, Euro } from 'lucide-react';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench, Euro, Edit, X } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -27,6 +27,8 @@ const Settings: React.FC = () => {
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
   const [newRuleAmount, setNewRuleAmount] = useState('');
   const [newRuleEmail, setNewRuleEmail] = useState('');
+  const [newRuleOperator, setNewRuleOperator] = useState<'LTE' | 'GTE'>('LTE');
+  const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -63,8 +65,13 @@ const Settings: React.FC = () => {
         });
     }
 
-    // Load Approval Rules
-    setApprovalRules(settings.approvalRules || []);
+    // Load Approval Rules - Normalize old data (maxAmount -> amount + LTE)
+    const normalizedRules = (settings.approvalRules || []).map((r: any) => ({
+        amount: r.amount !== undefined ? r.amount : r.maxAmount,
+        approverEmail: r.approverEmail,
+        operator: r.operator || 'LTE'
+    }));
+    setApprovalRules(normalizedRules);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -130,26 +137,53 @@ const Settings: React.FC = () => {
   const removeCategory = (codeToRemove: string) => { if(window.confirm("Remover esta categoria?")) { setCategories(categories.filter(c => c.code !== codeToRemove)); } };
 
   // APPROVAL RULES LOGIC
-  const addApprovalRule = () => {
+  const saveApprovalRule = () => {
       const amount = parseFloat(newRuleAmount);
       if (isNaN(amount) || amount <= 0 || !newRuleEmail.trim()) {
           alert("Preencha um valor válido e um email.");
           return;
       }
       
-      const newRules = [...approvalRules, { maxAmount: amount, approverEmail: newRuleEmail.trim() }];
+      const newRules = [...approvalRules];
+      const rule: ApprovalRule = { amount: amount, approverEmail: newRuleEmail.trim(), operator: newRuleOperator };
+
+      if (editingRuleIndex !== null) {
+          // Edit existing
+          newRules[editingRuleIndex] = rule;
+      } else {
+          // Add new
+          newRules.push(rule);
+      }
+      
       // Sort by amount ascending
-      newRules.sort((a, b) => a.maxAmount - b.maxAmount);
+      newRules.sort((a, b) => a.amount - b.amount);
       
       setApprovalRules(newRules);
-      setNewRuleAmount('');
-      setNewRuleEmail('');
+      resetRuleForm();
+  };
+
+  const editApprovalRule = (idx: number) => {
+      const rule = approvalRules[idx];
+      setNewRuleAmount(rule.amount.toString());
+      setNewRuleEmail(rule.approverEmail);
+      setNewRuleOperator(rule.operator);
+      setEditingRuleIndex(idx);
   };
 
   const removeApprovalRule = (idx: number) => {
-      const newRules = [...approvalRules];
-      newRules.splice(idx, 1);
-      setApprovalRules(newRules);
+      if(window.confirm("Remover esta regra?")) {
+          const newRules = [...approvalRules];
+          newRules.splice(idx, 1);
+          setApprovalRules(newRules);
+          if (editingRuleIndex === idx) resetRuleForm();
+      }
+  };
+
+  const resetRuleForm = () => {
+      setNewRuleAmount('');
+      setNewRuleEmail('');
+      setNewRuleOperator('LTE');
+      setEditingRuleIndex(null);
   };
 
   const handleSupplierUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,43 +260,71 @@ const Settings: React.FC = () => {
             <Euro className="w-5 h-5 text-green-600"/> Regras de Aprovação (Pedidos de Compra)
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            Defina quem deve aprovar pedidos com base no valor total. O sistema usará a regra cujo limite for igual ou superior ao total.
+            Defina quem deve aprovar pedidos. O sistema verificará as regras na ordem de valor.
         </p>
 
-        <div className="flex flex-col md:flex-row gap-2 mb-4">
-            <div className="relative md:w-32">
-                <span className="absolute left-3 top-2.5 text-slate-400">€</span>
+        <div className="flex flex-col md:flex-row gap-2 mb-4 items-end">
+            <div className="w-full md:w-32">
+                <label className="block text-xs font-bold text-slate-500 mb-1">Condição</label>
+                <select 
+                    value={newRuleOperator}
+                    onChange={(e) => setNewRuleOperator(e.target.value as 'LTE' | 'GTE')}
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                >
+                    <option value="LTE">Até (Max)</option>
+                    <option value="GTE">Maior/Igual (Min)</option>
+                </select>
+            </div>
+            <div className="w-full md:w-32 relative">
+                <label className="block text-xs font-bold text-slate-500 mb-1">Valor</label>
+                <span className="absolute left-3 top-8 text-slate-400">€</span>
                 <input 
                     type="number"
                     value={newRuleAmount}
                     onChange={(e) => setNewRuleAmount(e.target.value)}
-                    placeholder="Até..."
+                    placeholder="0"
                     className="w-full pl-6 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 />
             </div>
-            <input 
-                type="email"
-                value={newRuleEmail}
-                onChange={(e) => setNewRuleEmail(e.target.value)}
-                placeholder="Email do Aprovador (Ex: gestor@empresa.com)"
-                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
-            />
-            <button 
-                type="button"
-                onClick={addApprovalRule}
-                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm font-medium flex items-center gap-2"
-            >
-                <Plus className="w-4 h-4"/> Adicionar
-            </button>
+            <div className="flex-1 w-full">
+                <label className="block text-xs font-bold text-slate-500 mb-1">Email Aprovador</label>
+                <input 
+                    type="email"
+                    value={newRuleEmail}
+                    onChange={(e) => setNewRuleEmail(e.target.value)}
+                    placeholder="gestor@empresa.com"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                />
+            </div>
+            <div className="flex gap-1">
+                {editingRuleIndex !== null && (
+                    <button 
+                        type="button"
+                        onClick={resetRuleForm}
+                        className="bg-slate-200 text-slate-600 px-3 py-2 rounded-md hover:bg-slate-300 text-sm font-medium"
+                        title="Cancelar Edição"
+                    >
+                        <X className="w-4 h-4"/>
+                    </button>
+                )}
+                <button 
+                    type="button"
+                    onClick={saveApprovalRule}
+                    className={`text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${editingRuleIndex !== null ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}`}
+                >
+                    {editingRuleIndex !== null ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
+                    {editingRuleIndex !== null ? 'Atualizar' : 'Adicionar'}
+                </button>
+            </div>
         </div>
 
         <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
                     <tr>
-                        <th className="p-3 border-b dark:border-slate-700">Valor Máximo</th>
+                        <th className="p-3 border-b dark:border-slate-700">Regra</th>
                         <th className="p-3 border-b dark:border-slate-700">Aprovador</th>
-                        <th className="p-3 border-b dark:border-slate-700 w-16 text-center"></th>
+                        <th className="p-3 border-b dark:border-slate-700 w-24 text-center">Ações</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
@@ -270,13 +332,20 @@ const Settings: React.FC = () => {
                         <tr><td colSpan={3} className="p-4 text-center text-slate-400 italic">Sem regras (Aprovação automática).</td></tr>
                     ) : (
                         approvalRules.map((rule, idx) => (
-                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800">
-                                <td className="p-3 font-mono font-bold">Até {rule.maxAmount.toLocaleString()} €</td>
+                            <tr key={idx} className={`hover:bg-slate-50 dark:hover:bg-slate-800 ${editingRuleIndex === idx ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                                <td className="p-3 font-mono font-bold">
+                                    {rule.operator === 'GTE' ? '≥' : '≤'} {rule.amount.toLocaleString()} €
+                                </td>
                                 <td className="p-3">{rule.approverEmail}</td>
                                 <td className="p-3 text-center">
-                                    <button onClick={() => removeApprovalRule(idx)} className="text-slate-400 hover:text-red-500">
-                                        <Trash2 className="w-4 h-4" />
-                                    </button>
+                                    <div className="flex justify-center gap-2">
+                                        <button onClick={() => editApprovalRule(idx)} className="text-amber-500 hover:text-amber-700 transition-colors">
+                                            <Edit className="w-4 h-4" />
+                                        </button>
+                                        <button onClick={() => removeApprovalRule(idx)} className="text-slate-400 hover:text-red-500 transition-colors">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         ))
