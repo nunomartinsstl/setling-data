@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell, RefreshCw } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -689,7 +689,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     const query = row.isCustom ? row.customDesc : row.sku; 
     
     if (!query || query.trim().length < 3) {
-        alert("Digite ao menos 3 caracteres para buscar.");
+        alert("Digite pelo menos 3 caracteres para procurar.");
         return;
     }
 
@@ -874,7 +874,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       const hasUnresolvedPhotos = order.items.some(i => i.image && (!i.sku || i.sku === 'FOTO_PENDENTE'));
       
       if (hasUnresolvedPhotos) {
-          alert("BLOQUEADO: Este pedido contém itens identificados apenas por foto.\n\nVocê deve EDITAR o pedido e substituir as fotos por códigos de material válidos antes de aprovar.");
+          alert("BLOQUEADO: Este pedido contém imagens por corrigir.\n\nVocê deve EDITAR o pedido e substituir as fotos por códigos de material válidos.");
           return;
       }
 
@@ -1445,7 +1445,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         {type === 'FINISHED' && mode === 'LIST' && (
              <div className="relative w-full md:w-64">
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input type="text" placeholder="Buscar pedido..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm dark:bg-slate-800 dark:text-white dark:border-slate-600" />
+                <input type="text" placeholder="Pesquisar pedido..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm dark:bg-slate-800 dark:text-white dark:border-slate-600" />
              </div>
         )}
       </div>
@@ -1616,8 +1616,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                     {/* Expanded Content */}
                                     {isExpanded && (
                                         <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
-                                            {/* Type Toggle - ONLY FOR TECHNICAL USERS */}
-                                            {isTechnical && (
+                                            {/* Type Toggle - ALLOWED FOR TECHNICAL AND MANAGERS */}
+                                            {(isTechnical || canEdit) && (
                                                 <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-1 mb-4 w-fit">
                                                     <button
                                                         onClick={() => {
@@ -1645,6 +1645,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                             {/* Photo Input Area */}
                                             {row.inputType === 'PHOTO' ? (
                                                 <div className="mb-4">
+                                                    {/* NEW: Convert Button */}
+                                                    <button
+                                                        onClick={() => {
+                                                            const newRows = [...manualRows];
+                                                            newRows[idx].inputType = 'TEXT';
+                                                            // Update to Existing Material Mode
+                                                            newRows[idx].isCustom = false;
+                                                            newRows[idx].sku = '';
+                                                            newRows[idx].customDesc = '';
+                                                            newRows[idx].similarityChecked = false;
+                                                            
+                                                            setManualRows(newRows);
+                                                        }}
+                                                        className="w-full py-3 bg-brand-600 text-white rounded-lg font-bold shadow-sm hover:bg-brand-700 flex items-center justify-center gap-2 mb-4 transition-colors"
+                                                    >
+                                                        <RefreshCw className="w-4 h-4" /> Converter em Código de Material
+                                                    </button>
+
                                                     {row.image ? (
                                                         <div className="relative w-full h-48 bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden group">
                                                             <img src={row.image} alt="Upload" className="max-w-full max-h-full object-contain" />
@@ -1724,12 +1742,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                 }}
                                                                 className="text-xs bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 px-3 py-1.5 rounded-full font-bold flex items-center gap-1 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                                                             >
-                                                                <Search className="w-3 h-3" /> Buscar Existente
+                                                                <Search className="w-3 h-3" /> Procurar Existente
                                                             </button>
                                                         )}
                                                     </div>
 
                                                     <div className="mb-3">
+                                                        {/* NEW: View Image Button if converting */}
+                                                        {row.image && (
+                                                            <div className="mb-2 flex justify-center">
+                                                                <button
+                                                                    onClick={() => setViewImage(row.image!)}
+                                                                    className="text-xs flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                                                                >
+                                                                    <ImageIcon className="w-3 h-3"/> Ver Foto Original
+                                                                </button>
+                                                            </div>
+                                                        )}
+
                                                         {row.isCustom ? (
                                                             <div>
                                                                 <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Descrição do Novo Material</label>
@@ -1805,7 +1835,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             </div>
                                                         ) : (
                                                             <div className="relative">
-                                                                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Buscar Material Existente</label>
+                                                                <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Procurar Material Existente</label>
                                                                 <div className="relative">
                                                                     <input 
                                                                         type="text" 
@@ -2040,7 +2070,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                <div className="flex items-center gap-3 ml-14 md:ml-0">
                                                    {hasPendingPhotos && (
                                                        <span className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-xs font-bold rounded-full flex items-center gap-1 border border-red-100 dark:border-red-800 animate-pulse">
-                                                           <Camera className="w-3 h-3" /> Requer Identificação
+                                                           <Camera className="w-3 h-3" /> Imagens por Corrigir
                                                        </span>
                                                    )}
                                                    {isPending ? (
@@ -2198,7 +2228,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
                                                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                                                         >
-                                                            <Edit className="w-3 h-3" /> {hasPendingPhotos ? 'Resolver Fotos' : 'Editar'}
+                                                            <Edit className="w-3 h-3" /> {hasPendingPhotos ? 'Corrigir Imagem' : 'Editar'}
                                                         </button>
                                                     )}
 
