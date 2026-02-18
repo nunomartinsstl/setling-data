@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { StorageService } from '../services/storageService';
-import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench } from 'lucide-react';
+import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule } from '../types';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench, Euro } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -22,6 +22,11 @@ const Settings: React.FC = () => {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [newCatCode, setNewCatCode] = useState('');
   const [newCatName, setNewCatName] = useState('');
+
+  // Approval Rules
+  const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
+  const [newRuleAmount, setNewRuleAmount] = useState('');
+  const [newRuleEmail, setNewRuleEmail] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -48,7 +53,7 @@ const Settings: React.FC = () => {
     }
     setSuppliers(settings.suppliers || []);
     
-    // Load categories or fallback to default if not present yet
+    // Load categories
     if (settings.categories && settings.categories.length > 0) {
         setCategories(settings.categories);
     } else {
@@ -57,6 +62,9 @@ const Settings: React.FC = () => {
              else setCategories(mod.DEFAULT_CATEGORIES);
         });
     }
+
+    // Load Approval Rules
+    setApprovalRules(settings.approvalRules || []);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -71,7 +79,8 @@ const Settings: React.FC = () => {
           unitOptions: unitOptions,
           suppliers: suppliers,
           categories: categories,
-          autoDecrementStock: true // PERMANENT: Force Auto Decrement Stock
+          approvalRules: approvalRules,
+          autoDecrementStock: true 
       });
       setMessage('Configurações salvas com sucesso.');
       setTimeout(() => setMessage(''), 3000);
@@ -94,79 +103,59 @@ const Settings: React.FC = () => {
       }
   };
 
-  const addRecipient = () => {
-      setRecipients([...recipients, { email: '', type: 'TO' }]);
-  };
+  // ... (Recipients, Companies, Units, Categories logic unchanged)
+  const addRecipient = () => { setRecipients([...recipients, { email: '', type: 'TO' }]); };
+  const removeRecipient = (index: number) => { const updated = [...recipients]; updated.splice(index, 1); setRecipients(updated); };
+  const updateRecipient = (index: number, field: keyof EmailRecipient, value: string) => { const updated = [...recipients]; updated[index] = { ...updated[index], [field]: value }; setRecipients(updated); };
 
-  const removeRecipient = (index: number) => {
-      const updated = [...recipients];
-      updated.splice(index, 1);
-      setRecipients(updated);
-  };
-
-  const updateRecipient = (index: number, field: keyof EmailRecipient, value: string) => {
-      const updated = [...recipients];
-      updated[index] = { ...updated[index], [field]: value };
-      setRecipients(updated);
-  };
-
-  const addCompany = () => {
-      if (!newCompany.trim()) return;
-      const id = Date.now().toString(); // Simple ID generation
-      setCompanies([...companies, { id, name: newCompany.trim() }]);
-      setNewCompany('');
-  };
-
-  const removeCompany = (id: string) => {
-      setCompanies(companies.filter(c => c.id !== id));
-  };
+  const addCompany = () => { if (!newCompany.trim()) return; const id = Date.now().toString(); setCompanies([...companies, { id, name: newCompany.trim() }]); setNewCompany(''); };
+  const removeCompany = (id: string) => { setCompanies(companies.filter(c => c.id !== id)); };
 
   const addUnit = () => {
-      if (!newUnitAbbr.trim() || !newUnitDesc.trim()) {
-          alert("Preencha a abreviatura e a descrição.");
-          return;
-      }
+      if (!newUnitAbbr.trim() || !newUnitDesc.trim()) { alert("Preencha a abreviatura e a descrição."); return; }
       const abbr = newUnitAbbr.trim().toUpperCase();
-      if (unitOptions.some(u => u.value === abbr)) {
-          alert("Esta unidade já existe.");
-          return;
-      }
+      if (unitOptions.some(u => u.value === abbr)) { alert("Esta unidade já existe."); return; }
       setUnitOptions([...unitOptions, { value: abbr, description: newUnitDesc.trim() }]);
-      setNewUnitAbbr('');
-      setNewUnitDesc('');
+      setNewUnitAbbr(''); setNewUnitDesc('');
   };
-
-  const removeUnit = (unitToRemove: string) => {
-      setUnitOptions(unitOptions.filter(u => u.value !== unitToRemove));
-  };
+  const removeUnit = (unitToRemove: string) => { setUnitOptions(unitOptions.filter(u => u.value !== unitToRemove)); };
 
   const addCategory = () => {
-      if (!newCatCode.trim() || !newCatName.trim()) {
-          alert("Preencha o código (3 letras) e o nome.");
-          return;
-      }
+      if (!newCatCode.trim() || !newCatName.trim()) { alert("Preencha o código (3 letras) e o nome."); return; }
       const code = newCatCode.trim().toUpperCase();
-      if (categories.some(c => c.code === code)) {
-          alert("Este código de categoria já existe.");
+      if (categories.some(c => c.code === code)) { alert("Este código de categoria já existe."); return; }
+      setCategories([...categories, { code: code, name: newCatName.trim().toUpperCase() }]);
+      setNewCatCode(''); setNewCatName('');
+  };
+  const removeCategory = (codeToRemove: string) => { if(window.confirm("Remover esta categoria?")) { setCategories(categories.filter(c => c.code !== codeToRemove)); } };
+
+  // APPROVAL RULES LOGIC
+  const addApprovalRule = () => {
+      const amount = parseFloat(newRuleAmount);
+      if (isNaN(amount) || amount <= 0 || !newRuleEmail.trim()) {
+          alert("Preencha um valor válido e um email.");
           return;
       }
-      setCategories([...categories, { code: code, name: newCatName.trim().toUpperCase() }]);
-      setNewCatCode('');
-      setNewCatName('');
+      
+      const newRules = [...approvalRules, { maxAmount: amount, approverEmail: newRuleEmail.trim() }];
+      // Sort by amount ascending
+      newRules.sort((a, b) => a.maxAmount - b.maxAmount);
+      
+      setApprovalRules(newRules);
+      setNewRuleAmount('');
+      setNewRuleEmail('');
   };
 
-  const removeCategory = (codeToRemove: string) => {
-      if(window.confirm("Remover esta categoria? Isso não afeta pedidos antigos, mas remove a opção para novos.")) {
-          setCategories(categories.filter(c => c.code !== codeToRemove));
-      }
+  const removeApprovalRule = (idx: number) => {
+      const newRules = [...approvalRules];
+      newRules.splice(idx, 1);
+      setApprovalRules(newRules);
   };
 
   const handleSupplierUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
       if (supplierFileRef.current) supplierFileRef.current.value = '';
-
       const reader = new FileReader();
       reader.onload = async (evt) => {
           try {
@@ -174,28 +163,15 @@ const Settings: React.FC = () => {
               const wb = XLSX.read(data, { type: 'array' });
               const ws = wb.Sheets[wb.SheetNames[0]];
               const jsonData: any[] = XLSX.utils.sheet_to_json(ws);
-
               if (jsonData.length === 0) throw new Error("Ficheiro vazio.");
-              
               const required = ['Fornecedor', 'Nome', 'Dias pagamento', 'Morada'];
               const missing = required.filter(col => !(col in jsonData[0]));
-              
               if (missing.length > 0) throw new Error(`Colunas em falta: ${missing.join(', ')}`);
-
-              const newSuppliers: Supplier[] = jsonData.map(row => ({
-                  code: row['Fornecedor']?.toString() || '',
-                  name: row['Nome']?.toString() || '',
-                  paymentTerms: row['Dias pagamento']?.toString() || '',
-                  address: row['Morada']?.toString() || ''
-              })).filter(s => s.code && s.name);
-
+              const newSuppliers: Supplier[] = jsonData.map(row => ({ code: row['Fornecedor']?.toString() || '', name: row['Nome']?.toString() || '', paymentTerms: row['Dias pagamento']?.toString() || '', address: row['Morada']?.toString() || '' })).filter(s => s.code && s.name);
               if (newSuppliers.length === 0) throw new Error("Nenhum fornecedor válido encontrado.");
-
               setSuppliers(newSuppliers);
               alert(`${newSuppliers.length} fornecedores importados. Clique em "Salvar" para confirmar.`);
-          } catch(err: any) {
-              alert("Erro na importação: " + err.message);
-          }
+          } catch(err: any) { alert("Erro na importação: " + err.message); }
       };
       reader.readAsArrayBuffer(file);
   };
@@ -232,7 +208,6 @@ const Settings: React.FC = () => {
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
             Defina o código necessário para criar novas contas de Administrador.
         </p>
-        
         <div className="mb-4">
             <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Código de Acesso Mestre</label>
             <input 
@@ -242,9 +217,72 @@ const Settings: React.FC = () => {
                 placeholder="Ex: SenhaForte123 (Deixe em branco para usar o padrão)"
                 className="w-full p-2 border border-purple-200 dark:border-purple-800 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-900 dark:text-purple-200 focus:ring-2 focus:ring-purple-500 outline-none font-mono"
             />
-            <p className="text-[10px] text-slate-400 mt-1">
-                Se deixar em branco, o sistema usará o código de recuperação padrão.
-            </p>
+        </div>
+      </div>
+
+      {/* APPROVAL RULES */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Euro className="w-5 h-5 text-green-600"/> Regras de Aprovação (Pedidos de Compra)
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Defina quem deve aprovar pedidos com base no valor total. O sistema usará a regra cujo limite for igual ou superior ao total.
+        </p>
+
+        <div className="flex flex-col md:flex-row gap-2 mb-4">
+            <div className="relative md:w-32">
+                <span className="absolute left-3 top-2.5 text-slate-400">€</span>
+                <input 
+                    type="number"
+                    value={newRuleAmount}
+                    onChange={(e) => setNewRuleAmount(e.target.value)}
+                    placeholder="Até..."
+                    className="w-full pl-6 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                />
+            </div>
+            <input 
+                type="email"
+                value={newRuleEmail}
+                onChange={(e) => setNewRuleEmail(e.target.value)}
+                placeholder="Email do Aprovador (Ex: gestor@empresa.com)"
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+            />
+            <button 
+                type="button"
+                onClick={addApprovalRule}
+                className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 text-sm font-medium flex items-center gap-2"
+            >
+                <Plus className="w-4 h-4"/> Adicionar
+            </button>
+        </div>
+
+        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+            <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
+                    <tr>
+                        <th className="p-3 border-b dark:border-slate-700">Valor Máximo</th>
+                        <th className="p-3 border-b dark:border-slate-700">Aprovador</th>
+                        <th className="p-3 border-b dark:border-slate-700 w-16 text-center"></th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                    {approvalRules.length === 0 ? (
+                        <tr><td colSpan={3} className="p-4 text-center text-slate-400 italic">Sem regras (Aprovação automática).</td></tr>
+                    ) : (
+                        approvalRules.map((rule, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-800">
+                                <td className="p-3 font-mono font-bold">Até {rule.maxAmount.toLocaleString()} €</td>
+                                <td className="p-3">{rule.approverEmail}</td>
+                                <td className="p-3 text-center">
+                                    <button onClick={() => removeApprovalRule(idx)} className="text-slate-400 hover:text-red-500">
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </td>
+                            </tr>
+                        ))
+                    )}
+                </tbody>
+            </table>
         </div>
       </div>
 
@@ -423,10 +461,10 @@ const Settings: React.FC = () => {
       {/* EMAIL SETTINGS */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
-            <Mail className="w-5 h-5 text-slate-500"/> Notificações de Stock
+            <Mail className="w-5 h-5 text-slate-500"/> Notificações de Stock (Armazém)
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-            Defina os e-mails que receberão alertas quando houver itens novos ou sem stock.
+            Defina os e-mails que receberão alertas quando houver itens novos ou sem stock no armazém.
         </p>
         
         <div className="space-y-3 mb-6">

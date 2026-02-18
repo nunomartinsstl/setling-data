@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { MasterMaterial, Supplier, UnitOption, PurchaseOrder } from '../types';
+import { MasterMaterial, Supplier, UnitOption, PurchaseOrder, ApprovalRule, UserRole } from '../types';
 import { StorageService } from '../services/storageService';
-import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2, Hash } from 'lucide-react';
+import { ShoppingBag, Search, Plus, Trash2, Edit, Save, ArrowLeft, X, FileSpreadsheet, FileText, User, MapPin, CreditCard, ChevronDown, ChevronUp, AlertCircle, HelpCircle, Check, Euro, CheckCircle, Loader2, Hash, ShieldCheck, XCircle } from 'lucide-react';
 
 // Explicitly declare global types to avoid TS errors without imports
 declare const window: any;
@@ -62,8 +63,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const [viewMode, setViewMode] = useState<'LIST' | 'CREATE'>('LIST');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
+  const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
   const [savedOrders, setSavedOrders] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<UserRole>(UserRole.VIEWER);
 
   // Form State
   const [orderId, setOrderId] = useState<string | null>(null);
@@ -89,6 +92,9 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   // Initial Load
   useEffect(() => {
       loadData();
+      StorageService.subscribeToAuth(user => {
+          if (user) setCurrentUserRole(user.role);
+      });
   }, [viewMode]);
 
   const loadData = async () => {
@@ -100,6 +106,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           ]);
           setSuppliers(settings.suppliers || []);
           setUnitOptions(settings.unitOptions || [{ value: 'UN', description: 'Unidade' }]);
+          setApprovalRules(settings.approvalRules || []);
           setSavedOrders(orders.sort((a,b) => new Date(b.dateCreated).getTime() - new Date(a.dateCreated).getTime()));
           
           // Initialize empty row if needed
@@ -123,6 +130,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   const subTotal = rows.reduce((acc, row) => acc + (Number(row.quantity) * Number(row.unitPrice)), 0);
   const vatTotal = subTotal * VAT_RATE;
   const grandTotal = subTotal + vatTotal;
+
+  const canApprove = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.MANAGEMENT;
 
   const validatePep = () => {
       if (!pep) return true; 
@@ -280,13 +289,35 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       }
   };
 
+  const handleApprovalAction = async (order: PurchaseOrder, action: 'APPROVE' | 'REJECT') => {
+      if (!window.confirm(action === 'APPROVE' ? "Aprovar pedido?" : "Rejeitar pedido?")) return;
+      
+      setLoading(true);
+      try {
+          const updatedOrder: PurchaseOrder = {
+              ...order,
+              status: action === 'APPROVE' ? 'APPROVED' : 'REJECTED',
+              approvalMetadata: {
+                  ...order.approvalMetadata,
+                  [action === 'APPROVE' ? 'approvedBy' : 'rejectedBy']: currentUsername,
+                  [action === 'APPROVE' ? 'approvedAt' : 'rejectedAt']: new Date().toISOString()
+              }
+          };
+          await StorageService.savePurchaseOrder(updatedOrder);
+          await loadData();
+      } catch(e: any) {
+          alert("Erro: " + e.message);
+      } finally {
+          setLoading(false);
+      }
+  };
+
   const toggleExpandListOrder = (id: string) => {
     setExpandedOrderId(prev => prev === id ? null : id);
   };
 
   // --- PRINT GENERATION ---
   const handlePrintOrder = (orderToPrint?: PurchaseOrder) => {
-    // If orderToPrint is passed, use its data. Otherwise use current form state.
     const printSupplier = orderToPrint ? orderToPrint.supplier : selectedSupplier;
     const printRows = orderToPrint ? orderToPrint.items : rows;
     const printId = orderToPrint ? orderToPrint.displayId : displayId;
@@ -298,16 +329,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
     const title = printId ? `PEDIDO DE COMPRA #${printId}` : "RASCUNHO";
     const todayStr = printDate ? new Date(printDate).toLocaleDateString() : new Date().toLocaleDateString();
 
-    // Calculate totals for print (re-calculate to be safe)
     const pSubTotal = printRows.reduce((acc, row) => acc + (Number(row.quantity) * Number(row.unitPrice)), 0);
     const pVatTotal = pSubTotal * VAT_RATE;
     const pGrandTotal = pSubTotal + pVatTotal;
 
-    // Payment Logic
     const paymentTerms = printSupplier.paymentTerms;
     const paymentDisplay = (String(paymentTerms) === '0') ? 'Pronto pagamento' : (paymentTerms || 'A Definir');
 
-    // Detect if we need to invert logo (for white logo on white paper)
     const isGenericLogo = logoUrl.includes('setling-logo-white');
     const logoStyle = isGenericLogo ? 'filter: invert(1);' : '';
 
@@ -450,7 +478,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
             </div>
             
             <script>
-                // Auto-print when loaded
                 window.onload = function() {
                     window.print();
                 }
@@ -459,7 +486,6 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
         </html>
     `;
 
-    // Use specific UTF-8 blob type for correct character encoding
     const blob = new Blob([printContent], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const printWindow = window.open(url, '_blank');
@@ -471,6 +497,31 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
   const handleSave = async () => {
       if (!isFormValid) return alert("Preencha todos os campos obrigatórios em vermelho e verifique os itens.");
+
+      // Check Approval Rules
+      let status: PurchaseOrder['status'] = 'SENT'; // Default (auto-approved)
+      let matchedRule: ApprovalRule | undefined;
+
+      if (approvalRules.length > 0) {
+          // Find first rule where total <= maxAmount
+          // Rules should be sorted by maxAmount ASC
+          const sortedRules = [...approvalRules].sort((a,b) => a.maxAmount - b.maxAmount);
+          matchedRule = sortedRules.find(r => grandTotal <= r.maxAmount);
+          
+          // If no rule matches, assume it needs the highest level approval OR default to approval?
+          // Usually strict systems require approval for anything above max.
+          // Let's assume if it exceeds all rules, we take the highest rule or flag it.
+          // For now, if match found, it's PENDING. If not found (meaning > max rule), also PENDING with highest.
+          
+          if (!matchedRule && grandTotal > 0) {
+              // Exceeds all configured limits -> Use the highest authority
+              matchedRule = sortedRules[sortedRules.length - 1];
+          }
+
+          if (matchedRule) {
+              status = 'PENDING_APPROVAL';
+          }
+      }
 
       const newPO: PurchaseOrder = {
           id: orderId || Math.random().toString(36).substr(2, 9),
@@ -491,12 +542,36 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           vatTotal,
           grandTotal,
           creator: currentUsername,
-          status: 'SENT'
+          status: status,
+          approvalMetadata: matchedRule ? { approverEmail: matchedRule.approverEmail } : undefined
       };
 
       setLoading(true);
       try {
           const saved = await StorageService.savePurchaseOrder(newPO);
+          
+          // If pending approval, trigger mailto
+          if (status === 'PENDING_APPROVAL' && matchedRule) {
+              const subject = `Aprovação Necessária: Pedido #${saved.displayId} - ${grandTotal.toFixed(2)}€`;
+              const body = `Olá,\n\nO pedido de compra #${saved.displayId} requer a sua aprovação.\n\n` +
+                           `Fornecedor: ${saved.supplier.name}\n` +
+                           `Total: ${grandTotal.toFixed(2)}€\n` +
+                           `Criado por: ${currentUsername}\n\n` +
+                           `Por favor, aceda à plataforma para aprovar ou rejeitar.\n\nCumprimentos.`;
+              
+              const mailto = `mailto:${matchedRule.approverEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+              
+              // Use slight delay to allow UI update
+              setTimeout(() => {
+                  window.location.href = mailto;
+              }, 500);
+              
+              alert(`Pedido guardado! A aguardar aprovação de ${matchedRule.approverEmail}.\nO seu cliente de email será aberto.`);
+          } else {
+              if (window.confirm("Pedido gravado e aprovado!\nDeseja visualizar o PDF agora?")) {
+                  handlePrintOrder(saved);
+              }
+          }
           
           setOrderId(saved.id);
           setDisplayId(saved.displayId);
@@ -510,20 +585,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               return [saved, ...prev];
           });
 
-          setLoading(false);
-          await new Promise(resolve => setTimeout(resolve, 10));
-
-          if (window.confirm("Pedido gravado com sucesso!\n\nDeseja visualizar o PDF agora?")) {
-              handlePrintOrder(saved);
-          }
-          
           setViewMode('LIST');
           setOrderId(null);
           loadData();
 
       } catch (e: any) {
-          setLoading(false);
           alert("Erro: " + e.message);
+      } finally {
+          setLoading(false);
       }
   };
 
@@ -556,6 +625,16 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       setRows([{ sku: '', description: '', quantity: 1, unit: 'UN', unitPrice: 0, isCustom: false, showSuggestions: false, similarityChecked: false }]);
       setExpandedRow(0);
       setViewMode('CREATE');
+  };
+
+  const getStatusBadge = (status: PurchaseOrder['status']) => {
+      switch(status) {
+          case 'PENDING_APPROVAL': return <span className="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-bold border border-amber-200 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Aguarda Aprovação</span>;
+          case 'APPROVED': return <span className="px-2 py-1 rounded-full bg-green-100 text-green-700 text-xs font-bold border border-green-200 flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Aprovado</span>;
+          case 'REJECTED': return <span className="px-2 py-1 rounded-full bg-red-100 text-red-700 text-xs font-bold border border-red-200 flex items-center gap-1"><XCircle className="w-3 h-3"/> Rejeitado</span>;
+          case 'SENT': return <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 flex items-center gap-1"><Check className="w-3 h-3"/> Emitido</span>;
+          default: return <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">Rascunho</span>;
+      }
   };
 
   return (
@@ -627,6 +706,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                 <th className="p-4 whitespace-nowrap">Fornecedor</th>
                                 <th className="p-4 whitespace-nowrap">Responsável</th>
                                 <th className="p-4 text-right whitespace-nowrap">Total</th>
+                                <th className="p-4 text-center whitespace-nowrap">Status</th>
                                 <th className="p-4 text-right whitespace-nowrap">Ação</th>
                             </tr>
                         </thead>
@@ -649,17 +729,25 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             <td className="p-4 font-bold whitespace-nowrap">{po.supplier.name}</td>
                                             <td className="p-4 whitespace-nowrap">{po.creator}</td>
                                             <td className="p-4 text-right whitespace-nowrap">{po.grandTotal.toFixed(2)} €</td>
+                                            <td className="p-4 text-center whitespace-nowrap">
+                                                {getStatusBadge(po.status)}
+                                            </td>
                                             <td className="p-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex justify-end gap-2">
                                                     <button onClick={() => handlePrintOrder(po)} className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 dark:bg-blue-900/30 rounded" title="Imprimir PDF"><FileText className="w-4 h-4"/></button>
-                                                    <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                    
+                                                    {/* Edit only if not approved/rejected, or if admin */}
+                                                    {['DRAFT', 'SENT', 'PENDING_APPROVAL'].includes(po.status) && (
+                                                        <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                    )}
+                                                    
                                                     <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 dark:bg-red-900/30 rounded" title="Excluir"><Trash2 className="w-4 h-4"/></button>
                                                 </div>
                                             </td>
                                         </tr>
                                         {isExpanded && (
                                             <tr className="bg-slate-50 dark:bg-slate-800/50">
-                                                <td colSpan={6} className="p-0">
+                                                <td colSpan={7} className="p-0">
                                                     <div className="p-4 border-t border-slate-100 dark:border-slate-700 animate-fade-in pl-12">
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-xs text-slate-500 dark:text-slate-400">
                                                             <div>
@@ -668,8 +756,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                             <div>
                                                                 <span className="font-bold">Condição Pagamento:</span> {String(po.supplier.paymentTerms) === '0' ? 'Pronto Pagamento' : (po.supplier.paymentTerms || 'A Definir')}
                                                             </div>
+                                                            {po.approvalMetadata?.approverEmail && (
+                                                                <div className="col-span-2">
+                                                                    <span className="font-bold">Aprovação Necessária de:</span> {po.approvalMetadata.approverEmail}
+                                                                    {po.approvalMetadata.approvedBy && <span className="text-green-600 ml-2">(Aprovado por {po.approvalMetadata.approvedBy} em {new Date(po.approvalMetadata.approvedAt!).toLocaleDateString()})</span>}
+                                                                    {po.approvalMetadata.rejectedBy && <span className="text-red-600 ml-2">(Rejeitado por {po.approvalMetadata.rejectedBy})</span>}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                        <div className="overflow-x-auto">
+                                                        <div className="overflow-x-auto mb-4">
                                                             <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
                                                                 <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                                                                     <tr>
@@ -693,6 +788,24 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                                 </tbody>
                                                             </table>
                                                         </div>
+
+                                                        {/* APPROVAL ACTIONS */}
+                                                        {po.status === 'PENDING_APPROVAL' && canApprove && (
+                                                            <div className="flex gap-3 justify-end pt-2 border-t border-slate-200 dark:border-slate-700">
+                                                                <button 
+                                                                    onClick={() => handleApprovalAction(po, 'REJECT')}
+                                                                    className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded font-bold text-sm flex items-center gap-1"
+                                                                >
+                                                                    <XCircle className="w-4 h-4"/> Rejeitar
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleApprovalAction(po, 'APPROVE')}
+                                                                    className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded font-bold text-sm flex items-center gap-1"
+                                                                >
+                                                                    <ShieldCheck className="w-4 h-4"/> Aprovar Pedido
+                                                                </button>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
@@ -700,7 +813,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                     </React.Fragment>
                                 );
                             })}
-                            {savedOrders.length === 0 && <tr><td colSpan={6} className="p-8 text-center">Sem pedidos.</td></tr>}
+                            {savedOrders.length === 0 && <tr><td colSpan={7} className="p-8 text-center">Sem pedidos.</td></tr>}
                         </tbody>
                     </table>
                   </div>
@@ -723,7 +836,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                 type="text" 
                                 value={supplierSearch} 
                                 onChange={e => setSupplierSearch(e.target.value)} 
-                                placeholder="Buscar fornecedor..."
+                                placeholder="Procurar fornecedor..."
                                 className="w-full p-2 border border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded dark:text-white"
                             />
                             {supplierSearch && (

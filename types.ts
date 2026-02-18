@@ -28,6 +28,11 @@ export interface EmailRecipient {
   type: 'TO' | 'CC';
 }
 
+export interface ApprovalRule {
+  maxAmount: number;
+  approverEmail: string;
+}
+
 export interface UnitOption {
   value: string;
   description: string;
@@ -113,6 +118,14 @@ export interface PurchaseOrderItem {
   isCustom?: boolean;
 }
 
+export interface ApprovalMetadata {
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectedBy?: string;
+  rejectedAt?: string;
+  approverEmail?: string; // The email that was required for this level
+}
+
 export interface PurchaseOrder {
   id: string;
   displayId?: number;
@@ -124,7 +137,8 @@ export interface PurchaseOrder {
   vatTotal: number;
   grandTotal: number;
   creator: string;
-  status: string;
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'APPROVED' | 'REJECTED' | 'SENT';
+  approvalMetadata?: ApprovalMetadata;
 }
 
 export interface ReceiptItem {
@@ -151,7 +165,8 @@ export interface AppSettings {
   unitOptions?: UnitOption[]; 
   categories?: CategoryOption[];
   suppliers?: Supplier[];
-  autoDecrementStock?: boolean; 
+  autoDecrementStock?: boolean;
+  approvalRules?: ApprovalRule[];
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS';
