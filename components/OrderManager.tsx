@@ -824,7 +824,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 description: row.customDesc,
                 quantity: qtyNum,
                 unit: row.unit || null,
-                category: finalCategory,
+                category: finalCategory || null,
                 isCustom: true,
                 image: row.image || null
             });

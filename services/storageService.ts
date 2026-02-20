@@ -862,8 +862,95 @@ export const StorageService = {
       }
   },
 
-  reconcileCustomItems: async (masterList: MasterMaterial[]) => {
-      // Placeholder
+  reconcileCustomItems: async (masterList: MasterMaterial[], currentStock: StockItem[] = []) => {
+      if (!db) return;
+      
+      try {
+          const orders = await StorageService.getOrders();
+          const updates: any = {};
+          let updatedCount = 0;
+
+          // Helper to normalize
+          const norm = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+          // Create a lookup map from Stock (and Master) descriptions to SKUs
+          const descToSku = new Map<string, string>();
+          
+          // Populate from MasterList first
+          masterList.forEach(m => {
+              if (m.description) descToSku.set(norm(m.description), m.sku);
+          });
+          
+          // Override/Augment with Stock (higher priority if description matches exactly what was entered)
+          currentStock.forEach(s => {
+              if (s.description) descToSku.set(norm(s.description), s.sku);
+          });
+
+          for (const order of orders) {
+              // Only check active orders or pending ones
+              if (order.status === 'COMPLETED' || order.status === 'REJECTED') continue;
+
+              let orderModified = false;
+              let hasPendingCustom = false;
+
+              if (!order.items) continue;
+
+              for (const item of order.items) {
+                  // Check if item is "Provisional" (N/A SKU or isCustom with no SKU)
+                  // Also check if it is "FOTO_PENDENTE" - we can't resolve photos by description usually, but if they typed a description...
+                  if ((item.isCustom || item.sku === 'N/A' || !item.sku) && item.sku !== 'FOTO_PENDENTE') {
+                      const d = norm(item.description);
+                      if (descToSku.has(d)) {
+                          // MATCH FOUND!
+                          const newSku = descToSku.get(d)!;
+                          
+                          // Update Item
+                          item.sku = newSku;
+                          item.isCustom = false; // No longer custom
+                          // We keep the original description to avoid confusion, or we could update it.
+                          // Prompt says "convert the 'N/A' into the actual code".
+                          
+                          orderModified = true;
+                          
+                          // Log
+                          if (!order.changeLog) order.changeLog = [];
+                          order.changeLog.push({
+                              date: new Date().toISOString(),
+                              actor: 'SYSTEM',
+                              details: `Material "${item.description}" identificado em stock. Código atribuído: ${newSku}`
+                          });
+                      } else {
+                          hasPendingCustom = true;
+                      }
+                  } else if (item.isCustom) {
+                       hasPendingCustom = true;
+                  }
+              }
+
+              if (orderModified) {
+                  // Update Status if it was PENDING and now has no custom items
+                  if (order.status === 'PENDING' && !hasPendingCustom) {
+                      order.status = 'OPEN';
+                      if (!order.changeLog) order.changeLog = [];
+                      order.changeLog.push({
+                          date: new Date().toISOString(),
+                          actor: 'SYSTEM',
+                          details: `Estado alterado para OPEN (Todos os materiais identificados).`
+                      });
+                  }
+                  
+                  updates[`${KEYS.ORDERS}/${order.id}`] = order;
+                  updatedCount++;
+              }
+          }
+
+          if (updatedCount > 0) {
+              await db.ref().update(updates);
+              console.log(`[RECONCILE] Updated ${updatedCount} orders with identified materials.`);
+          }
+      } catch (e) {
+          console.error("Error reconciling custom items:", e);
+      }
   },
 
   syncCustomMaterials: async (masterList: MasterMaterial[]) => {

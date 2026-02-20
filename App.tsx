@@ -157,6 +157,8 @@ const App: React.FC = () => {
       }
       
       // 3. AUTO-PROCESS COMPLETED ORDERS (Force check on refresh)
+      let currentStockState = fetchedStock;
+
       if (user && (user.role === UserRole.ADMIN || user.role === UserRole.WAREHOUSE || user.role === UserRole.MANAGEMENT)) {
          try {
              // Step A: Deduct stock for any new completed orders
@@ -169,6 +171,7 @@ const App: React.FC = () => {
              await StorageService.processBackorders(updatedStock);
              
              // Update local stock state
+             currentStockState = updatedStock;
              setStock(updatedStock);
          } catch(e) {
              console.error("Error during auto-process stock routine", e);
@@ -179,7 +182,7 @@ const App: React.FC = () => {
       }
 
       // 4. Reconcile Custom Items
-      await StorageService.reconcileCustomItems(fetchedMaster);
+      await StorageService.reconcileCustomItems(fetchedMaster, currentStockState);
 
       // 5. Sync Custom Materials (Legacy placeholder logic)
       await StorageService.syncCustomMaterials(fetchedMaster);
