@@ -1942,8 +1942,34 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
                                                 <div className="flex-1 flex flex-col justify-end pb-3">
                                                      {!row.isCustom && row.sku && isKnownSku(row.sku) && (
-                                                        <div className={`text-xs font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                            Stock: {stockQty}
+                                                        <div className="flex flex-col text-xs">
+                                                            <span className={`font-medium ${stockQty > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                                Stock: {stockQty}
+                                                            </span>
+                                                            {(() => {
+                                                                const openQty = allActiveOrders
+                                                                    .filter(o => o.status !== 'COMPLETED' && o.status !== 'REJECTED')
+                                                                    .reduce((acc, o) => {
+                                                                        const item = o.items.find(i => i.sku === row.sku);
+                                                                        if (!item) return acc;
+                                                                        
+                                                                        // Calculate pending for this item
+                                                                        const picked = (o.pickedItems || [])
+                                                                            .filter((p: any) => p.material === row.sku)
+                                                                            .reduce((sum: number, p: any) => sum + (Number(p.pickedQty) || 0), 0);
+                                                                        
+                                                                        return acc + Math.max(0, item.quantity - picked);
+                                                                    }, 0);
+                                                                
+                                                                if (openQty > 0) {
+                                                                    return (
+                                                                        <span className="text-amber-600 dark:text-amber-400 font-medium mt-0.5">
+                                                                            Em Pedidos: {openQty}
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            })()}
                                                         </div>
                                                      )}
                                                 </div>
