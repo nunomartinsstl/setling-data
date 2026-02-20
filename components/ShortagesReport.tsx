@@ -53,6 +53,7 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
             order.items.forEach(item => {
                 // Ignore custom items without SKU for now, as we can't check stock reliably
                 if (item.isCustom && !item.sku) return;
+                if (item.backorderCreated) return; // Skip if backorder exists
                 
                 const sku = item.sku;
                 const picked = getPickedQty(order, sku);

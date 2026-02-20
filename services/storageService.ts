@@ -682,8 +682,13 @@ export const StorageService = {
       
       try {
           // 1. Map New Stock for fast lookup (Mutable for allocation)
+          // Normalize SKU to ensure matching (trim + uppercase)
+          const normalizeSku = (s: string) => s.trim().toUpperCase();
+          
           const stockMap = new Map<string, number>();
-          newStock.forEach(s => stockMap.set(s.sku, s.quantity));
+          newStock.forEach(s => {
+              if (s.sku) stockMap.set(normalizeSku(s.sku), s.quantity);
+          });
 
           // 2. Fetch Orders
           const allOrders = await StorageService.getOrders();
@@ -695,7 +700,7 @@ export const StorageService = {
           const getPickedQty = (order: Order, sku: string) => {
               const pickedList = toArray(order.pickedItems);
               return pickedList
-                  .filter((p: any) => (p.material || '').trim() === sku.trim())
+                  .filter((p: any) => normalizeSku(p.material || '') === normalizeSku(sku))
                   .reduce((acc: number, p: any) => acc + (Number(p.pickedQty) || 0), 0);
           };
 
@@ -714,21 +719,26 @@ export const StorageService = {
           const demandsBySku = new Map<string, Demand[]>();
 
           for (const order of candidates) {
+              if (!order.items) continue;
+              
               order.items.forEach((item, index) => {
                   if (item.isCustom) return;
                   if (item.backorderCreated) return; // Already handled
+                  if (!item.sku) return;
 
+                  const skuNorm = normalizeSku(item.sku);
                   const picked = getPickedQty(order, item.sku);
+                  
                   if (picked < item.quantity) {
                       const missing = item.quantity - picked;
                       if (missing > 0) {
-                          if (!demandsBySku.has(item.sku)) {
-                              demandsBySku.set(item.sku, []);
+                          if (!demandsBySku.has(skuNorm)) {
+                              demandsBySku.set(skuNorm, []);
                           }
-                          demandsBySku.get(item.sku)!.push({
+                          demandsBySku.get(skuNorm)!.push({
                               order,
                               itemIndex: index,
-                              sku: item.sku,
+                              sku: item.sku, // Keep original SKU for new order
                               missingQty: missing,
                               dateCreated: order.dateCreated,
                               description: item.description,
@@ -743,8 +753,8 @@ export const StorageService = {
           // 5. Allocate Stock (Smart Logic)
           const allocations = new Map<string, Demand[]>(); // OrderID -> Allocated Demands
 
-          demandsBySku.forEach((demands, sku) => {
-              let available = stockMap.get(sku) || 0;
+          demandsBySku.forEach((demands, skuNorm) => {
+              let available = stockMap.get(skuNorm) || 0;
               if (available <= 0) return;
 
               // Sort Demands:
@@ -763,7 +773,7 @@ export const StorageService = {
                   if (available >= demand.missingQty) {
                       // Allocate
                       available -= demand.missingQty;
-                      stockMap.set(sku, available); // Update available for next iteration
+                      stockMap.set(skuNorm, available); // Update available for next iteration
 
                       if (!allocations.has(demand.order.id)) {
                           allocations.set(demand.order.id, []);
@@ -791,13 +801,14 @@ export const StorageService = {
                   quantity: d.missingQty, // Only what's missing
                   quantityPicked: 0,
                   backorderCreated: false,
-                  fulfilledInOrderId: undefined
+                  fulfilledInOrderId: null,
+                  image: d.originalItem.image || null // Ensure no undefined
               }));
 
               const newOrder: Order = {
                   ...originalOrder,
                   id: newOrderId,
-                  displayId: undefined, // Let system generate or keep null? Usually null or new logic.
+                  displayId: null, // Let system generate or keep null? Usually null or new logic.
                   title: `${originalOrder.title} (Reabertura #${nextReopenCount})`,
                   status: 'OPEN',
                   dateCreated: new Date().toISOString(),

@@ -823,17 +823,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 sku: row.sku || 'N/A', // Could be FOTO_PENDENTE
                 description: row.customDesc,
                 quantity: qtyNum,
-                unit: row.unit,
+                unit: row.unit || null,
                 category: finalCategory,
                 isCustom: true,
-                image: row.image
+                image: row.image || null
             });
         } else {
             items.push({
                 sku: row.sku,
                 description: getMaterialDescription(row.sku),
                 quantity: qtyNum,
-                isCustom: false
+                isCustom: false,
+                image: null
             });
         }
     }
@@ -1266,15 +1267,32 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         </h4>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {targetCompanyId && (
-                <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa</label>
+            <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa {(!targetCompanyId) && <span className="text-red-500">*</span>}</label>
+                {targetCompanyId ? (
                     <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
                         <Building className="w-4 h-4"/>
                         {companies.find(c => c.id === targetCompanyId)?.name || "Empresa Desconhecida"}
+                        {isAdmin && (
+                            <button onClick={() => setTargetCompanyId('')} className="ml-auto text-xs text-blue-500 hover:underline">Alterar</button>
+                        )}
                     </div>
-                </div>
-            )}
+                ) : (
+                    <select 
+                        value={targetCompanyId}
+                        onChange={(e) => {
+                            setTargetCompanyId(e.target.value);
+                            if(formErrors.company) setFormErrors({...formErrors, company: false});
+                        }}
+                        className={`w-full p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${formErrors.company ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                    >
+                        <option value="">Selecione a empresa...</option>
+                        {companies.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                )}
+            </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1449,6 +1467,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
              </div>
         )}
       </div>
+
+      {message && (
+        <div className={`p-4 rounded-lg text-sm flex items-center gap-2 shadow-sm animate-fade-in ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'}`}>
+            {message.type === 'success' ? <CheckCircle className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4"/>}
+            {message.text}
+            <button onClick={() => setMessage(null)} className="ml-auto hover:text-slate-800 dark:hover:text-white"><X className="w-4 h-4"/></button>
+        </div>
+      )}
 
       {/* CREATION/EDIT AREA */}
       {showForm && (
