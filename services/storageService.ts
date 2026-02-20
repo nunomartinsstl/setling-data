@@ -681,66 +681,165 @@ export const StorageService = {
       if (!db) return 0;
       
       try {
-          // 1. Map New Stock for fast lookup
+          // 1. Map New Stock for fast lookup (Mutable for allocation)
           const stockMap = new Map<string, number>();
           newStock.forEach(s => stockMap.set(s.sku, s.quantity));
 
-          // 2. Fetch Orders (we need fresh list)
+          // 2. Fetch Orders
           const allOrders = await StorageService.getOrders();
           
-          // 3. Filter for candidates: COMPLETED orders
+          // 3. Filter for candidates: COMPLETED orders with unfulfilled items not yet backordered
           const candidates = allOrders.filter(o => o.status === 'COMPLETED');
           
+          // Helper to get picked qty
+          const getPickedQty = (order: Order, sku: string) => {
+              const pickedList = toArray(order.pickedItems);
+              return pickedList
+                  .filter((p: any) => (p.material || '').trim() === sku.trim())
+                  .reduce((acc: number, p: any) => acc + (Number(p.pickedQty) || 0), 0);
+          };
+
+          // 4. Collect all demands per SKU
+          interface Demand {
+              order: Order;
+              itemIndex: number; // To update the original item
+              sku: string;
+              missingQty: number;
+              dateCreated: string;
+              description: string;
+              unit?: string;
+              originalItem: OrderLineItem;
+          }
+
+          const demandsBySku = new Map<string, Demand[]>();
+
+          for (const order of candidates) {
+              order.items.forEach((item, index) => {
+                  if (item.isCustom) return;
+                  if (item.backorderCreated) return; // Already handled
+
+                  const picked = getPickedQty(order, item.sku);
+                  if (picked < item.quantity) {
+                      const missing = item.quantity - picked;
+                      if (missing > 0) {
+                          if (!demandsBySku.has(item.sku)) {
+                              demandsBySku.set(item.sku, []);
+                          }
+                          demandsBySku.get(item.sku)!.push({
+                              order,
+                              itemIndex: index,
+                              sku: item.sku,
+                              missingQty: missing,
+                              dateCreated: order.dateCreated,
+                              description: item.description,
+                              unit: item.unit,
+                              originalItem: item
+                          });
+                      }
+                  }
+              });
+          }
+
+          // 5. Allocate Stock (Smart Logic)
+          const allocations = new Map<string, Demand[]>(); // OrderID -> Allocated Demands
+
+          demandsBySku.forEach((demands, sku) => {
+              let available = stockMap.get(sku) || 0;
+              if (available <= 0) return;
+
+              // Sort Demands:
+              // 1. Exact Match (missing === available)
+              // 2. Oldest First
+              demands.sort((a, b) => {
+                  const aExact = a.missingQty === available;
+                  const bExact = b.missingQty === available;
+                  if (aExact && !bExact) return -1;
+                  if (!aExact && bExact) return 1;
+                  
+                  return new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime();
+              });
+
+              for (const demand of demands) {
+                  if (available >= demand.missingQty) {
+                      // Allocate
+                      available -= demand.missingQty;
+                      stockMap.set(sku, available); // Update available for next iteration
+
+                      if (!allocations.has(demand.order.id)) {
+                          allocations.set(demand.order.id, []);
+                      }
+                      allocations.get(demand.order.id)!.push(demand);
+                  }
+              }
+          });
+
+          // 6. Create Backorders
           let updatedCount = 0;
           const updates: any = {};
 
-          for (const order of candidates) {
-              let shouldReopen = false;
-              let hasUnfulfilledItems = false;
+          for (const [originalOrderId, allocatedDemands] of allocations.entries()) {
+              if (allocatedDemands.length === 0) continue;
 
-              // Helper to check picked qty
-              const getPickedQty = (sku: string) => {
-                  const pickedList = toArray(order.pickedItems);
-                  return pickedList
-                      .filter((p: any) => (p.material || '').trim() === sku.trim())
-                      .reduce((acc: number, p: any) => acc + (Number(p.pickedQty) || 0), 0);
-              };
+              const originalOrder = allocatedDemands[0].order; // All have same order
+              
+              // A. Create New Order
+              const nextReopenCount = (originalOrder.reopenCount || 0) + 1;
+              const newOrderId = `${originalOrder.id}_re_${nextReopenCount}`;
+              
+              const newItems: OrderLineItem[] = allocatedDemands.map(d => ({
+                  ...d.originalItem,
+                  quantity: d.missingQty, // Only what's missing
+                  quantityPicked: 0,
+                  backorderCreated: false,
+                  fulfilledInOrderId: undefined
+              }));
 
-              for (const item of order.items) {
-                  if (item.isCustom) continue; // Skip custom items for now
-                  
-                  const picked = getPickedQty(item.sku);
-                  if (picked < item.quantity) {
-                      hasUnfulfilledItems = true;
-                      const missing = item.quantity - picked;
-                      const available = stockMap.get(item.sku) || 0;
-                      
-                      // If we have ANY stock for a missing item, we reopen the order
-                      if (available > 0) {
-                          shouldReopen = true;
-                      }
-                  }
-              }
-
-              if (shouldReopen && hasUnfulfilledItems) {
-                  // Reopen Order
-                  order.status = 'OPEN'; // Or 'IN_PROCESS'
-                  order.reopenCount = (order.reopenCount || 0) + 1;
-                  
-                  if (!order.changeLog) order.changeLog = [];
-                  order.changeLog.push({
+              const newOrder: Order = {
+                  ...originalOrder,
+                  id: newOrderId,
+                  displayId: undefined, // Let system generate or keep null? Usually null or new logic.
+                  title: `${originalOrder.title} (Reabertura #${nextReopenCount})`,
+                  status: 'OPEN',
+                  dateCreated: new Date().toISOString(),
+                  items: newItems,
+                  pickedItems: [],
+                  changeLog: [{
                       date: new Date().toISOString(),
                       actor: 'SYSTEM',
-                      details: `Reaberto automaticamente: Stock reposto (${order.reopenCount}ª vez).`
-                  });
+                      details: `Gerado automaticamente a partir de ${originalOrder.id} por chegada de stock.`
+                  }],
+                  originalOrderId: originalOrder.id,
+                  reopenCount: 0, // Reset for the new order
+                  stockProcessed: false
+              };
 
-                  updates[`${KEYS.ORDERS}/${order.id}`] = order;
+              updates[`${KEYS.ORDERS}/${newOrderId}`] = newOrder;
+
+              // B. Update Original Order
+              let originalModified = false;
+              allocatedDemands.forEach(d => {
+                  if (originalOrder.items[d.itemIndex]) {
+                      originalOrder.items[d.itemIndex].backorderCreated = true;
+                      originalOrder.items[d.itemIndex].fulfilledInOrderId = newOrderId;
+                      originalModified = true;
+                  }
+              });
+
+              if (originalModified) {
+                  originalOrder.reopenCount = nextReopenCount;
+                  if (!originalOrder.changeLog) originalOrder.changeLog = [];
+                  originalOrder.changeLog.push({
+                      date: new Date().toISOString(),
+                      actor: 'SYSTEM',
+                      details: `Backorder gerado: ${newOrderId}`
+                  });
+                  updates[`${KEYS.ORDERS}/${originalOrder.id}`] = originalOrder;
                   updatedCount++;
-                  console.log(`[BACKORDER] Reopening Order ${order.id} due to stock arrival.`);
+                  console.log(`[BACKORDER] Created ${newOrderId} from ${originalOrder.id}`);
               }
           }
 
-          if (updatedCount > 0) {
+          if (Object.keys(updates).length > 0) {
               await db.ref().update(updates);
           }
 
