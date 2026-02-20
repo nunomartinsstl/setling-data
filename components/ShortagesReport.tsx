@@ -32,26 +32,44 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
         const result: ShortageItem[] = [];
         const demandMap = new Map<string, { desc: string, total: number, orders: any[] }>();
 
-        // 1. Filter Active Orders
-        const activeOrders = orders.filter(o => o.status === 'OPEN' || o.status === 'IN_PROCESS' || o.status === 'IN PROCESS');
+        // Helper to get picked quantity
+        const getPickedQty = (order: Order, sku: string) => {
+            if (!order.pickedItems || !Array.isArray(order.pickedItems)) return 0;
+            return order.pickedItems
+                .filter((p: any) => (p.material || '').trim() === sku.trim())
+                .reduce((acc: number, p: any) => acc + (Number(p.pickedQty) || 0), 0);
+        };
+
+        // 1. Filter Relevant Orders (Active OR Completed with missing items)
+        const relevantOrders = orders.filter(o => 
+            o.status === 'OPEN' || 
+            o.status === 'IN_PROCESS' || 
+            o.status === 'IN PROCESS' || 
+            o.status === 'COMPLETED'
+        );
 
         // 2. Aggregate Demand
-        activeOrders.forEach(order => {
+        relevantOrders.forEach(order => {
             order.items.forEach(item => {
                 // Ignore custom items without SKU for now, as we can't check stock reliably
                 if (item.isCustom && !item.sku) return;
                 
                 const sku = item.sku;
+                const picked = getPickedQty(order, sku);
+                const remainingDemand = Math.max(0, item.quantity - picked);
+
+                if (remainingDemand <= 0) return; // Fully satisfied
+
                 if (!demandMap.has(sku)) {
                     demandMap.set(sku, { desc: item.description, total: 0, orders: [] });
                 }
                 const entry = demandMap.get(sku)!;
-                entry.total += item.quantity;
+                entry.total += remainingDemand;
                 entry.orders.push({
                     id: order.id,
                     title: order.title,
                     dateCreated: order.dateCreated,
-                    reqQty: item.quantity,
+                    reqQty: remainingDemand, // Show remaining needed
                     creator: order.creator
                 });
             });

@@ -2,7 +2,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/database';
-import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem, Receipt } from '../types';
+import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem, Receipt, RolePermissions } from '../types';
 
 // Safely access environment variables
 const env = ((import.meta as any).env || {}) as any;
@@ -107,25 +107,30 @@ export const DEFAULT_CATEGORIES = [
 // Re-export for compatibility
 export const MATERIAL_CATEGORIES = DEFAULT_CATEGORIES;
 
+// DEFAULT PERMISSIONS (Fallback if not in DB)
+export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
+    [UserRole.ADMIN]: {
+        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewShortages: true, canSearch: true, canManageUsers: true, canManageSettings: true
+    },
+    [UserRole.MANAGEMENT]: {
+        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
+    },
+    [UserRole.WAREHOUSE]: {
+        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
+    },
+    [UserRole.TECHNICAL]: {
+        // UPDATED: Now includes canCreatePurchaseOrder: true
+        canCreateOrder: true, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewShortages: false, canSearch: true, canManageUsers: false, canManageSettings: false
+    },
+    [UserRole.VIEWER]: {
+        canCreateOrder: false, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: false, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewShortages: false, canSearch: false, canManageUsers: false, canManageSettings: false
+    }
+};
+
 // Helper to normalize string for matching descriptions (keep this for fuzzy description search)
 const normalizeText = (text: string): string => {
     if (!text) return '';
     return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-};
-
-// Helper to calculate business days
-const addBusinessDays = (startDate: Date, days: number): Date => {
-    const result = new Date(startDate);
-    let count = 0;
-    while (count < days) {
-        result.setDate(result.getDate() + 1);
-        const day = result.getDay();
-        // 0 is Sunday, 6 is Saturday
-        if (day !== 0 && day !== 6) {
-            count++;
-        }
-    }
-    return result;
 };
 
 // Safe array helper for Firebase data
@@ -328,8 +333,25 @@ export const StorageService = {
       if (!db) return { emailRecipients: [] };
       const snapshot = await db.ref(KEYS.SETTINGS).get();
       const val = snapshot.val() || { emailRecipients: [] };
-      // Enforce permanent stock deduction for all clients reading settings
+      
+      // MERGE DEFAULTS: Ensure permissions object exists and has all keys
       val.autoDecrementStock = true;
+      
+      if (!val.permissions) {
+          val.permissions = DEFAULT_PERMISSIONS;
+      } else {
+          // Merge deep to ensure new roles/keys are added to existing config
+          Object.keys(DEFAULT_PERMISSIONS).forEach((role) => {
+              const r = role as UserRole;
+              if (!val.permissions[r]) {
+                  val.permissions[r] = DEFAULT_PERMISSIONS[r];
+              } else {
+                  // Ensure all keys exist within role
+                  val.permissions[r] = { ...DEFAULT_PERMISSIONS[r], ...val.permissions[r] };
+              }
+          });
+      }
+
       return val;
   },
 
@@ -364,9 +386,6 @@ export const StorageService = {
       await db.ref(KEYS.STOCK).set(newStock);
   },
 
-  // ----------------------------------------------------------------
-  // REWRITTEN DECREMENT STOCK LOGIC (INSTRUMENTED)
-  // ----------------------------------------------------------------
   decrementStock: async (pickedItems: PickedItem[]): Promise<{ success: boolean; details: string[] }> => {
       // FORCE ARRAY: Firebase might return { "0": {...}, "1": {...} } as an object
       const itemsToProcess = toArray(pickedItems);

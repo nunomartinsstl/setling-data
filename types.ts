@@ -159,6 +159,20 @@ export interface Receipt {
   items: ReceiptItem[];
 }
 
+export interface RolePermissions {
+    canCreateOrder: boolean;
+    canViewOpenOrders: boolean;
+    canViewFinishedOrders: boolean;
+    canCreatePurchaseOrder: boolean;
+    canViewStock: boolean;
+    canManageStock: boolean; // Upload/Edit
+    canViewReceipts: boolean;
+    canViewShortages: boolean;
+    canSearch: boolean;
+    canManageUsers: boolean; // Usually Admin only
+    canManageSettings: boolean; // Usually Admin only
+}
+
 export interface AppSettings {
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
@@ -169,6 +183,7 @@ export interface AppSettings {
   suppliers?: Supplier[];
   autoDecrementStock?: boolean;
   approvalRules?: ApprovalRule[];
+  permissions?: Record<UserRole, RolePermissions>;
 }
 
 export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS';

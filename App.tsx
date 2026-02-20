@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption, Receipt } from './types';
+import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption, Receipt, RolePermissions } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -12,7 +12,7 @@ import UsersManager from './components/UsersManager';
 import PurchaseOrderManager from './components/PurchaseOrderManager';
 import ShortagesReport from './components/ShortagesReport';
 import ReceiptsManager from './components/ReceiptsManager';
-import { StorageService, DEFAULT_CATEGORIES } from './services/storageService';
+import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS } from './services/storageService';
 
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
 const LOGO_HOTELARIA = "https://setlinghotelaria.pt/wp-content/uploads/2024/12/setling-hotelaria-logo-big.svg";
@@ -29,6 +29,8 @@ const App: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]); // Store companies
   const [categories, setCategories] = useState<CategoryOption[]>(DEFAULT_CATEGORIES);
   const [allUsers, setAllUsers] = useState<User[]>([]); // Store all users for lookups
+  const [currentPermissions, setCurrentPermissions] = useState<RolePermissions>(DEFAULT_PERMISSIONS[UserRole.VIEWER]);
+  
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
   
@@ -89,6 +91,13 @@ const App: React.FC = () => {
         StorageService.getSettings(),
       ]);
       
+      // Update Permissions based on User Role and Settings
+      if (user && fetchedSettings.permissions && fetchedSettings.permissions[user.role]) {
+          setCurrentPermissions(fetchedSettings.permissions[user.role]);
+      } else if (user) {
+          setCurrentPermissions(DEFAULT_PERMISSIONS[user.role] || DEFAULT_PERMISSIONS[UserRole.VIEWER]);
+      }
+
       // 2. Fetch sensitive data independently (Receipts, Users)
       // If the current user (e.g. Technician) lacks permission, we catch the error 
       // instead of breaking the entire application load.
@@ -96,13 +105,22 @@ const App: React.FC = () => {
       let fetchedUsers: User[] = [];
 
       try {
-          fetchedReceipts = await StorageService.getReceipts();
+          // Check dynamic permission instead of hardcoded role
+          if (fetchedSettings.permissions?.[user?.role || UserRole.VIEWER]?.canViewReceipts ?? DEFAULT_PERMISSIONS[user?.role || UserRole.VIEWER].canViewReceipts) {
+              fetchedReceipts = await StorageService.getReceipts();
+          }
       } catch (e) {
           console.warn("Receipts access restricted or failed.", e);
       }
 
       try {
-          fetchedUsers = await StorageService.getUsers();
+          if (fetchedSettings.permissions?.[user?.role || UserRole.VIEWER]?.canManageUsers ?? DEFAULT_PERMISSIONS[user?.role || UserRole.VIEWER].canManageUsers) {
+              fetchedUsers = await StorageService.getUsers();
+          } else if (user?.role === UserRole.TECHNICAL || user?.role === UserRole.MANAGEMENT) {
+              // Technicians need a restricted list of supervisors, so we might need a separate call or allow reading users but not editing
+              // For now, let's try to fetch for everyone but fail silently, as OrderManager needs allUsers for email lookup
+              fetchedUsers = await StorageService.getUsers();
+          }
       } catch (e) {
           console.warn("Users list access restricted or failed.", e);
       }
@@ -178,7 +196,9 @@ const App: React.FC = () => {
 
   // --- FILTERED ORDERS LOGIC ---
   const visibleOrders = orders.filter(o => {
-      if (user?.role === UserRole.ADMIN || user?.role === UserRole.WAREHOUSE || user?.role === UserRole.MANAGEMENT) return true;
+      // Admins and Warehouse/Management usually see all, but let's respect company scope for non-admins
+      if (user?.role === UserRole.ADMIN) return true;
+      if (user?.role === UserRole.WAREHOUSE || user?.role === UserRole.MANAGEMENT) return true;
       return !o.companyId || o.companyId === user?.companyId;
   });
 
@@ -221,12 +241,12 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'DASHBOARD':
-        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} onNavigate={setView} />;
+        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} />;
       case 'CREATE_ORDER':
-        return (
+        return currentPermissions.canCreateOrder ? (
             <OrderManager 
-              orders={orders} // Pass all orders so reservation logic works correctly
-              allActiveOrders={orders} // Pass Full List for FIFO
+              orders={orders} 
+              allActiveOrders={orders} 
               stock={stock}
               masterList={masterList}
               type="OPEN"
@@ -237,15 +257,15 @@ const App: React.FC = () => {
               userCompanyId={user.companyId}
               companies={companies}
               categories={categories}
-              currentUser={user} // Pass full user object
-              allUsers={allUsers} // Pass all users for lookup
+              currentUser={user}
+              allUsers={allUsers}
             />
-          );
+          ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'OPEN_ORDERS':
-        return (
+        return currentPermissions.canViewOpenOrders ? (
           <OrderManager 
             orders={visibleOrders} 
-            allActiveOrders={orders} // Pass Full List for FIFO
+            allActiveOrders={orders} 
             stock={stock}
             masterList={masterList}
             type="OPEN" 
@@ -259,9 +279,9 @@ const App: React.FC = () => {
             currentUser={user}
             allUsers={allUsers}
           />
-        );
+        ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'FINISHED_ORDERS':
-        return (
+        return currentPermissions.canViewFinishedOrders ? (
           <OrderManager 
             orders={visibleOrders} 
             allActiveOrders={orders} 
@@ -278,9 +298,9 @@ const App: React.FC = () => {
             currentUser={user}
             allUsers={allUsers}
           />
-        );
+        ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'PURCHASE_ORDERS':
-         return (
+         return currentPermissions.canCreatePurchaseOrder ? (
              <PurchaseOrderManager 
                 masterList={masterList}
                 currentUsername={user.username}
@@ -289,39 +309,39 @@ const App: React.FC = () => {
                 userRole={user.role}
                 userCompanyId={user.companyId}
              />
-         );
+         ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'STOCK':
-        return (
+        return currentPermissions.canViewStock ? (
           <StockManager 
             stock={stock} 
             masterList={masterList}
             userRole={user.role} 
             refreshData={refreshData} 
           />
-        );
+        ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'RECEIPTS':
-        return (
+        return currentPermissions.canViewReceipts ? (
           <ReceiptsManager 
             receipts={receipts}
             masterList={masterList}
           />
-        );
+        ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'SHORTAGES':
-        return (
+        return currentPermissions.canViewShortages ? (
             <ShortagesReport 
                 orders={orders} // Pass all orders to calculate aggregate demand
                 stock={stock} 
                 onNavigateToOrder={(id) => console.log(id)} 
             />
-        );
+        ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'QUERY':
-        return <QueryAssistant orders={visibleOrders} stock={stock} />;
+        return currentPermissions.canSearch ? <QueryAssistant orders={visibleOrders} stock={stock} /> : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'SETTINGS':
-        return <Settings />;
+        return currentPermissions.canManageSettings ? <Settings /> : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'USERS':
-        return <UsersManager />;
+        return currentPermissions.canManageUsers ? <UsersManager /> : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       default:
-        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} onNavigate={setView} />;
+        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} />;
     }
   };
 
@@ -336,6 +356,7 @@ const App: React.FC = () => {
       toggleTheme={toggleTheme}
       isDarkMode={darkMode}
       logoUrl={logoUrl}
+      permissions={currentPermissions}
     >
       {renderContent()}
     </Layout>

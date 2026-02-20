@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { StorageService } from '../services/storageService';
-import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench, Euro, Edit, X } from 'lucide-react';
+import { StorageService, DEFAULT_PERMISSIONS } from '../services/storageService';
+import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule, UserRole, RolePermissions } from '../types';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench, Euro, Edit, X, Lock } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -29,6 +29,9 @@ const Settings: React.FC = () => {
   const [newRuleEmail, setNewRuleEmail] = useState('');
   const [newRuleOperator, setNewRuleOperator] = useState<'LTE' | 'GTE'>('LTE');
   const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
+
+  // Permissions
+  const [permissions, setPermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_PERMISSIONS);
 
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -65,6 +68,11 @@ const Settings: React.FC = () => {
         });
     }
 
+    // Load Permissions
+    if (settings.permissions) {
+        setPermissions(settings.permissions);
+    }
+
     // Load Approval Rules - Normalize old data (maxAmount -> amount + LTE)
     const normalizedRules = (settings.approvalRules || []).map((r: any) => ({
         amount: r.amount !== undefined ? r.amount : r.maxAmount,
@@ -87,6 +95,7 @@ const Settings: React.FC = () => {
           suppliers: suppliers,
           categories: categories,
           approvalRules: approvalRules,
+          permissions: permissions,
           autoDecrementStock: true 
       });
       setMessage('Configurações salvas com sucesso.');
@@ -108,6 +117,21 @@ const Settings: React.FC = () => {
       } finally {
           setSyncing(false);
       }
+  };
+
+  const togglePermission = (role: UserRole, key: keyof RolePermissions) => {
+      // Prevent locking Admin out of critical features
+      if (role === UserRole.ADMIN && (key === 'canManageSettings' || key === 'canManageUsers')) {
+          return;
+      }
+
+      setPermissions(prev => ({
+          ...prev,
+          [role]: {
+              ...prev[role],
+              [key]: !prev[role][key]
+          }
+      }));
   };
 
   // ... (Recipients, Companies, Units, Categories logic unchanged)
@@ -210,8 +234,24 @@ const Settings: React.FC = () => {
       reader.readAsArrayBuffer(file);
   };
 
+  const PERMISSION_LABELS: Record<keyof RolePermissions, string> = {
+      canCreateOrder: "Criar Pedidos Armazém",
+      canViewOpenOrders: "Ver Pedidos Abertos",
+      canViewFinishedOrders: "Ver Pedidos Finalizados",
+      canCreatePurchaseOrder: "Criar Pedidos Compra",
+      canViewStock: "Visualizar Stock",
+      canManageStock: "Gerir Stock (Upload)",
+      canViewReceipts: "Ver Entradas",
+      canViewShortages: "Relatório de Faltas",
+      canSearch: "Pesquisar",
+      canManageUsers: "Gerir Utilizadores",
+      canManageSettings: "Gerir Configurações"
+  };
+
+  const ROLES_TO_CONFIGURE = [UserRole.MANAGEMENT, UserRole.WAREHOUSE, UserRole.TECHNICAL, UserRole.VIEWER];
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-fade-in pb-12">
+    <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12">
       <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
         Configurações do Sistema
       </h2>
@@ -232,6 +272,48 @@ const Settings: React.FC = () => {
             {syncing ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
             Reparar/Sincronizar Logins por Nome
         </button>
+      </div>
+
+      {/* PERMISSIONS MATRIX */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Lock className="w-5 h-5 text-brand-600"/> Matriz de Permissões
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Defina o que cada função pode fazer ou visualizar no sistema.
+        </p>
+        
+        <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left border-collapse">
+                <thead>
+                    <tr className="bg-slate-100 dark:bg-slate-900 border-b dark:border-slate-700">
+                        <th className="p-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[200px]">Funcionalidade</th>
+                        {ROLES_TO_CONFIGURE.map(role => (
+                            <th key={role} className="p-3 text-center font-semibold text-slate-700 dark:text-slate-200 capitalize">
+                                {role === UserRole.MANAGEMENT ? 'Coordenação' : role === UserRole.WAREHOUSE ? 'Logística' : role === UserRole.TECHNICAL ? 'Técnico' : 'Viewer'}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    {(Object.keys(PERMISSION_LABELS) as Array<keyof RolePermissions>).map(key => (
+                        <tr key={key} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <td className="p-3 font-medium text-slate-600 dark:text-slate-300">{PERMISSION_LABELS[key]}</td>
+                            {ROLES_TO_CONFIGURE.map(role => (
+                                <td key={`${role}-${key}`} className="p-3 text-center">
+                                    <input 
+                                        type="checkbox"
+                                        checked={permissions[role][key]}
+                                        onChange={() => togglePermission(role, key)}
+                                        className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-gray-300 cursor-pointer"
+                                    />
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
       </div>
 
       {/* ADMIN CODE */}

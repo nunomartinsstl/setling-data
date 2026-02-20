@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Order, StockItem, OrderLineItem } from '../types';
 import { Search, Package, ShoppingCart, User, Calendar, ChevronDown, ChevronUp, Activity } from 'lucide-react';
@@ -11,7 +12,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
   const [query, setQuery] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
-  // Search logic: Checks Title, Creator, ID, or any nested Item SKU/Description
+  // Search logic: Checks Title, Creator, ID, Items (SKU/Desc), or Picked Bins
   const filteredOrders = orders.filter(o => {
     if (!query) return false;
     const q = query.toLowerCase();
@@ -28,13 +29,21 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
         item.description.toLowerCase().includes(q)
     );
 
-    return inHeader || inItems;
+    // Check Picked Items (Bin Locations)
+    const pickedItems = o.pickedItems ? (Array.isArray(o.pickedItems) ? o.pickedItems : Object.values(o.pickedItems)) : [];
+    const inPicked = pickedItems.some((p: any) => 
+        p.bin && p.bin.toLowerCase().includes(q)
+    );
+
+    return inHeader || inItems || inPicked;
   });
 
   const filteredStock = stock.filter(s => {
     if (!query) return false;
     const q = query.toLowerCase();
-    return s.sku.toLowerCase().includes(q) || s.description.toLowerCase().includes(q);
+    return s.sku.toLowerCase().includes(q) || 
+           s.description.toLowerCase().includes(q) ||
+           (s.batch && s.batch.toLowerCase().includes(q));
   });
 
   const hasResults = filteredOrders.length > 0 || filteredStock.length > 0;
@@ -51,7 +60,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Digite Material, descrição, título do pedido ou nome do usuário..."
+            placeholder="Digite Material, descrição, utilizador ou localização (ex: 14-0-1-1)..."
             className="w-full pl-12 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400"
           />
           <Search className="absolute left-4 top-3.5 w-6 h-6 text-slate-400" />
@@ -77,7 +86,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
                     <th className="p-3">Material</th>
                     <th className="p-3">Descrição</th>
                     <th className="p-3 text-right">Qtd</th>
-                    <th className="p-3">Lote</th>
+                    <th className="p-3">Lote / Localização</th>
                 </tr>
              </thead>
              <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
@@ -86,7 +95,14 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
                         <td className="p-3 font-medium text-slate-800 dark:text-white">{item.sku}</td>
                         <td className="p-3">{item.description}</td>
                         <td className="p-3 text-right font-bold">{item.quantity}</td>
-                        <td className="p-3 font-mono text-xs">{item.batch}</td>
+                        <td className="p-3 font-mono text-xs">
+                            {/* Highlight the match if querying by bin */}
+                            {query && item.batch && item.batch.toLowerCase().includes(query.toLowerCase()) ? (
+                                <span className="bg-yellow-200 dark:bg-yellow-900 text-slate-900 dark:text-white px-1 rounded">{item.batch}</span>
+                            ) : (
+                                item.batch
+                            )}
+                        </td>
                     </tr>
                 ))}
              </tbody>
