@@ -131,7 +131,7 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                     <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
                 </div>
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Relatório de Faltas</h2>
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Material em Falta</h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400">Materiais com pedidos acima do stock físico ou que esgotarão o stock.</p>
                 </div>
             </div>

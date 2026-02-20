@@ -235,7 +235,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                   <NavItem 
                     view="SHORTAGES" 
                     icon={AlertTriangle} 
-                    label="Relatório de Faltas" 
+                    label="Material em Falta" 
                     isActive={currentView === 'SHORTAGES'} 
                     onClick={() => handleNavClick('SHORTAGES')} 
                   />

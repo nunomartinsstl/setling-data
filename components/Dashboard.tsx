@@ -108,7 +108,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
                     className="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-red-700 dark:text-red-300"
                   >
                       <AlertTriangle className="w-6 h-6" />
-                      <span className="font-semibold">Relatório de Faltas</span>
+                      <span className="font-semibold">Material em Falta</span>
                   </button>
               )}
 
