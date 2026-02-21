@@ -985,14 +985,16 @@ export const StorageService = {
           for (const order of activeOrders) {
               if (!order.items) continue;
               
-              let canFulfill = true;
+              let canFulfillAny = false; // Changed from canFulfill (all) to canFulfillAny (at least one)
               let isPartiallyPicked = false;
+              let hasStockItems = false;
 
               // Check each item
               for (const item of order.items) {
-                  if (item.isCustom) continue; // Custom items don't consume stock (or we can't track)
+                  if (item.isCustom) continue; // Custom items don't consume stock
                   if (!item.sku) continue;
                   
+                  hasStockItems = true;
                   const sku = norm(item.sku);
                   const picked = getPickedQty(order, item.sku);
                   if (picked > 0) isPartiallyPicked = true;
@@ -1001,17 +1003,16 @@ export const StorageService = {
                   
                   if (needed > 0) {
                       const available = stockMap.get(sku) || 0;
-                      if (available >= needed) {
-                          // Allocate
-                          stockMap.set(sku, available - needed);
-                      } else {
-                          // Insufficient Stock
-                          canFulfill = false;
-                          // Consume what is left? No, usually all or nothing for "OPEN" status? 
-                          // Or should we consume partial to block others?
-                          // Standard logic: First come first served consumes what it can.
-                          stockMap.set(sku, 0); 
+                      // Allocate whatever is available (partial or full)
+                      const allocate = Math.min(available, needed);
+                      
+                      if (allocate > 0) {
+                          stockMap.set(sku, available - allocate);
+                          canFulfillAny = true;
                       }
+                  } else {
+                      // If needed is 0, it means it's already picked/fulfilled
+                      canFulfillAny = true;
                   }
               }
 
@@ -1023,27 +1024,32 @@ export const StorageService = {
               const isProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
               
               if (!isProcess && !isPartiallyPicked) {
-                  if (!canFulfill && order.status === 'OPEN') {
+                  // If we have stock items but CANNOT fulfill ANY of them -> PENDING
+                  // If we have NO stock items (only custom), it defaults to PENDING (canFulfillAny=false)
+                  
+                  if (!canFulfillAny && order.status === 'OPEN') {
                       // Downgrade
                       order.status = 'PENDING';
                       if (!order.changeLog) order.changeLog = [];
                       order.changeLog.push({
                           date: new Date().toISOString(),
                           actor: 'SYSTEM',
-                          details: 'Estado alterado para PENDING (Stock insuficiente).'
+                          details: 'Estado alterado para PENDING (Stock insuficiente para todos os itens).'
                       });
                       updates[`${KEYS.ORDERS}/${order.id}`] = order;
                       updatedCount++;
-                  } else if (canFulfill && order.status === 'PENDING') {
-                      // Upgrade (only if NO custom items are still pending resolution)
-                      // We already checked custom items in the previous loop (reconcileCustomItems logic above).
-                      // But we need to be careful not to conflict.
-                      // Let's assume the previous loop handled the "Custom" check.
-                      // We need to re-verify "hasPendingCustom" here if we want to be safe, 
-                      // but for now let's just check if it has any custom items.
-                      const hasCustom = order.items.some(i => i.isCustom);
+                  } else if (canFulfillAny && order.status === 'PENDING') {
+                      // Upgrade
+                      // Ensure no custom items are blocking (optional, but safer)
+                      const hasUnresolvedCustom = order.items.some(i => i.isCustom);
                       
-                      if (!hasCustom) {
+                      // If it has unresolved custom items, we might want to keep it PENDING?
+                      // User said: "an order should be only flagged as pending when all of its items and quantities are missing."
+                      // If we have 1 stock item (available) and 1 custom item (unresolved).
+                      // canFulfillAny = true.
+                      // Should it be OPEN? Yes, so we can pick the stock item.
+                      
+                      if (canFulfillAny) { // Simplified condition
                           order.status = 'OPEN';
                           if (!order.changeLog) order.changeLog = [];
                           order.changeLog.push({

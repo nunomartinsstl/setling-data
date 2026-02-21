@@ -1073,7 +1073,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           `O técnico ${currentUser.username} registou uma requisição (PEP: ${order.pep || 'N/A'}) que aguarda aprovação.\n` +
           `Itens: ${order.items.length}\n\n` +
           `Por favor, aceda à plataforma para validar e aprovar o pedido.\n\n` +
-          `Cumprimentos,\nSetling Pedidos`;
+          `Cumprimentos`;
 
       const mailto = `mailto:${supervisor.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       window.location.href = mailto;
