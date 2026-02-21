@@ -512,19 +512,19 @@ export const StorageService = {
                       }));
             }
 
-            // B. Deduct Stock
-            if (itemsToDeduct.length > 0) {
-                await StorageService.decrementStock(itemsToDeduct);
-            }
+            // B. Deduct Stock - DISABLED AS PER USER REQUEST
+            // if (itemsToDeduct.length > 0) {
+            //    await StorageService.decrementStock(itemsToDeduct);
+            // }
 
             // C. Mark as Processed and Save
             order.stockProcessed = true;
-            if(!order.changeLog) order.changeLog = [];
-            order.changeLog.push({
-                date: new Date().toISOString(),
-                actor: 'SYSTEM',
-                details: `Stock debitado automaticamente após finalização externa.`
-            });
+            // if(!order.changeLog) order.changeLog = [];
+            // order.changeLog.push({
+            //    date: new Date().toISOString(),
+            //    actor: 'SYSTEM',
+            //    details: `Stock debitado automaticamente após finalização externa.`
+            // });
 
             await StorageService.updateOrder(order);
             processedCount++;
@@ -944,9 +944,123 @@ export const StorageService = {
               }
           }
 
+          // ... (existing SKU matching logic) ...
+
+          // ---------------------------------------------------------
+          // NEW LOGIC: Downgrade OPEN -> PENDING if stock is insufficient
+          // ---------------------------------------------------------
+          
+          // 1. Build Mutable Stock Map
+          const stockMap = new Map<string, number>();
+          currentStock.forEach(s => {
+              if (s.sku) stockMap.set(norm(s.sku), s.quantity);
+          });
+
+          // 2. Helper to get picked qty (copied for scope)
+          const getPickedQty = (order: Order, sku: string) => {
+              if (!order.pickedItems || !Array.isArray(order.pickedItems)) return 0;
+              return order.pickedItems
+                  .filter((p: any) => norm(p.material || '') === norm(sku))
+                  .reduce((acc: number, p: any) => acc + (Number(p.pickedQty) || 0), 0);
+          };
+
+          // 3. Prioritize Orders: IN_PROCESS first (reserved), then OPEN/PENDING by Date
+          const activeOrders = orders.filter(o => 
+              o.status === 'IN_PROCESS' || 
+              o.status === 'IN PROCESS' || 
+              o.status === 'OPEN' || 
+              o.status === 'PENDING'
+          );
+
+          // Sort: IN_PROCESS first, then by Date
+          activeOrders.sort((a, b) => {
+              const aProcess = a.status === 'IN_PROCESS' || a.status === 'IN PROCESS';
+              const bProcess = b.status === 'IN_PROCESS' || b.status === 'IN PROCESS';
+              if (aProcess && !bProcess) return -1;
+              if (!aProcess && bProcess) return 1;
+              return new Date(a.dateCreated).getTime() - new Date(b.dateCreated).getTime();
+          });
+
+          // 4. Simulate Allocation
+          for (const order of activeOrders) {
+              if (!order.items) continue;
+              
+              let canFulfill = true;
+              let isPartiallyPicked = false;
+
+              // Check each item
+              for (const item of order.items) {
+                  if (item.isCustom) continue; // Custom items don't consume stock (or we can't track)
+                  if (!item.sku) continue;
+                  
+                  const sku = norm(item.sku);
+                  const picked = getPickedQty(order, item.sku);
+                  if (picked > 0) isPartiallyPicked = true;
+
+                  const needed = Math.max(0, item.quantity - picked);
+                  
+                  if (needed > 0) {
+                      const available = stockMap.get(sku) || 0;
+                      if (available >= needed) {
+                          // Allocate
+                          stockMap.set(sku, available - needed);
+                      } else {
+                          // Insufficient Stock
+                          canFulfill = false;
+                          // Consume what is left? No, usually all or nothing for "OPEN" status? 
+                          // Or should we consume partial to block others?
+                          // Standard logic: First come first served consumes what it can.
+                          stockMap.set(sku, 0); 
+                      }
+                  }
+              }
+
+              // 5. Update Status
+              // We only change OPEN <-> PENDING. 
+              // We DO NOT touch IN_PROCESS (it's already being worked on).
+              // We DO NOT downgrade if it's partially picked (it's effectively in process).
+              
+              const isProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
+              
+              if (!isProcess && !isPartiallyPicked) {
+                  if (!canFulfill && order.status === 'OPEN') {
+                      // Downgrade
+                      order.status = 'PENDING';
+                      if (!order.changeLog) order.changeLog = [];
+                      order.changeLog.push({
+                          date: new Date().toISOString(),
+                          actor: 'SYSTEM',
+                          details: 'Estado alterado para PENDING (Stock insuficiente).'
+                      });
+                      updates[`${KEYS.ORDERS}/${order.id}`] = order;
+                      updatedCount++;
+                  } else if (canFulfill && order.status === 'PENDING') {
+                      // Upgrade (only if NO custom items are still pending resolution)
+                      // We already checked custom items in the previous loop (reconcileCustomItems logic above).
+                      // But we need to be careful not to conflict.
+                      // Let's assume the previous loop handled the "Custom" check.
+                      // We need to re-verify "hasPendingCustom" here if we want to be safe, 
+                      // but for now let's just check if it has any custom items.
+                      const hasCustom = order.items.some(i => i.isCustom);
+                      
+                      if (!hasCustom) {
+                          order.status = 'OPEN';
+                          if (!order.changeLog) order.changeLog = [];
+                          order.changeLog.push({
+                              date: new Date().toISOString(),
+                              actor: 'SYSTEM',
+                              details: 'Estado alterado para OPEN (Stock disponível).'
+                          });
+                          updates[`${KEYS.ORDERS}/${order.id}`] = order;
+                          updatedCount++;
+                      }
+                  }
+              }
+          }
+
           if (updatedCount > 0) {
               await db.ref().update(updates);
-              console.log(`[RECONCILE] Updated ${updatedCount} orders with identified materials.`);
+              console.log(`[RECONCILE] Updated ${updatedCount} orders.`);
           }
       } catch (e) {
           console.error("Error reconciling custom items:", e);
