@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import Fuse from 'fuse.js';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
@@ -349,8 +350,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     stock.forEach(s => {
         if (!optionsMap.has(s.sku)) optionsMap.set(s.sku, s.description);
     });
-    return Array.from(optionsMap.entries()).map(([sku, desc]) => ({ sku, desc }));
+    return Array.from(optionsMap.entries()).map(([sku, desc]) => {
+        // Create normalized SKU for fuzzy matching (e.g. ACC0168 -> ACC168)
+        // Removes leading zeros from the numeric part if present
+        const normalizedSku = sku.replace(/^([A-Z]+)0+(\d+)$/, '$1$2');
+        return { sku, desc, normalizedSku };
+    });
   }, [masterList, stock]);
+
+  const fuse = useMemo(() => {
+      return new Fuse(materialOptions, {
+          keys: ['sku', 'desc', 'normalizedSku'],
+          threshold: 0.3, // 0.0 = exact match, 1.0 = match anything. 0.3 is good for typos.
+          ignoreLocation: true, // Search anywhere in the string
+          minMatchCharLength: 2,
+          shouldSort: true
+      });
+  }, [materialOptions]);
 
   // Load Settings for Units
   useEffect(() => {
@@ -565,11 +581,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
   const getSuggestions = (input: string) => {
     if (!input || input.length < 2) return [];
-    const normalizedInput = normalizeText(input);
-    return materialOptions.filter(opt => 
-        normalizeText(opt.sku).includes(normalizedInput) || 
-        normalizeText(opt.desc).includes(normalizedInput)
-    ).slice(0, 50); 
+    
+    // Use Fuse for fuzzy search
+    const results = fuse.search(input);
+    
+    // Return top 500 results (increased from 50)
+    return results.slice(0, 500).map(r => r.item);
   };
 
   // ... (Import Logic omitted for brevity, unchanged)
@@ -1090,6 +1107,30 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     if (!targetCompanyId) {
         setMessage({ type: 'error', text: "Empresa não identificada. Se você é admin, selecione a empresa." });
         return;
+    }
+
+    // PEP VALIDATION
+    if (pep) {
+        const company = companies.find(c => c.id === targetCompanyId);
+        const isHotelaria = company?.name.toLowerCase().includes('hotelaria');
+        const prefix = isHotelaria ? '2200' : '1700';
+        
+        // Allowed formats:
+        // 1. XXXX.000
+        // 2. XXXX.000/000
+        // 3. XXXX.000/000/0000
+        const pattern1 = new RegExp(`^${prefix}\\.\\d{3}$`);
+        const pattern2 = new RegExp(`^${prefix}\\.\\d{3}\\/\\d{3}$`);
+        const pattern3 = new RegExp(`^${prefix}\\.\\d{3}\\/\\d{3}\\/\\d{4}$`);
+
+        if (!pattern1.test(pep) && !pattern2.test(pep) && !pattern3.test(pep)) {
+            setFormErrors(prev => ({ ...prev, pep: true }));
+            setMessage({ 
+                type: 'error', 
+                text: `Formato do PEP inválido para ${company?.name}. Deve começar por ${prefix} e seguir o formato XXXX.000, XXXX.000/000 ou XXXX.000/000/0000.` 
+            });
+            return;
+        }
     }
 
     setIsProcessing(true);
