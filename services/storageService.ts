@@ -234,29 +234,24 @@ export const StorageService = {
       let userCredential;
 
       try {
-          // Attempt standard registration
+      // Attempt standard registration
           userCredential = await auth.createUserWithEmailAndPassword(email, password);
           uid = userCredential.user!.uid;
       } catch (err: any) {
-          // Handle "Email Already In Use" specifically
+          // ... (existing error handling for email-already-in-use) ...
           if (err.code === 'auth/email-already-in-use') {
               try {
-                  // Attempt to sign in with provided credentials to check if it's a "Zombie" (Auth exists, DB missing)
                   const loginCred = await auth.signInWithEmailAndPassword(email, password);
                   const snapshot = await db.ref(`${KEYS.USERS}/${loginCred.user!.uid}`).get();
                   
                   if (!snapshot.exists()) {
-                      // RECOVERY MODE: User exists in Auth but not in DB.
-                      // We proceed to recreate the DB record with the new details.
                       console.log("Recuperando utilizador órfão (Auth sem DB).");
                       uid = loginCred.user!.uid;
                       userCredential = loginCred;
                   } else {
-                      // Standard duplicate error
                       throw new Error("Este email já está em uso.");
                   }
               } catch (loginErr: any) {
-                  // If login failed (wrong password) or genuine duplicate
                   if (loginErr.message === "Este email já está em uso.") throw loginErr;
                   throw new Error("Email já registado. Tente usar a SENHA ORIGINAL para recuperar a conta ou peça ao Admin para apagar no Console.");
               }
@@ -265,24 +260,73 @@ export const StorageService = {
           }
       }
 
-      const username = `${firstName}-${lastName}`.toLowerCase();
+      // --- SMART RECOVERY: Check if this email existed in DB (Auth deleted, DB remained) ---
+      // We scan for the email to see if we can adopt an old profile
+      let oldProfile: User | null = null;
+      let oldUid: string | null = null;
 
-      const newUser: User = {
-          uid,
-          email,
-          username,
-          firstName,
-          lastName,
-          role,
-          companyId
-      };
-
-      // 1. Save Full Profile
-      await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
-      
-      // 2. Save Public Mapping (Username -> Email)
       try {
-          const usernameKey = normalizeText(username);
+          // Try optimized query first
+          const querySnap = await db.ref(KEYS.USERS).orderByChild('email').equalTo(email).get();
+          if (querySnap.exists()) {
+              const val = querySnap.val();
+              oldUid = Object.keys(val)[0];
+              oldProfile = val[oldUid];
+          } else {
+              // Fallback: Client-side filter (if index missing)
+              const allSnap = await db.ref(KEYS.USERS).get();
+              if (allSnap.exists()) {
+                  const all = allSnap.val();
+                  const foundKey = Object.keys(all).find(k => all[k].email === email);
+                  if (foundKey) {
+                      oldUid = foundKey;
+                      oldProfile = all[foundKey];
+                  }
+              }
+          }
+      } catch (e) {
+          console.warn("Error checking for old profile:", e);
+      }
+
+      let newUser: User;
+
+      if (oldProfile && oldUid) {
+          console.log(`[RECOVERY] Adopting old profile from ${oldUid} to ${uid}`);
+          // ADOPT OLD PROFILE
+          newUser = {
+              ...oldProfile,
+              uid: uid, // NEW UID
+              firstName: firstName, // Update names if user changed them
+              lastName: lastName,
+              // Keep role, companyId, username, supervisorId from old profile
+          };
+
+          // 1. Save to New Location
+          await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
+          
+          // 2. Delete Old Location (Cleanup)
+          if (oldUid !== uid) {
+              await db.ref(`${KEYS.USERS}/${oldUid}`).remove();
+          }
+
+      } else {
+          // STANDARD NEW USER
+          const username = `${firstName}-${lastName}`.toLowerCase();
+          newUser = {
+              uid,
+              email,
+              username,
+              firstName,
+              lastName,
+              role,
+              companyId
+          };
+          await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
+      }
+
+      // 3. Update Public Mapping (Username -> Email)
+      try {
+          const usernameKey = normalizeText(newUser.username);
           if (usernameKey) {
               await db.ref(`${KEYS.USERNAMES}/${usernameKey}`).set(email);
           }
@@ -291,7 +335,7 @@ export const StorageService = {
       }
 
       if (userCredential && userCredential.user) {
-          await userCredential.user.updateProfile({ displayName: username });
+          await userCredential.user.updateProfile({ displayName: newUser.username });
       }
       return newUser;
   },
