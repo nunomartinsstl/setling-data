@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Fuse from 'fuse.js';
+import { PORTUGAL_ZIP_CODES } from '../constants/zipCodes';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
@@ -128,7 +129,29 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   const [manualRows, setManualRows] = useState<ManualRow[]>([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false, inputType: 'TEXT'}]);
   const [orderTitle, setOrderTitle] = useState('');
   const [pep, setPep] = useState('');
-  const [address, setAddress] = useState('');
+  const [addressStreet, setAddressStreet] = useState('');
+  const [addressZip, setAddressZip] = useState('');
+  const [addressCity, setAddressCity] = useState('');
+
+  const handleZipChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      let val = e.target.value.replace(/[^0-9]/g, '');
+      if (val.length > 7) val = val.slice(0, 7);
+      
+      let formatted = val;
+      if (val.length > 4) {
+          formatted = val.slice(0, 4) + '-' + val.slice(4);
+      }
+      
+      setAddressZip(formatted);
+      
+      // Auto-fill City
+      if (val.length >= 4) {
+          const prefix = val.slice(0, 4);
+          if (PORTUGAL_ZIP_CODES[prefix]) {
+              setAddressCity(PORTUGAL_ZIP_CODES[prefix]);
+          }
+      }
+  };
 
   // Company Selection for Admins
   const [targetCompanyId, setTargetCompanyId] = useState<string>('');
@@ -394,7 +417,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     const savedRows = localStorage.getItem('draft_rows');
     const savedTitle = localStorage.getItem('draft_title');
     const savedPep = localStorage.getItem('draft_pep');
-    const savedAddress = localStorage.getItem('draft_address');
+    const savedStreet = localStorage.getItem('draft_street');
+    const savedZip = localStorage.getItem('draft_zip');
+    const savedCity = localStorage.getItem('draft_city');
     const savedDate = localStorage.getItem('draft_date');
     
     if (savedRows) {
@@ -402,7 +427,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     }
     if (savedTitle) setOrderTitle(savedTitle);
     if (savedPep) setPep(savedPep);
-    if (savedAddress) setAddress(savedAddress);
+    if (savedStreet) setAddressStreet(savedStreet);
+    if (savedZip) setAddressZip(savedZip);
+    if (savedCity) setAddressCity(savedCity);
     if (savedDate) setDueDate(savedDate);
   }, [editingOrderId]);
 
@@ -415,15 +442,19 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     if (editingOrderId) return;
     localStorage.setItem('draft_title', orderTitle);
     localStorage.setItem('draft_pep', pep);
-    localStorage.setItem('draft_address', address);
+    localStorage.setItem('draft_street', addressStreet);
+    localStorage.setItem('draft_zip', addressZip);
+    localStorage.setItem('draft_city', addressCity);
     localStorage.setItem('draft_date', dueDate);
-  }, [orderTitle, pep, address, dueDate, editingOrderId]);
+  }, [orderTitle, pep, addressStreet, addressZip, addressCity, dueDate, editingOrderId]);
 
   const clearDraft = () => {
       localStorage.removeItem('draft_rows');
       localStorage.removeItem('draft_title');
       localStorage.removeItem('draft_pep');
-      localStorage.removeItem('draft_address');
+      localStorage.removeItem('draft_street');
+      localStorage.removeItem('draft_zip');
+      localStorage.removeItem('draft_city');
       localStorage.removeItem('draft_date');
       resetForm();
   };
@@ -877,7 +908,23 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       setManualRows(rows);
       setOrderTitle(order.title);
       setPep(order.pep || '');
-      setAddress(order.address || '');
+      
+      // Parse Address back to fields
+      const addr = order.address || '';
+      // Try to extract Zip (XXXX-XXX)
+      const zipMatch = addr.match(/(\d{4}-\d{3})/);
+      if (zipMatch) {
+          const zip = zipMatch[0];
+          const parts = addr.split(zip);
+          setAddressStreet(parts[0].replace(/,\s*$/, '').trim());
+          setAddressZip(zip);
+          setAddressCity(parts[1] ? parts[1].trim() : '');
+      } else {
+          setAddressStreet(addr);
+          setAddressZip('');
+          setAddressCity('');
+      }
+
       setDueDate(order.dueDate);
       setEditingOrderId(order.id);
       setTargetCompanyId(order.companyId || (isAdmin ? '' : (userCompanyId || '')));
@@ -1182,12 +1229,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 }
             }
 
+            const fullAddress = `${addressStreet}, ${addressZip} ${addressCity}`.trim();
+
             const newOrder: Order = {
                 id: Math.random().toString(36).substr(2, 9),
                 displayId: 0, 
                 title: orderTitle,
                 pep: pep,
-                address: address,
+                address: fullAddress,
                 creator: currentUsername,
                 status: initialStatus,
                 dateCreated: new Date().toISOString(),
@@ -1360,11 +1409,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                     </div>
                 </div>
             )}
-            {address && (
+            {(addressStreet || addressZip || addressCity) && (
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Morada de Entrega</label>
                     <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
-                        {address}
+                        {`${addressStreet}, ${addressZip} ${addressCity}`.trim()}
                     </div>
                 </div>
             )}
@@ -1618,17 +1667,46 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 Prefixo Fixo: {getTargetCompany()?.name.toLowerCase().includes('hotelaria') ? '2200' : '1700'}
                             </p>
                         </div>
-                        <div>
-                            <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                                <MapPin className="w-3 h-3" /> Morada / Local
-                            </label>
-                            <input 
-                                type="text"
-                                value={address}
-                                onChange={e => setAddress(e.target.value)}
-                                placeholder="Local de entrega"
-                                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
-                            />
+                        <div className="md:col-span-2 space-y-3">
+                            <div>
+                                <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                                    <MapPin className="w-3 h-3" /> Morada (Rua)
+                                </label>
+                                <input 
+                                    type="text"
+                                    value={addressStreet}
+                                    onChange={e => setAddressStreet(e.target.value)}
+                                    placeholder="Rua, Nº, Andar..."
+                                    className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                                />
+                            </div>
+                            <div className="flex gap-3">
+                                <div className="w-32">
+                                    <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
+                                        Cód. Postal
+                                    </label>
+                                    <input 
+                                        type="text"
+                                        value={addressZip}
+                                        onChange={handleZipChange}
+                                        placeholder="0000-000"
+                                        maxLength={8}
+                                        className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 text-center tracking-widest"
+                                    />
+                                </div>
+                                <div className="flex-1">
+                                    <label className="block text-xs font-semibold mb-1 text-slate-500 dark:text-slate-400">
+                                        Localidade
+                                    </label>
+                                    <input 
+                                        type="text"
+                                        value={addressCity}
+                                        onChange={e => setAddressCity(e.target.value)}
+                                        placeholder="Cidade / Vila"
+                                        className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                                    />
+                                </div>
+                            </div>
                         </div>
                     </div>
 

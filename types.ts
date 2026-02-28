@@ -167,6 +167,7 @@ export interface RolePermissions {
     canViewStock: boolean;
     canManageStock: boolean; // Upload/Edit
     canViewReceipts: boolean;
+    canViewTransfers: boolean;
     canViewShortages: boolean;
     canSearch: boolean;
     canManageUsers: boolean; // Usually Admin only
@@ -186,6 +187,16 @@ export interface AppSettings {
   permissions?: Record<UserRole, RolePermissions>;
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS';
+export interface Transfer {
+  id: string;
+  material: string;
+  qty: number;
+  originBin: string;
+  destBin: string;
+  timestamp: string;
+  userId: string;
+}
+
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS' | 'TRANSFERS';
 
 export type OrderItem = Order;

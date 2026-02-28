@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { User, ViewState, UserRole, RolePermissions } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle, ArrowDownCircle } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle, ArrowDownCircle, ArrowRightLeft } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -228,6 +228,16 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                     label="Entradas" 
                     isActive={currentView === 'RECEIPTS'} 
                     onClick={() => handleNavClick('RECEIPTS')} 
+                  />
+              )}
+
+              {permissions.canViewTransfers && (
+                  <NavItem 
+                    view="TRANSFERS" 
+                    icon={ArrowRightLeft} 
+                    label="Transferências" 
+                    isActive={currentView === 'TRANSFERS'} 
+                    onClick={() => handleNavClick('TRANSFERS')} 
                   />
               )}
 

@@ -54,7 +54,8 @@ const KEYS = {
   SETTINGS: 'nexus_settings',
   PURCHASE_ORDERS: 'nexus_purchase_orders', 
   INVITES: 'nexus_invites',
-  RECEIPTS: 'nexus_receipts'
+  RECEIPTS: 'nexus_receipts',
+  TRANSFERS: 'nexus_transfers'
 };
 
 export const DEFAULT_CATEGORIES = [
@@ -110,20 +111,20 @@ export const MATERIAL_CATEGORIES = DEFAULT_CATEGORIES;
 // DEFAULT PERMISSIONS (Fallback if not in DB)
 export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
     [UserRole.ADMIN]: {
-        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewShortages: true, canSearch: true, canManageUsers: true, canManageSettings: true
+        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: true, canManageSettings: true
     },
     [UserRole.MANAGEMENT]: {
-        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
+        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
     },
     [UserRole.WAREHOUSE]: {
-        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
+        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
     },
     [UserRole.TECHNICAL]: {
         // UPDATED: Now includes canCreatePurchaseOrder: true
-        canCreateOrder: true, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewShortages: false, canSearch: true, canManageUsers: false, canManageSettings: false
+        canCreateOrder: true, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: true, canManageUsers: false, canManageSettings: false
     },
     [UserRole.VIEWER]: {
-        canCreateOrder: false, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: false, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewShortages: false, canSearch: false, canManageUsers: false, canManageSettings: false
+        canCreateOrder: false, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: false, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: false, canManageUsers: false, canManageSettings: false
     }
 };
 
@@ -624,6 +625,13 @@ export const StorageService = {
   getReceipts: async (): Promise<Receipt[]> => {
       if (!db) return [];
       const snapshot = await db.ref(KEYS.RECEIPTS).get();
+      if (!snapshot.exists()) return [];
+      return Object.values(snapshot.val());
+  },
+
+  getTransfers: async (): Promise<any[]> => {
+      if (!db) return [];
+      const snapshot = await db.ref(KEYS.TRANSFERS).get();
       if (!snapshot.exists()) return [];
       return Object.values(snapshot.val());
   },

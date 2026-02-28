@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption, Receipt, RolePermissions } from './types';
+import { User, ViewState, Order, StockItem, MasterMaterial, UserRole, Company, CategoryOption, Receipt, Transfer, RolePermissions } from './types';
 import Login from './components/Login';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -12,6 +12,7 @@ import UsersManager from './components/UsersManager';
 import PurchaseOrderManager from './components/PurchaseOrderManager';
 import ShortagesReport from './components/ShortagesReport';
 import ReceiptsManager from './components/ReceiptsManager';
+import TransfersManager from './components/TransfersManager';
 import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS } from './services/storageService';
 
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
@@ -26,6 +27,7 @@ const App: React.FC = () => {
   const [stock, setStock] = useState<StockItem[]>([]);
   const [masterList, setMasterList] = useState<MasterMaterial[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]); // Store companies
   const [categories, setCategories] = useState<CategoryOption[]>(DEFAULT_CATEGORIES);
   const [allUsers, setAllUsers] = useState<User[]>([]); // Store all users for lookups
@@ -102,6 +104,7 @@ const App: React.FC = () => {
       // If the current user (e.g. Technician) lacks permission, we catch the error 
       // instead of breaking the entire application load.
       let fetchedReceipts: Receipt[] = [];
+      let fetchedTransfers: Transfer[] = [];
       let fetchedUsers: User[] = [];
 
       try {
@@ -111,6 +114,14 @@ const App: React.FC = () => {
           }
       } catch (e) {
           console.warn("Receipts access restricted or failed.", e);
+      }
+
+      try {
+          if (fetchedSettings.permissions?.[user?.role || UserRole.VIEWER]?.canViewTransfers ?? DEFAULT_PERMISSIONS[user?.role || UserRole.VIEWER].canViewTransfers) {
+              fetchedTransfers = await StorageService.getTransfers();
+          }
+      } catch (e) {
+          console.warn("Transfers access restricted or failed.", e);
       }
 
       try {
@@ -127,6 +138,7 @@ const App: React.FC = () => {
       
       setCompanies(fetchedCompanies);
       setReceipts(fetchedReceipts);
+      setTransfers(fetchedTransfers);
       setAllUsers(fetchedUsers);
       
       if (fetchedSettings.categories && fetchedSettings.categories.length > 0) {
@@ -326,6 +338,13 @@ const App: React.FC = () => {
         return currentPermissions.canViewReceipts ? (
           <ReceiptsManager 
             receipts={receipts}
+            masterList={masterList}
+          />
+        ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
+      case 'TRANSFERS':
+        return currentPermissions.canViewTransfers ? (
+          <TransfersManager 
+            transfers={transfers}
             masterList={masterList}
           />
         ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
