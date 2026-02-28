@@ -274,6 +274,7 @@ const App: React.FC = () => {
               categories={categories}
               currentUser={user}
               allUsers={allUsers}
+              onNavigate={setView}
             />
           ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'OPEN_ORDERS':

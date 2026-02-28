@@ -24,6 +24,7 @@ interface OrderManagerProps {
   categories?: CategoryOption[]; // Dynamic categories from settings
   currentUser?: User; // Full user object to access supervisorId
   allUsers?: User[]; // To lookup supervisor details
+  onNavigate?: (view: ViewState) => void;
 }
 
 interface ManualRow {
@@ -116,7 +117,7 @@ const resizeImage = (file: File): Promise<string> => {
     });
 };
 
-const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [], currentUser, allUsers = [] }) => {
+const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [], currentUser, allUsers = [], onNavigate }) => {
   // ... (existing state)
   const [isProcessing, setIsProcessing] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -1264,6 +1265,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             
             refreshData();
             clearDraft(); 
+            if (onNavigate) {
+                onNavigate('DASHBOARD');
+            }
         }
     } catch (err: any) {
         setMessage({ type: 'error', text: err.message });
