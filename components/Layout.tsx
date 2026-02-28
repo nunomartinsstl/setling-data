@@ -15,27 +15,35 @@ interface LayoutProps {
   isDarkMode: boolean;
   logoUrl: string;
   permissions: RolePermissions;
+  shortageCount?: number;
 }
 
-const NavItem = ({ view, icon: Icon, label, isActive, onClick, isChild = false }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void, isChild?: boolean }) => {
+const NavItem = ({ view, icon: Icon, label, isActive, onClick, isChild = false, badgeCount }: { view: ViewState, icon: any, label: string, isActive: boolean, onClick: () => void, isChild?: boolean, badgeCount?: number }) => {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center space-x-3 px-4 py-2.5 rounded-lg transition-all duration-200 group ${
+      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all duration-200 group ${
         isActive 
           ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-semibold shadow-sm' 
           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
       } ${isChild ? 'text-sm' : ''}`}
     >
-      <Icon className={`flex-shrink-0 transition-colors ${isChild ? 'w-4 h-4' : 'w-5 h-5'} ${
-        isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'
-      }`} />
-      <span>{label}</span>
+      <div className="flex items-center space-x-3">
+        <Icon className={`flex-shrink-0 transition-colors ${isChild ? 'w-4 h-4' : 'w-5 h-5'} ${
+          isActive ? 'text-brand-600 dark:text-brand-400' : 'text-slate-400 group-hover:text-slate-500 dark:group-hover:text-slate-300'
+        }`} />
+        <span>{label}</span>
+      </div>
+      {badgeCount !== undefined && badgeCount > 0 && (
+        <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] h-[18px] flex items-center justify-center">
+          {badgeCount}
+        </span>
+      )}
     </button>
   );
 };
 
-const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh, toggleTheme, isDarkMode, logoUrl, permissions }) => {
+const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout, children, isConnected, onRefresh, toggleTheme, isDarkMode, logoUrl, permissions, shortageCount = 0 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   
@@ -248,6 +256,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                     label="Material em Falta" 
                     isActive={currentView === 'SHORTAGES'} 
                     onClick={() => handleNavClick('SHORTAGES')} 
+                    badgeCount={shortageCount}
                   />
               )}
               

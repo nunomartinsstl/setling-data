@@ -9,9 +9,10 @@ interface DashboardProps {
   userRole?: UserRole;
   permissions?: RolePermissions;
   onNavigate: (view: ViewState) => void;
+  shortageCount?: number;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissions, onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissions, onNavigate, shortageCount = 0 }) => {
   const stats = useMemo(() => {
     const openOrders = orders.filter(o => o.status === 'OPEN');
     // Check for both underscore and space versions of the status
@@ -176,8 +177,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
                   {showShortages && (
                       <button 
                         onClick={() => onNavigate('SHORTAGES')}
-                        className="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-red-700 dark:text-red-300 h-full"
+                        className="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-red-700 dark:text-red-300 h-full relative"
                       >
+                          {shortageCount > 0 && (
+                            <span className="absolute top-3 right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm animate-pulse">
+                              {shortageCount}
+                            </span>
+                          )}
                           <AlertTriangle className="w-6 h-6" />
                           <span className="font-semibold">Material em Falta</span>
                       </button>

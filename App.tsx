@@ -14,6 +14,7 @@ import ShortagesReport from './components/ShortagesReport';
 import ReceiptsManager from './components/ReceiptsManager';
 import TransfersManager from './components/TransfersManager';
 import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS } from './services/storageService';
+import { calculateShortages } from './src/utils/inventory';
 
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
 const LOGO_HOTELARIA = "https://setlinghotelaria.pt/wp-content/uploads/2024/12/setling-hotelaria-logo-big.svg";
@@ -217,6 +218,13 @@ const App: React.FC = () => {
       return !o.companyId || o.companyId === user?.companyId;
   });
 
+  // Calculate Shortages for Badge
+  const shortageCount = React.useMemo(() => {
+    if (!orders || !stock) return 0;
+    // Count all instances of missing materials (MISSING or EXHAUSTED)
+    return calculateShortages(orders, stock).length;
+  }, [orders, stock]);
+
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
     setView('DASHBOARD');
@@ -256,7 +264,7 @@ const App: React.FC = () => {
 
     switch (view) {
       case 'DASHBOARD':
-        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} />;
+        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} shortageCount={shortageCount} />;
       case 'CREATE_ORDER':
         return currentPermissions.canCreateOrder ? (
             <OrderManager 
@@ -364,7 +372,7 @@ const App: React.FC = () => {
       case 'USERS':
         return currentPermissions.canManageUsers ? <UsersManager /> : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       default:
-        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} />;
+        return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} shortageCount={shortageCount} />;
     }
   };
 
@@ -380,6 +388,7 @@ const App: React.FC = () => {
       isDarkMode={darkMode}
       logoUrl={logoUrl}
       permissions={currentPermissions}
+      shortageCount={shortageCount}
     >
       {renderContent()}
     </Layout>

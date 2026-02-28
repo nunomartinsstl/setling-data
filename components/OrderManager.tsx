@@ -464,7 +464,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       setManualRows([{sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false, inputType: 'TEXT'}]);
       setOrderTitle('');
       setPep('');
-      setAddress('');
+      setAddressStreet('');
+      setAddressZip('');
+      setAddressCity('');
       setDueDate('');
       setPendingItems([]);
       setCreationStep('INITIAL');
@@ -1719,6 +1721,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                         {manualRows.map((row, idx) => {
                             const isExpanded = idx === expandedRowIndex;
                             const isError = formErrors.rows.includes(idx);
+                            const isInvalidSku = formErrors.invalidSkus?.includes(idx);
+                            const isUnchecked = formErrors.unchecked?.includes(idx);
+                            const isMissingCategory = formErrors.missingCategory?.includes(idx);
+                            const isDuplicate = formErrors.duplicateCustom?.includes(idx);
+
                             const stockQty = getStockCount(row.sku);
                             const suggestions = !row.isCustom && row.sku ? getSuggestions(row.sku) : [];
                             const isPendingPhoto = row.sku === 'FOTO_PENDENTE';
@@ -1727,7 +1734,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 <div 
                                     key={idx} 
                                     className={`rounded-lg border transition-all duration-200 overflow-hidden ${
-                                        isError || isPendingPhoto ? (isPendingPhoto ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/10' : 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800') : 
+                                        isError || isPendingPhoto || isInvalidSku || isUnchecked || isMissingCategory || isDuplicate ? (isPendingPhoto ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/10' : 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800') : 
                                         isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-md ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                     }`}
                                 >
@@ -1737,7 +1744,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                         className="p-3 flex items-center justify-between cursor-pointer select-none"
                                     >
                                         <div className="flex items-center gap-3">
-                                            <span className={`text-xs font-bold uppercase ${isError ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>Item {idx + 1}</span>
+                                            <span className={`text-xs font-bold uppercase ${isError || isInvalidSku || isUnchecked || isMissingCategory || isDuplicate ? 'text-red-500' : 'text-slate-500 dark:text-slate-400'}`}>Item {idx + 1}</span>
                                             {!isExpanded && (
                                                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px] md:max-w-[300px] flex items-center gap-2">
                                                     {row.image && <Camera className="w-3 h-3 text-brand-600"/>}
@@ -1925,7 +1932,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                         }}
                                                                         placeholder="Descreva o material..."
                                                                         className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${
-                                                                            (isError && !row.customDesc)
+                                                                            ((isError && !row.customDesc) || isDuplicate || isUnchecked)
                                                                             ? 'border-red-500 bg-white ring-1 ring-red-200' 
                                                                             : 'border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 focus:ring-2 focus:ring-blue-500'
                                                                         }`}
@@ -1933,7 +1940,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     {!row.similarityChecked ? (
                                                                         <button 
                                                                             onClick={() => handleCheckSimilarity(idx)}
-                                                                            className="flex-none px-4 py-3 bg-blue-600 text-white rounded-md font-bold text-sm whitespace-nowrap hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                                                                            className={`flex-none px-4 py-3 ${isUnchecked ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-md font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 shadow-sm`}
                                                                         >
                                                                             <Search className="w-4 h-4" /> Verificar
                                                                         </button>
@@ -1945,7 +1952,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                 </div>
                                                                 
                                                                 <div className="mt-3">
-                                                                    <label className={`block text-xs font-bold uppercase mb-1`}>Categoria Obrigatória</label>
+                                                                    <label className={`block text-xs font-bold uppercase mb-1 ${isMissingCategory ? 'text-red-600' : ''}`}>Categoria Obrigatória</label>
                                                                     <div className="relative">
                                                                         <select
                                                                             value={row.category}
@@ -1954,7 +1961,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 newRows[idx].category = e.target.value;
                                                                                 setManualRows(newRows);
                                                                             }}
-                                                                            className={`w-full p-2.5 border rounded-md text-sm outline-none appearance-none dark:bg-slate-900 dark:text-white border-slate-300 dark:border-slate-600`}
+                                                                            className={`w-full p-2.5 border rounded-md text-sm outline-none appearance-none dark:bg-slate-900 dark:text-white ${isMissingCategory ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600'}`}
                                                                         >
                                                                             <option value="">Selecione uma categoria...</option>
                                                                             {categories.map(cat => (
@@ -1977,7 +1984,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 setManualRows(newRows);
                                                                             }}
                                                                             placeholder="Digite a categoria sugerida..."
-                                                                            className="w-full mt-2 p-2 border border-slate-300 dark:border-slate-600 rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white"
+                                                                            className={`w-full mt-2 p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isMissingCategory ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
                                                                         />
                                                                     )}
                                                                 </div>
@@ -1996,7 +2003,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                             setManualRows(newRows);
                                                                         }}
                                                                         placeholder="Código ou nome do material..."
-                                                                        className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && !row.sku ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                                                        className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${(isError && !row.sku) || isInvalidSku ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                                                                     />
                                                                 </div>
                                                                 {row.sku && !isKnownSku(row.sku) && suggestions.length > 0 && (
