@@ -939,8 +939,8 @@ export const StorageService = {
           });
 
           for (const order of orders) {
-              // Only check active orders or pending ones
-              if (order.status === 'COMPLETED' || order.status === 'REJECTED') continue;
+              // Only check active orders or pending ones (Allow COMPLETED to fix retroactive SKU matches)
+              if (order.status === 'REJECTED') continue;
 
               let orderModified = false;
               let hasPendingCustom = false;

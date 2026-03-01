@@ -174,6 +174,9 @@ const App: React.FC = () => {
 
       if (user && (user.role === UserRole.ADMIN || user.role === UserRole.WAREHOUSE || user.role === UserRole.MANAGEMENT)) {
          try {
+             // Step 0: Reconcile Custom Items FIRST (Fix N/A SKUs so they can be backordered)
+             await StorageService.reconcileCustomItems(fetchedMaster, currentStockState);
+
              // Step A: Deduct stock for any new completed orders
              await StorageService.deductStockForCompletedOrders();
              
@@ -193,9 +196,6 @@ const App: React.FC = () => {
       } else {
          setStock(fetchedStock);
       }
-
-      // 4. Reconcile Custom Items
-      await StorageService.reconcileCustomItems(fetchedMaster, currentStockState);
 
       // 5. Sync Custom Materials (Legacy placeholder logic)
       await StorageService.syncCustomMaterials(fetchedMaster);
