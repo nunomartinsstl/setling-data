@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transfer, MasterMaterial } from '../types';
-import { Search, ArrowRightLeft, FileSpreadsheet } from 'lucide-react';
+import { Search, ArrowRightLeft, FileSpreadsheet, ArrowRight, Calendar, User, Clock } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -35,29 +35,22 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
     );
   }, [transfers, searchQuery, masterList]);
 
-  const handleExportExcel = () => {
-    if (filteredTransfers.length === 0) {
-        alert("Não há transferências para exportar.");
-        return;
-    }
-
-    const flatData = filteredTransfers.map(t => ({
+  const handleExportExcel = (t: Transfer) => {
+    const flatData = [{
         "Data": new Date(t.timestamp).toLocaleDateString(),
-        "Hora": new Date(t.timestamp).toLocaleTimeString(),
         "Material": t.material,
         "Descrição": getDescription(t.material),
         "Origem": t.originBin,
         "Destino": t.destBin,
-        "Quantidade": t.qty,
-        "Utilizador": t.userId
-    }));
+        "Quantidade": t.qty
+    }];
 
     const ws = XLSX.utils.json_to_sheet(flatData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Transferências");
+    XLSX.utils.book_append_sheet(wb, ws, "Transferência");
     
     const dateStr = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `Transferencias_${dateStr}.xlsx`);
+    XLSX.writeFile(wb, `Transferencia_${t.material}_${dateStr}.xlsx`);
   };
 
   return (
@@ -72,14 +65,6 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
                     <p className="text-sm text-slate-500 dark:text-slate-400">Registo de movimentos de material entre localizações.</p>
                 </div>
             </div>
-            
-            <button
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm"
-            >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Exportar Excel</span>
-            </button>
         </div>
 
         {/* Search Bar */}
@@ -96,71 +81,85 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
             </div>
         </div>
 
-        {/* List of Transfers */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-            <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
-                    <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-xs">
-                        <tr>
-                            <th className="px-6 py-3 font-semibold">Data</th>
-                            <th className="px-6 py-3 font-semibold">Material</th>
-                            <th className="px-6 py-3 font-semibold">Descrição</th>
-                            <th className="px-6 py-3 font-semibold text-center">Origem</th>
-                            <th className="px-6 py-3 font-semibold text-center">Destino</th>
-                            <th className="px-6 py-3 font-semibold text-right">Qtd</th>
-                            <th className="px-6 py-3 font-semibold">Utilizador</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                        {filteredTransfers.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
-                                    Nenhuma transferência encontrada.
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredTransfers.map((t) => (
-                                <tr key={t.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                    <td className="px-6 py-3 whitespace-nowrap">
-                                        <div className="flex flex-col">
-                                            <span className="font-medium text-slate-700 dark:text-slate-200">
-                                                {new Date(t.timestamp).toLocaleDateString()}
-                                            </span>
-                                            <span className="text-xs text-slate-400">
-                                                {new Date(t.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-3 font-mono font-medium text-orange-600 dark:text-orange-400">
+        {/* List of Transfers (Card Layout) */}
+        <div className="space-y-4">
+            {filteredTransfers.length === 0 ? (
+                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div className="bg-slate-100 dark:bg-slate-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ArrowRightLeft className="w-8 h-8 text-slate-400" />
+                    </div>
+                    <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-1">Nenhuma transferência encontrada</h3>
+                    <p className="text-slate-500 dark:text-slate-400">Tente ajustar a pesquisa.</p>
+                </div>
+            ) : (
+                filteredTransfers.map((t) => (
+                    <div 
+                        key={t.id} 
+                        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-4"
+                    >
+                        {/* Top Row: Header Info */}
+                        <div className="flex justify-between items-start">
+                            <div className="flex-1 min-w-0 pr-4">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <span className="font-mono font-bold text-lg text-orange-600 dark:text-orange-400">
                                         {t.material}
-                                    </td>
-                                    <td className="px-6 py-3 max-w-xs truncate" title={getDescription(t.material)}>
+                                    </span>
+                                    <span className="text-sm text-slate-600 dark:text-slate-300 font-medium truncate">
                                         {getDescription(t.material)}
-                                    </td>
-                                    <td className="px-6 py-3 text-center font-mono text-xs">
-                                        <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                                            {t.originBin}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-3 text-center font-mono text-xs">
-                                        <span className="bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
-                                            {t.destBin}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-3 text-right">
-                                        <span className="font-bold text-slate-800 dark:text-white">
-                                            {t.qty}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-3 text-xs text-slate-500 truncate max-w-[100px]" title={t.userId}>
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+                                    <span className="flex items-center gap-1">
+                                        <Calendar className="w-3 h-3" />
+                                        {new Date(t.timestamp).toLocaleDateString()}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        {new Date(t.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                        <User className="w-3 h-3" />
                                         {t.userId}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                                    </span>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => handleExportExcel(t)}
+                                className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-transparent hover:border-green-200 dark:hover:border-green-800 transition-all"
+                                title="Exportar Excel"
+                            >
+                                <FileSpreadsheet className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Bottom Row: Movement Details */}
+                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                            <div className="flex items-center gap-2 md:gap-8 flex-1 min-w-0">
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Origem</span>
+                                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 text-sm truncate">
+                                        {t.originBin}
+                                    </span>
+                                </div>
+                                <ArrowRight className="w-4 h-4 text-slate-300 dark:text-slate-600 flex-shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                    <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Destino</span>
+                                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 text-sm truncate">
+                                        {t.destBin}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col items-end pl-3 border-l border-slate-200 dark:border-slate-700 ml-2 flex-shrink-0">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Qtd</span>
+                                <span className="text-xl font-bold text-slate-800 dark:text-white leading-none">
+                                    {t.qty}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                ))
+            )}
         </div>
     </div>
   );
