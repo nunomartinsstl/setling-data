@@ -2,7 +2,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/database';
-import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Supplier, Company, OrderLineItem, PickedItem, Receipt, RolePermissions } from '../types';
+import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Company, OrderLineItem, PickedItem, Receipt, RolePermissions } from '../types';
 
 // Safely access environment variables
 const env = ((import.meta as any).env || {}) as any;
@@ -21,7 +21,6 @@ const firebaseConfig = {
 // Check if critical config is present
 const hasConfig = !!firebaseConfig.apiKey && !!firebaseConfig.databaseURL;
 
-let app;
 let db: firebase.database.Database | undefined;
 let auth: firebase.auth.Auth | undefined;
 let isFirebaseActive = false;
@@ -29,9 +28,7 @@ let isFirebaseActive = false;
 if (hasConfig) {
     try {
         if (!firebase.apps.length) {
-            app = firebase.initializeApp(firebaseConfig);
-        } else {
-            app = firebase.app();
+            firebase.initializeApp(firebaseConfig);
         }
         db = firebase.database();
         auth = firebase.auth();
@@ -180,50 +177,12 @@ export const StorageService = {
   authenticateUser: async (identifier: string, password: string) => {
     if (!auth || !db) throw new Error("Serviço offline. Verifique a configuração.");
     
-    let emailToAuth = identifier;
-
-    // Detect if input is username (no @ symbol)
+    // STRICT EMAIL LOGIN ONLY
     if (!identifier.includes('@')) {
-        const usernameQuery = normalizeText(identifier);
-        let foundEmail = '';
-
-        try {
-            // 1. Try Public Mapping (Faster & Permission Safe if rules configured)
-            const mappingSnap = await db.ref(`${KEYS.USERNAMES}/${usernameQuery}`).get();
-            if (mappingSnap.exists()) {
-                foundEmail = mappingSnap.val();
-            } else {
-                // 2. Fallback: Search in full Users list (May fail with Permission Denied if not admin)
-                // We attempt this for backwards compatibility
-                const snapshot = await db.ref(KEYS.USERS)
-                    .orderByChild('username')
-                    .equalTo(usernameQuery) // This requires .indexOn rule usually
-                    .get();
-
-                if (snapshot.exists()) {
-                    const usersObj = snapshot.val();
-                    const ids = Object.keys(usersObj);
-                    if (ids.length > 0) {
-                        foundEmail = usersObj[ids[0]].email;
-                    }
-                }
-            }
-        } catch (e: any) {
-            // Detailed error for developers/users
-            console.error("Username lookup failed:", e);
-            if (e.code === 'PERMISSION_DENIED') {
-                throw new Error("Login por nome indisponível (Acesso Negado). Por favor use o Email ou peça ao Administrador para Sincronizar Logins.");
-            }
-        }
-
-        if (foundEmail) {
-            emailToAuth = foundEmail;
-        } else {
-            throw new Error("Nome de utilizador não encontrado.");
-        }
+        throw new Error("Por favor, use o seu email para entrar.");
     }
 
-    const cred = await auth.signInWithEmailAndPassword(emailToAuth, password);
+    const cred = await auth.signInWithEmailAndPassword(identifier, password);
     const snapshot = await db.ref(`${KEYS.USERS}/${cred.user!.uid}`).get();
     return snapshot.val() as User;
   },
@@ -235,9 +194,62 @@ export const StorageService = {
       let userCredential;
 
       try {
-      // Attempt standard registration
+          // 1. Attempt standard registration (Creates Auth User)
           userCredential = await auth.createUserWithEmailAndPassword(email, password);
           uid = userCredential.user!.uid;
+          
+          // --- SECURITY CHECKS (Post-Auth, Pre-DB) ---
+          try {
+              // A. Validate Admin Code
+              if (role === UserRole.ADMIN) {
+                  const settingsSnap = await db.ref(KEYS.SETTINGS).get();
+                  const settings = settingsSnap.val() || {};
+                  // Default code if not set: "admin123" (Should be changed!)
+                  const validCode = settings.adminAccessCode; 
+                  
+                  if (!validCode) {
+                       // If no code is configured in DB, we might block or allow. 
+                       // Safe default: Block if input is empty, or warn.
+                       // For now, let's assume if DB has no code, we can't verify, so we block to be safe 
+                       // UNLESS it's the very first setup (bootstrap).
+                       // Let's check if any users exist.
+                       const usersSnap = await db.ref(KEYS.USERS).limitToFirst(1).get();
+                       if (usersSnap.exists()) {
+                           throw new Error("Erro de configuração: Código Mestre não definido no sistema.");
+                       }
+                       // If no users exist, allow first admin (Bootstrap)
+                  } else if (adminCode !== validCode) {
+                      throw new Error("Código de Acesso Mestre incorreto.");
+                  }
+              } 
+              // B. Validate Invite (Non-Admin)
+              else {
+                  // Check for invite
+                  const inviteSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
+                  if (!inviteSnap.exists()) {
+                      throw new Error("Este email não possui um convite válido. Peça ao Administrador.");
+                  }
+                  
+                  // Optional: Validate Role matches Invite?
+                  // For now, we just ensure they were invited. 
+                  // We could also enforce the role from the invite:
+                  const inviteKey = Object.keys(inviteSnap.val())[0];
+                  const inviteData = inviteSnap.val()[inviteKey];
+                  
+                  // Consume Invite (Delete it so it can't be reused)
+                  await db.ref(`${KEYS.INVITES}/${inviteKey}`).remove();
+                  
+                  // Force role from invite to prevent client-side tampering
+                  if (inviteData.role) {
+                      role = inviteData.role; 
+                  }
+              }
+          } catch (securityErr) {
+              // ROLLBACK: Delete the Auth user if security checks fail
+              await userCredential.user!.delete();
+              throw securityErr;
+          }
+
       } catch (err: any) {
           // ... (existing error handling for email-already-in-use) ...
           if (err.code === 'auth/email-already-in-use') {
@@ -249,6 +261,9 @@ export const StorageService = {
                       console.log("Recuperando utilizador órfão (Auth sem DB).");
                       uid = loginCred.user!.uid;
                       userCredential = loginCred;
+                      
+                      // Note: We skip security checks here because they already proved ownership 
+                      // of an existing Auth account. We assume they passed checks originally.
                   } else {
                       throw new Error("Este email já está em uso.");
                   }
@@ -339,32 +354,6 @@ export const StorageService = {
           await userCredential.user.updateProfile({ displayName: newUser.username });
       }
       return newUser;
-  },
-
-  // UTILITY TO REPAIR USERNAMES
-  syncUsernames: async () => {
-      if (!db) return 0;
-      const snapshot = await db.ref(KEYS.USERS).get();
-      if (!snapshot.exists()) return 0;
-      
-      const users = snapshot.val();
-      const updates: any = {};
-      let count = 0;
-      
-      Object.values(users).forEach((u: any) => {
-          if (u.username && u.email) {
-              const key = normalizeText(u.username);
-              if (key) {
-                  updates[`${KEYS.USERNAMES}/${key}`] = u.email;
-                  count++;
-              }
-          }
-      });
-      
-      if (count > 0) {
-          await db.ref().update(updates);
-      }
-      return count;
   },
 
   getUsers: async (): Promise<User[]> => {
@@ -1039,14 +1028,12 @@ export const StorageService = {
               
               let canFulfillAny = false; // Changed from canFulfill (all) to canFulfillAny (at least one)
               let isPartiallyPicked = false;
-              let hasStockItems = false;
 
               // Check each item
               for (const item of order.items) {
                   if (item.isCustom) continue; // Custom items don't consume stock
                   if (!item.sku) continue;
                   
-                  hasStockItems = true;
                   const sku = norm(item.sku);
                   const picked = getPickedQty(order, item.sku);
                   if (picked > 0) isPartiallyPicked = true;
@@ -1093,7 +1080,6 @@ export const StorageService = {
                   } else if (canFulfillAny && order.status === 'PENDING') {
                       // Upgrade
                       // Ensure no custom items are blocking (optional, but safer)
-                      const hasUnresolvedCustom = order.items.some(i => i.isCustom);
                       
                       // If it has unresolved custom items, we might want to keep it PENDING?
                       // User said: "an order should be only flagged as pending when all of its items and quantities are missing."
@@ -1125,7 +1111,7 @@ export const StorageService = {
       }
   },
 
-  syncCustomMaterials: async (masterList: MasterMaterial[]) => {
+  syncCustomMaterials: async () => {
       // Placeholder
   },
 

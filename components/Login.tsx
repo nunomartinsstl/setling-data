@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
-import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle, Moon, Sun, Wrench, RefreshCw, X, Loader2 } from 'lucide-react';
+import { Lock, User as UserIcon, LogIn, UserPlus, AlertCircle, ShieldCheck, Mail, Key, Building, Eye, EyeOff, CheckCircle, Moon, Sun, Wrench } from 'lucide-react';
 import { StorageService } from '../services/storageService';
 
 interface LoginProps {
@@ -11,10 +11,9 @@ interface LoginProps {
 
 const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [isRegistering, setIsRegistering] = useState(false);
-  const [showRepairModal, setShowRepairModal] = useState(false);
   
   // Login State
-  const [loginIdentifier, setLoginIdentifier] = useState(''); // Email OR Username
+  const [loginIdentifier, setLoginIdentifier] = useState(''); // Email ONLY
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   
@@ -25,11 +24,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [regPassword, setRegPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
-
-  // Repair State
-  const [repairEmail, setRepairEmail] = useState('');
-  const [repairPassword, setRepairPassword] = useState('');
-  const [isRepairing, setIsRepairing] = useState(false);
 
   const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
   const [adminCode, setAdminCode] = useState('');
@@ -132,7 +126,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     } catch (err: any) {
         let msg = err.message;
         if (msg.includes('auth/invalid-credential')) msg = "Credenciais incorretas.";
-        else if (msg.includes('auth/invalid-email')) msg = "Formato de email inválido ou nome de utilizador não encontrado.";
+        else if (msg.includes('auth/invalid-email')) msg = "Formato de email inválido.";
         else if (msg.includes('auth/too-many-requests')) msg = "Muitas tentativas falhadas. Tente mais tarde.";
         else if (msg.includes('index')) msg = "Erro de configuração do banco (Index). Avise o Admin.";
         setError(msg || 'Erro ao entrar.');
@@ -179,7 +173,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     try {
         // Automatically handles incremental usernames inside service
         const user = await StorageService.registerUser(email, regPassword, firstName, lastName, role, adminCode, companyId);
-        localStorage.setItem('last_login_identifier', user.username); // Store username for next login convenience
+        localStorage.setItem('last_login_identifier', user.email); // Store email for next login convenience
         
         // SHOW SUCCESS SCREEN INSTEAD OF DIRECT LOGIN
         setCreatedUser(user);
@@ -192,36 +186,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     } finally {
         setIsLoading(false);
     }
-  };
-
-  const handleRepairSystem = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if(!repairEmail || !repairPassword) return;
-      
-      setIsRepairing(true);
-      setError(''); // Clear main error
-      
-      try {
-          // 1. Authenticate (Must use email)
-          if (!repairEmail.includes('@')) throw new Error("Use o EMAIL de Administrador.");
-          const user = await StorageService.authenticateUser(repairEmail, repairPassword);
-          
-          if (user.role !== UserRole.ADMIN) {
-              throw new Error("Apenas Administradores podem realizar reparos.");
-          }
-          
-          // 2. Run Sync
-          const count = await StorageService.syncUsernames();
-          alert(`Sistema Sincronizado! ${count} nomes de utilizador foram restaurados.\n\nAgora o login por nome deve funcionar.`);
-          
-          // 3. Login normally
-          onLogin(user);
-          
-      } catch (err: any) {
-          alert("Erro na reparação: " + err.message);
-      } finally {
-          setIsRepairing(false);
-      }
   };
 
   // Helper for input validation classes
@@ -242,9 +206,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Seu registo foi realizado com sucesso.</p>
                 
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Utilizador de Acesso</p>
-                    <p className="text-2xl font-mono font-bold text-brand-600 dark:text-brand-400 tracking-wide">{createdUser.username}</p>
-                    <p className="text-xs text-slate-400 mt-2">Use este nome ou seu email para entrar.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Email de Acesso</p>
+                    <p className="text-xl font-mono font-bold text-brand-600 dark:text-brand-400 tracking-wide">{createdUser.email}</p>
+                    <p className="text-xs text-slate-400 mt-2">Use este email para entrar.</p>
                 </div>
 
                 <button
@@ -261,53 +225,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-slate-100 dark:bg-slate-950 transition-colors duration-200 relative">
       
-      {/* Repair Modal */}
-      {showRepairModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl w-full max-w-sm border border-slate-200 dark:border-slate-700 relative">
-                  <button onClick={() => setShowRepairModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"><X className="w-5 h-5"/></button>
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-2 flex items-center gap-2">
-                      <Wrench className="w-5 h-5 text-amber-500"/> Reparar Sistema
-                  </h3>
-                  <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                      Se o login por nome de utilizador não funciona, um Administrador deve usar esta ferramenta para sincronizar a base de dados.
-                  </p>
-                  
-                  <form onSubmit={handleRepairSystem} className="space-y-3">
-                      <div>
-                          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Email de Admin</label>
-                          <input 
-                            type="email" 
-                            required
-                            value={repairEmail}
-                            onChange={e => setRepairEmail(e.target.value)}
-                            placeholder="admin@empresa.com"
-                            className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500 border-slate-300 dark:border-slate-600"
-                          />
-                      </div>
-                      <div>
-                          <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">Senha</label>
-                          <input 
-                            type="password" 
-                            required
-                            value={repairPassword}
-                            onChange={e => setRepairPassword(e.target.value)}
-                            className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500 border-slate-300 dark:border-slate-600"
-                          />
-                      </div>
-                      <button 
-                        type="submit" 
-                        disabled={isRepairing}
-                        className="w-full bg-amber-600 text-white py-2 rounded font-bold hover:bg-amber-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                          {isRepairing ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
-                          Sincronizar e Entrar
-                      </button>
-                  </form>
-              </div>
-          </div>
-      )}
-
       <div className="absolute top-4 right-4">
         <button 
             onClick={toggleTheme}
@@ -539,15 +456,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
             ) : (
                 <form onSubmit={handleLogin} className="space-y-4 animate-fade-in">
                     <div>
-                        <label className={labelClass(loginIdentifier)}>Email ou Utilizador</label>
+                        <label className={labelClass(loginIdentifier)}>Email</label>
                         <div className="relative">
-                            <UserIcon className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                            <Mail className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                             <input
-                                type="text"
+                                type="email"
                                 value={loginIdentifier}
                                 onChange={(e) => setLoginIdentifier(e.target.value)}
                                 className={`pl-10 ${inputClass(loginIdentifier)}`}
-                                placeholder="Email ou Nome de Utilizador"
+                                placeholder="seu@email.com"
                             />
                         </div>
                     </div>
@@ -587,27 +504,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                         <p>{error}</p>
-                        {(error.includes('Acesso Negado') || error.includes('utilizador')) && (
-                            <button 
-                                onClick={() => setShowRepairModal(true)}
-                                className="mt-2 text-xs font-bold underline hover:text-red-900 dark:hover:text-red-100"
-                            >
-                                Sincronizar Sistema (Admin)
-                            </button>
-                        )}
                     </div>
-                </div>
-            )}
-            
-            {/* Simple repair link always available */}
-            {!isRegistering && !error && (
-                <div className="mt-4 text-center">
-                    <button 
-                        onClick={() => setShowRepairModal(true)}
-                        className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 flex items-center justify-center gap-1 mx-auto transition-colors"
-                    >
-                        <Wrench className="w-3 h-3"/> Problemas no login? (Admin)
-                    </button>
                 </div>
             )}
         </div>

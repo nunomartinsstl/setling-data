@@ -174,6 +174,11 @@ export interface RolePermissions {
     canManageSettings: boolean; // Usually Admin only
 }
 
+export interface SynonymGroup {
+  id: string;
+  words: string[];
+}
+
 export interface AppSettings {
   notificationEmail?: string; 
   emailRecipients: EmailRecipient[];
@@ -185,6 +190,7 @@ export interface AppSettings {
   autoDecrementStock?: boolean;
   approvalRules?: ApprovalRule[];
   permissions?: Record<UserRole, RolePermissions>;
+  synonyms?: SynonymGroup[];
 }
 
 export interface Transfer {

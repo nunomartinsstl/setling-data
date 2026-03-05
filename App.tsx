@@ -198,7 +198,7 @@ const App: React.FC = () => {
       }
 
       // 5. Sync Custom Materials (Legacy placeholder logic)
-      await StorageService.syncCustomMaterials(fetchedMaster);
+      await StorageService.syncCustomMaterials();
 
       // 6. Fetch Orders (now updated)
       const fetchedOrders = await StorageService.getOrders();

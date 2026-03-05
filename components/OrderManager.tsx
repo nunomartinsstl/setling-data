@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Fuse from 'fuse.js';
 import { PORTUGAL_ZIP_CODES } from '../constants/zipCodes';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User } from '../types';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User, SynonymGroup } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell, RefreshCw } from 'lucide-react';
@@ -181,9 +181,32 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   
   // Settings Options
   const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
+  const [synonyms, setSynonyms] = useState<SynonymGroup[]>([]);
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [advancedFilters, setAdvancedFilters] = useState({
+    material: '',
+    user: '',
+    datePlacedStart: '',
+    datePlacedEnd: '',
+    dateDueStart: '',
+    dateDueEnd: '',
+    pep: ''
+  });
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (advancedFilters.material) count++;
+    if (advancedFilters.user) count++;
+    if (advancedFilters.datePlacedStart) count++;
+    if (advancedFilters.datePlacedEnd) count++;
+    if (advancedFilters.dateDueStart) count++;
+    if (advancedFilters.dateDueEnd) count++;
+    if (advancedFilters.pep) count++;
+    return count;
+  }, [advancedFilters]);
 
   // --- FIFO ALLOCATION LOGIC ---
   const allocationMap = useMemo(() => {
@@ -329,19 +352,64 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         });
     }
 
-    // 4. Search Filter
-    if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
+    // 4. Advanced Search Filter
+    if (activeFiltersCount > 0) {
         result = result.filter(group => {
-            if ((group.root.title || '').toLowerCase().includes(q) || 
-                (group.root.id || '').toLowerCase().includes(q) ||
-                (group.root.displayId?.toString() || '').includes(q) ||
-                (group.root.creator || '').toLowerCase().includes(q)) return true;
-            
-            return group.children.some(c => 
-                (c.title || '').toLowerCase().includes(q) ||
-                (c.id || '').toLowerCase().includes(q)
-            );
+            const root = group.root;
+            const children = group.children;
+            const allOrders = [root, ...children];
+
+            // Material Filter
+            if (advancedFilters.material) {
+                const q = advancedFilters.material.toLowerCase();
+                const hasMaterial = allOrders.some(o => 
+                    o.items.some(i => 
+                        (i.sku || '').toLowerCase().includes(q) || 
+                        (i.description || '').toLowerCase().includes(q)
+                    )
+                );
+                if (!hasMaterial) return false;
+            }
+
+            // User Filter
+            if (advancedFilters.user) {
+                const q = advancedFilters.user.toLowerCase();
+                const hasUser = allOrders.some(o => (o.creator || '').toLowerCase().includes(q));
+                if (!hasUser) return false;
+            }
+
+            // PEP Filter
+            if (advancedFilters.pep) {
+                const q = advancedFilters.pep.toLowerCase();
+                const hasPep = allOrders.some(o => (o.pep || '').toLowerCase().includes(q));
+                if (!hasPep) return false;
+            }
+
+            // Date Placed Range
+            if (advancedFilters.datePlacedStart) {
+                const start = new Date(advancedFilters.datePlacedStart).setHours(0,0,0,0);
+                const hasValidDate = allOrders.some(o => new Date(o.dateCreated).getTime() >= start);
+                if (!hasValidDate) return false;
+            }
+            if (advancedFilters.datePlacedEnd) {
+                const end = new Date(advancedFilters.datePlacedEnd).setHours(23,59,59,999);
+                const hasValidDate = allOrders.some(o => new Date(o.dateCreated).getTime() <= end);
+                if (!hasValidDate) return false;
+            }
+
+            // Date Due Range
+            if (advancedFilters.dateDueStart) {
+                const start = new Date(advancedFilters.dateDueStart).setHours(0,0,0,0);
+                const hasValidDate = allOrders.some(o => o.dueDate && new Date(o.dueDate).getTime() >= start);
+                if (!hasValidDate) return false;
+            }
+            if (advancedFilters.dateDueEnd) {
+                const end = new Date(advancedFilters.dateDueEnd).setHours(23,59,59,999);
+                const hasValidDate = allOrders.some(o => o.dueDate && new Date(o.dueDate).getTime() <= end);
+                if (!hasValidDate) return false;
+            }
+
+            return true;
         });
     }
 
@@ -359,7 +427,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     });
 
     return result;
-  }, [orders, type, searchQuery]);
+  }, [orders, type, advancedFilters, activeFiltersCount]);
   
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const canApprove = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
@@ -378,13 +446,26 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         // Create normalized SKU for fuzzy matching (e.g. ACC0168 -> ACC168)
         // Removes leading zeros from the numeric part if present
         const normalizedSku = sku.replace(/^([A-Z]+)0+(\d+)$/, '$1$2');
-        return { sku, desc, normalizedSku };
+        
+        // Enrich with synonyms
+        let keywords = '';
+        if (synonyms.length > 0) {
+            const descLower = desc.toLowerCase();
+            synonyms.forEach(group => {
+                const hasMatch = group.words.some(word => descLower.includes(word.toLowerCase()));
+                if (hasMatch) {
+                    keywords += ' ' + group.words.join(' ');
+                }
+            });
+        }
+
+        return { sku, desc, normalizedSku, keywords };
     });
-  }, [masterList, stock]);
+  }, [masterList, stock, synonyms]);
 
   const fuse = useMemo(() => {
       return new Fuse(materialOptions, {
-          keys: ['sku', 'desc', 'normalizedSku'],
+          keys: ['sku', 'desc', 'normalizedSku', 'keywords'],
           threshold: 0.3, // 0.0 = exact match, 1.0 = match anything. 0.3 is good for typos.
           ignoreLocation: true, // Search anywhere in the string
           minMatchCharLength: 2,
@@ -392,7 +473,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       });
   }, [materialOptions]);
 
-  // Load Settings for Units
+  // Load Settings for Units and Synonyms
   useEffect(() => {
       const loadOpts = async () => {
           const settings = await StorageService.getSettings();
@@ -400,6 +481,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
               setUnitOptions(settings.unitOptions);
           } else {
               setUnitOptions([{ value: "UN", description: "Unidade" }]); // Fallback
+          }
+          if (settings.synonyms) {
+              setSynonyms(settings.synonyms);
           }
       };
       loadOpts();
@@ -1551,16 +1635,135 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       )}
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-          {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
-          {mode === 'CREATE' ? (isTechnical ? 'Nova Requisição' : 'Novo Pedido ao Armazém') : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos ao Armazém Finalizados')}
-        </h2>
-        {type === 'FINISHED' && mode === 'LIST' && (
-             <div className="relative w-full md:w-64">
-                <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                <input type="text" placeholder="Pesquisar pedido..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm dark:bg-slate-800 dark:text-white dark:border-slate-600" />
-             </div>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
+            {mode === 'CREATE' ? <Upload className="text-brand-500"/> : (type === 'OPEN' ? <Clock className="text-blue-500"/> : <CheckCircle className="text-green-500"/>)}
+            {mode === 'CREATE' ? (isTechnical ? 'Nova Requisição' : 'Novo Pedido ao Armazém') : (type === 'OPEN' ? 'Pedidos Abertos' : 'Pedidos ao Armazém Finalizados')}
+            </h2>
+            
+            {mode === 'LIST' && (
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowAdvancedSearch(true)}
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
+                    >
+                        <Search className="w-4 h-4" />
+                        <span>Pesquisa Avançada</span>
+                        {activeFiltersCount > 0 && (
+                            <span className="bg-brand-600 text-white text-xs px-2 py-0.5 rounded-full">
+                                {activeFiltersCount}
+                            </span>
+                        )}
+                    </button>
+                </div>
+            )}
+        </div>
+
+        {/* Advanced Search Modal */}
+        {mode === 'LIST' && showAdvancedSearch && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAdvancedSearch(false)}>
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl p-6 border border-slate-200 dark:border-slate-700 animate-fade-in" onClick={e => e.stopPropagation()}>
+                    <div className="flex justify-between items-center mb-6">
+                        <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+                            <Search className="w-5 h-5 text-brand-600" /> Pesquisa Avançada
+                        </h3>
+                        <button onClick={() => setShowAdvancedSearch(false)} className="text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-white">
+                            <X className="w-6 h-6" />
+                        </button>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Material (SKU/Desc)</label>
+                            <input 
+                                type="text" 
+                                value={advancedFilters.material}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, material: e.target.value})}
+                                placeholder="Ex: Parafuso, ACC..."
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Utilizador</label>
+                            <input 
+                                type="text" 
+                                value={advancedFilters.user}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, user: e.target.value})}
+                                placeholder="Nome do criador..."
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">PEP / Obra</label>
+                            <input 
+                                type="text" 
+                                value={advancedFilters.pep}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, pep: e.target.value})}
+                                placeholder="Nº PEP..."
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
+                            />
+                        </div>
+                        <div className="hidden lg:block"></div> {/* Spacer */}
+                        
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Data Criação (Início)</label>
+                            <input 
+                                type="date" 
+                                value={advancedFilters.datePlacedStart}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, datePlacedStart: e.target.value})}
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Data Criação (Fim)</label>
+                            <input 
+                                type="date" 
+                                value={advancedFilters.datePlacedEnd}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, datePlacedEnd: e.target.value})}
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Data Levantamento (Início)</label>
+                            <input 
+                                type="date" 
+                                value={advancedFilters.dateDueStart}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, dateDueStart: e.target.value})}
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Data Levantamento (Fim)</label>
+                            <input 
+                                type="date" 
+                                value={advancedFilters.dateDueEnd}
+                                onChange={(e) => setAdvancedFilters({...advancedFilters, dateDueEnd: e.target.value})}
+                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end mt-6 gap-3 pt-4 border-t dark:border-slate-700">
+                        <button 
+                            onClick={() => setAdvancedFilters({
+                                material: '', user: '', pep: '', 
+                                datePlacedStart: '', datePlacedEnd: '', 
+                                dateDueStart: '', dateDueEnd: ''
+                            })}
+                            className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:text-red-600 transition-colors"
+                        >
+                            Limpar Filtros
+                        </button>
+                        <button 
+                            onClick={() => setShowAdvancedSearch(false)}
+                            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm"
+                        >
+                            Ver Resultados
+                        </button>
+                    </div>
+                </div>
+            </div>
         )}
       </div>
 

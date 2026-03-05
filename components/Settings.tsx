@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { StorageService, DEFAULT_PERMISSIONS } from '../services/storageService';
-import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule, UserRole, RolePermissions } from '../types';
-import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, RefreshCw, Wrench, Euro, Edit, X, Lock } from 'lucide-react';
+import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule, UserRole, RolePermissions, SynonymGroup } from '../types';
+import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, Euro, Edit, X, Lock, Search } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -12,6 +12,10 @@ const Settings: React.FC = () => {
   const [newCompany, setNewCompany] = useState('');
   const [adminAccessCode, setAdminAccessCode] = useState('');
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  
+  // Synonyms
+  const [synonyms, setSynonyms] = useState<SynonymGroup[]>([]);
+  const [newSynonymsInput, setNewSynonymsInput] = useState('');
   
   // Unit Options
   const [unitOptions, setUnitOptions] = useState<UnitOption[]>([]);
@@ -34,7 +38,6 @@ const Settings: React.FC = () => {
   const [permissions, setPermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_PERMISSIONS);
 
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
   
   const supplierFileRef = useRef<HTMLInputElement>(null);
@@ -80,6 +83,9 @@ const Settings: React.FC = () => {
         operator: r.operator || 'LTE'
     }));
     setApprovalRules(normalizedRules);
+
+    // Load Synonyms
+    setSynonyms(settings.synonyms || []);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -96,6 +102,7 @@ const Settings: React.FC = () => {
           categories: categories,
           approvalRules: approvalRules,
           permissions: permissions,
+          synonyms: synonyms,
           autoDecrementStock: true 
       });
       setMessage('Configurações salvas com sucesso.');
@@ -105,18 +112,6 @@ const Settings: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSyncUsernames = async () => {
-      setSyncing(true);
-      try {
-          const count = await StorageService.syncUsernames();
-          alert(`Sincronização concluída! ${count} logins reparados.`);
-      } catch(e: any) {
-          alert("Erro: " + e.message);
-      } finally {
-          setSyncing(false);
-      }
   };
 
   const togglePermission = (role: UserRole, key: keyof RolePermissions) => {
@@ -210,6 +205,28 @@ const Settings: React.FC = () => {
       setEditingRuleIndex(null);
   };
 
+  // SYNONYMS LOGIC
+  const addSynonymGroup = () => {
+      if (!newSynonymsInput.trim()) return;
+      const words = newSynonymsInput.split(',').map(w => w.trim()).filter(w => w.length > 0);
+      if (words.length < 2) {
+          alert("Insira pelo menos duas palavras separadas por vírgula.");
+          return;
+      }
+      const newGroup: SynonymGroup = {
+          id: Date.now().toString(),
+          words: words
+      };
+      setSynonyms([...synonyms, newGroup]);
+      setNewSynonymsInput('');
+  };
+
+  const removeSynonymGroup = (id: string) => {
+      if(window.confirm("Remover este grupo de sinónimos?")) {
+          setSynonyms(synonyms.filter(s => s.id !== id));
+      }
+  };
+
   const handleSupplierUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
@@ -243,6 +260,7 @@ const Settings: React.FC = () => {
       canManageStock: "Gerir Stock (Upload)",
       canViewReceipts: "Ver Entradas",
       canViewShortages: "Relatório de Faltas",
+      canViewTransfers: "Ver Transferências",
       canSearch: "Pesquisar",
       canManageUsers: "Gerir Utilizadores",
       canManageSettings: "Gerir Configurações"
@@ -255,24 +273,6 @@ const Settings: React.FC = () => {
       <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
         Configurações do Sistema
       </h2>
-
-      {/* REPAIR TOOLS CARD - Prominent at Top */}
-      <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-xl shadow-sm border border-amber-200 dark:border-amber-800">
-        <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-amber-800 dark:text-amber-400">
-            <Wrench className="w-5 h-5"/> Manutenção de Acessos
-        </h3>
-        <p className="text-sm text-amber-700 dark:text-amber-500 mb-4">
-            Se os utilizadores não conseguirem entrar usando o <strong>Nome de Utilizador</strong> (Erro: Permission Denied), clique abaixo para regenerar o índice de busca pública.
-        </p>
-        <button 
-            onClick={handleSyncUsernames}
-            disabled={syncing}
-            className="w-full flex items-center justify-center gap-2 text-sm font-bold text-white bg-amber-600 hover:bg-amber-700 p-3 rounded-lg transition-colors shadow-sm"
-        >
-            {syncing ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
-            Reparar/Sincronizar Logins por Nome
-        </button>
-      </div>
 
       {/* PERMISSIONS MATRIX */}
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -694,6 +694,58 @@ const Settings: React.FC = () => {
                         <button 
                             onClick={() => removeCompany(company.id)}
                             className="text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                ))
+            )}
+        </div>
+      </div>
+
+      {/* SYNONYMS SETTINGS */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <Search className="w-5 h-5 text-slate-500"/> Sinónimos de Pesquisa
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Defina grupos de palavras equivalentes para facilitar a pesquisa (ex: "Curva, Joelho").
+        </p>
+
+        <div className="flex gap-2 mb-4">
+            <input 
+                type="text"
+                value={newSynonymsInput}
+                onChange={(e) => setNewSynonymsInput(e.target.value)}
+                placeholder="Palavras separadas por vírgula (ex: Curva, Joelho, Cotovelo)"
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSynonymGroup())}
+            />
+            <button 
+                type="button"
+                onClick={addSynonymGroup}
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+            >
+                Adicionar
+            </button>
+        </div>
+
+        <div className="space-y-2 max-h-60 overflow-y-auto">
+            {synonyms.length === 0 ? (
+                <p className="text-sm text-slate-400 italic">Nenhum grupo de sinónimos definido.</p>
+            ) : (
+                synonyms.map((group) => (
+                    <div key={group.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-700">
+                        <div className="flex flex-wrap gap-2">
+                            {group.words.map((word, idx) => (
+                                <span key={idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded text-xs font-medium text-slate-600 dark:text-slate-300">
+                                    {word}
+                                </span>
+                            ))}
+                        </div>
+                        <button 
+                            onClick={() => removeSynonymGroup(group.id)}
+                            className="text-slate-400 hover:text-red-500 transition-colors ml-2"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
