@@ -700,8 +700,20 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   const getSuggestions = (input: string) => {
     if (!input || input.length < 2) return [];
     
-    // Use Fuse for fuzzy search
-    const results = fuse.search(input);
+    // Use Fuse for fuzzy search with AND logic for multiple terms
+    const terms = input.trim().split(/\s+/);
+    const query = {
+        $and: terms.map(term => ({
+            $or: [
+                { sku: term },
+                { desc: term },
+                { normalizedSku: term },
+                { keywords: term }
+            ]
+        }))
+    };
+    
+    const results = fuse.search(query);
     
     // Return top 500 results (increased from 50)
     return results.slice(0, 500).map(r => r.item);
