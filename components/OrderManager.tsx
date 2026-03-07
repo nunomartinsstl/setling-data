@@ -5,7 +5,7 @@ import { PORTUGAL_ZIP_CODES } from '../constants/zipCodes';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User, SynonymGroup } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
-import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell, RefreshCw } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell, RefreshCw, Maximize2 } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -981,7 +981,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 description: getMaterialDescription(row.sku),
                 quantity: qtyNum,
                 isCustom: false,
-                image: null
+                image: row.image || null
             });
         }
     }
@@ -1001,7 +1001,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : '',
           similarityChecked: true,
           image: item.image,
-          inputType: item.image ? 'PHOTO' : 'TEXT'
+          inputType: (item.image && item.sku === 'FOTO_PENDENTE') ? 'PHOTO' : 'TEXT'
       }));
 
       setManualRows(rows);
@@ -2081,8 +2081,37 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                             ) : (
                                                 /* Text Input Logic (Original) */
                                                 <>
-                                                    <div className="flex justify-end mb-2">
-                                                        {!row.isCustom ? (
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        {row.image && (
+                                                            <div 
+                                                                className="relative group cursor-pointer mr-2" 
+                                                                onClick={() => setSelectedImage(row.image)}
+                                                                title="Ver imagem anexada"
+                                                            >
+                                                                <img 
+                                                                    src={row.image} 
+                                                                    alt="Item" 
+                                                                    className="h-12 w-12 object-cover rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm" 
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg flex items-center justify-center">
+                                                                    <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
+                                                                </div>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const newRows = [...manualRows];
+                                                                        newRows[idx].image = undefined;
+                                                                        setManualRows(newRows);
+                                                                    }}
+                                                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-600"
+                                                                    title="Remover imagem"
+                                                                >
+                                                                    <X className="w-3 h-3" />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                        <div className="flex-1 flex justify-end">
+                                                            {!row.isCustom ? (
                                                             <button 
                                                                 onClick={() => {
                                                                     const newRows = [...manualRows];
@@ -2117,6 +2146,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             </button>
                                                         )}
                                                     </div>
+                                                </div>
 
                                                     <div className="mb-3">
                                                         {/* NEW: View Image Button if converting */}

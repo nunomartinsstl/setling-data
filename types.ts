@@ -1,11 +1,13 @@
 
-export enum UserRole {
-  ADMIN = 'ADMIN',
-  MANAGEMENT = 'MANAGEMENT',
-  WAREHOUSE = 'WAREHOUSE',
-  TECHNICAL = 'TECHNICAL',
-  VIEWER = 'VIEWER'
-}
+export const UserRole = {
+  ADMIN: 'ADMIN',
+  MANAGEMENT: 'MANAGEMENT',
+  WAREHOUSE: 'WAREHOUSE',
+  TECHNICAL: 'TECHNICAL',
+  VIEWER: 'VIEWER'
+} as const;
+
+export type UserRole = typeof UserRole[keyof typeof UserRole] | string;
 
 export interface User {
   uid: string;
@@ -30,7 +32,8 @@ export interface EmailRecipient {
 
 export interface ApprovalRule {
   amount: number; // Replaces maxAmount
-  approverEmail: string;
+  approverRole?: string;
+  approverEmail?: string;
   operator: 'LTE' | 'GTE'; // LTE = <= (Até), GTE = >= (Maior ou Igual)
 }
 
@@ -124,6 +127,7 @@ export interface ApprovalMetadata {
   approvedAt?: string;
   rejectedBy?: string;
   rejectedAt?: string;
+  approverRole?: string;
   approverEmail?: string; // The email that was required for this level
 }
 

@@ -31,6 +31,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
 
   // Data
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [availableRoles, setAvailableRoles] = useState<string[]>(Object.values(UserRole));
   const [existingUsernames, setExistingUsernames] = useState<Set<string>>(new Set());
 
   const [error, setError] = useState('');
@@ -47,17 +48,30 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
         setLoginIdentifier(savedId);
     }
     
-    // Fetch companies for registration form
-    const loadCompanies = async () => {
+    // Fetch companies and settings for registration form
+    const loadData = async () => {
         try {
-            // Use specific method to allow granular permission handling
-            const companyList = await StorageService.getCompanies();
+            const [companyList, settings] = await Promise.all([
+                StorageService.getCompanies(),
+                StorageService.getSettings()
+            ]);
             setCompanies(companyList || []);
+            
+            if (settings.permissions) {
+                const roles = Object.keys(settings.permissions);
+                if (roles.length > 0) {
+                    setAvailableRoles(roles);
+                    // If current role is not in the list, default to WAREHOUSE or first available
+                    if (!roles.includes(role)) {
+                        setRole((roles.includes(UserRole.WAREHOUSE) ? UserRole.WAREHOUSE : roles[0]) as UserRole);
+                    }
+                }
+            }
         } catch (e) {
-            console.warn("Could not load companies (permission denied or offline).");
+            console.warn("Could not load data (permission denied or offline).");
         }
     };
-    loadCompanies();
+    loadData();
   }, []);
 
   // Fetch usernames when entering registration mode to check for collisions
@@ -104,6 +118,23 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
         }
         return `${base}${counter}`;
     }
+
+    const getRoleLabel = (r: string) => {
+        if (r === UserRole.MANAGEMENT) return 'Coordenação';
+        if (r === UserRole.WAREHOUSE) return 'Logística';
+        if (r === UserRole.TECHNICAL) return 'Técnico';
+        if (r === UserRole.VIEWER) return 'Viewer';
+        if (r === UserRole.ADMIN) return 'Administrador';
+        return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase().replace(/_/g, ' ');
+    };
+
+    const getRoleIcon = (r: string) => {
+        if (r === UserRole.MANAGEMENT) return UserIcon;
+        if (r === UserRole.WAREHOUSE) return Lock;
+        if (r === UserRole.TECHNICAL) return Wrench;
+        if (r === UserRole.ADMIN) return ShieldCheck;
+        return UserIcon;
+    };
 
     return base;
   };
@@ -325,29 +356,27 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Função</label>
                         <div className="grid grid-cols-2 gap-2">
-                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.WAREHOUSE ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                <input type="radio" name="role" className="hidden" checked={role === UserRole.WAREHOUSE} onChange={() => setRole(UserRole.WAREHOUSE)} />
-                                <Lock className={`w-4 h-4 ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-xs ${role !== UserRole.WAREHOUSE ? 'text-slate-500 dark:text-slate-400' : ''}`}>Logística</span>
-                            </label>
-                            
-                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.TECHNICAL ? 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                <input type="radio" name="role" className="hidden" checked={role === UserRole.TECHNICAL} onChange={() => setRole(UserRole.TECHNICAL)} />
-                                <Wrench className={`w-4 h-4 ${role !== UserRole.TECHNICAL ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-xs ${role !== UserRole.TECHNICAL ? 'text-slate-500 dark:text-slate-400' : ''}`}>Técnico</span>
-                            </label>
+                            {availableRoles.map(r => {
+                                const Icon = getRoleIcon(r);
+                                const isSelected = role === r;
+                                let colorClass = 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700';
+                                
+                                if (isSelected) {
+                                    if (r === UserRole.WAREHOUSE) colorClass = 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300';
+                                    else if (r === UserRole.TECHNICAL) colorClass = 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300';
+                                    else if (r === UserRole.MANAGEMENT) colorClass = 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300';
+                                    else if (r === UserRole.ADMIN) colorClass = 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300';
+                                    else colorClass = 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300';
+                                }
 
-                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.MANAGEMENT ? 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                <input type="radio" name="role" className="hidden" checked={role === UserRole.MANAGEMENT} onChange={() => setRole(UserRole.MANAGEMENT)} />
-                                <UserIcon className={`w-4 h-4 ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-xs ${role !== UserRole.MANAGEMENT ? 'text-slate-500 dark:text-slate-400' : ''}`}>Coordenador</span>
-                            </label>
-
-                            <label className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${role === UserRole.ADMIN ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300' : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}>
-                                <input type="radio" name="role" className="hidden" checked={role === UserRole.ADMIN} onChange={() => setRole(UserRole.ADMIN)} />
-                                <ShieldCheck className={`w-4 h-4 ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                <span className={`font-semibold text-xs ${role !== UserRole.ADMIN ? 'text-slate-500 dark:text-slate-400' : ''}`}>Admin</span>
-                            </label>
+                                return (
+                                    <label key={r} className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${colorClass}`}>
+                                        <input type="radio" name="role" className="hidden" checked={isSelected} onChange={() => setRole(r as UserRole)} />
+                                        <Icon className={`w-4 h-4 ${!isSelected ? 'text-slate-500 dark:text-slate-400' : ''}`} />
+                                        <span className={`font-semibold text-xs ${!isSelected ? 'text-slate-500 dark:text-slate-400' : ''}`}>{getRoleLabel(r)}</span>
+                                    </label>
+                                );
+                            })}
                         </div>
                     </div>
 

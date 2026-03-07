@@ -110,6 +110,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           // Migrate old maxAmount rules to new structure if needed
           const rules = (settings.approvalRules || []).map((r: any) => ({
               amount: r.amount !== undefined ? r.amount : r.maxAmount,
+              approverRole: r.approverRole,
               approverEmail: r.approverEmail,
               operator: r.operator || 'LTE'
           }));
@@ -571,7 +572,19 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
       setLoading(true);
       try {
-          const saved = await StorageService.savePurchaseOrder(newPO);
+          // Fetch users to find approver emails if role is selected
+          let approverEmails: string[] = [];
+          if (matchedRule?.approverRole) {
+              const users = await StorageService.getUsers();
+              approverEmails = users.filter(u => u.role === matchedRule?.approverRole).map(u => u.email);
+          } else if (matchedRule?.approverEmail) {
+              approverEmails = [matchedRule.approverEmail];
+          }
+
+          const saved = await StorageService.savePurchaseOrder({
+              ...newPO,
+              ...(matchedRule ? { approvalMetadata: { approverRole: matchedRule.approverRole, approverEmail: matchedRule.approverEmail } } : {})
+          });
           
           // If pending approval, trigger mailto
           if (status === 'PENDING_APPROVAL' && matchedRule) {
@@ -582,14 +595,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                            `Criado por: ${currentUsername}\n\n` +
                            `Por favor, aceda à plataforma para aprovar ou rejeitar.\n\nCumprimentos.`;
               
-              const mailto = `mailto:${matchedRule.approverEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+              const targetEmail = approverEmails.length > 0 ? approverEmails.join(',') : '';
+              const mailto = `mailto:${targetEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
               
               // Use slight delay to allow UI update
               setTimeout(() => {
                   window.location.href = mailto;
               }, 500);
               
-              alert(`Pedido guardado! A aguardar aprovação de ${matchedRule.approverEmail}.\nO seu cliente de email será aberto.`);
+              alert(`Pedido guardado! A aguardar aprovação de ${matchedRule.approverRole || matchedRule.approverEmail}.\n${approverEmails.length > 0 ? 'O seu cliente de email será aberto.' : 'Aviso: Nenhum utilizador encontrado com esta função para enviar email.'}`);
           } else {
               if (window.confirm("Pedido gravado e aprovado!\nDeseja visualizar o PDF agora?")) {
                   handlePrintOrder(saved);
@@ -660,6 +674,15 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           case 'SENT': return <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-bold border border-blue-200 flex items-center gap-1"><Check className="w-3 h-3"/> Emitido</span>;
           default: return <span className="px-2 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-bold border border-slate-200">Rascunho</span>;
       }
+  };
+
+  const getRoleLabel = (role: string) => {
+      if (role === UserRole.MANAGEMENT) return 'Coordenação';
+      if (role === UserRole.WAREHOUSE) return 'Logística';
+      if (role === UserRole.TECHNICAL) return 'Técnico';
+      if (role === UserRole.VIEWER) return 'Viewer';
+      if (role === UserRole.ADMIN) return 'Administrador';
+      return role;
   };
 
   return (
@@ -781,13 +804,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                             <div>
                                                                 <span className="font-bold">Condição Pagamento:</span> {String(po.supplier.paymentTerms) === '0' ? 'Pronto Pagamento' : (po.supplier.paymentTerms || 'A Definir')}
                                                             </div>
-                                                            {po.approvalMetadata?.approverEmail && (
-                                                                <div className="col-span-2">
-                                                                    <span className="font-bold">Aprovação Necessária de:</span> {po.approvalMetadata.approverEmail}
-                                                                    {po.approvalMetadata.approvedBy && <span className="text-green-600 ml-2">(Aprovado por {po.approvalMetadata.approvedBy} em {new Date(po.approvalMetadata.approvedAt!).toLocaleDateString()})</span>}
-                                                                    {po.approvalMetadata.rejectedBy && <span className="text-red-600 ml-2">(Rejeitado por {po.approvalMetadata.rejectedBy})</span>}
-                                                                </div>
-                                                            )}
+                                                                    {po.approvalMetadata?.approverRole && (
+                                                                        <div className="col-span-2">
+                                                                            <span className="font-bold">Aprovação Necessária de:</span> {getRoleLabel(po.approvalMetadata.approverRole)}
+                                                                            {po.approvalMetadata.approvedBy && <span className="text-green-600 ml-2">(Aprovado por {po.approvalMetadata.approvedBy} em {new Date(po.approvalMetadata.approvedAt!).toLocaleDateString()})</span>}
+                                                                            {po.approvalMetadata.rejectedBy && <span className="text-red-600 ml-2">(Rejeitado por {po.approvalMetadata.rejectedBy})</span>}
+                                                                        </div>
+                                                                    )}
+                                                                    {!po.approvalMetadata?.approverRole && po.approvalMetadata?.approverEmail && (
+                                                                        <div className="col-span-2">
+                                                                            <span className="font-bold">Aprovação Necessária de:</span> {po.approvalMetadata.approverEmail}
+                                                                            {po.approvalMetadata.approvedBy && <span className="text-green-600 ml-2">(Aprovado por {po.approvalMetadata.approvedBy} em {new Date(po.approvalMetadata.approvedAt!).toLocaleDateString()})</span>}
+                                                                            {po.approvalMetadata.rejectedBy && <span className="text-red-600 ml-2">(Rejeitado por {po.approvalMetadata.rejectedBy})</span>}
+                                                                        </div>
+                                                                    )}
                                                         </div>
                                                         <div className="overflow-x-auto mb-4">
                                                             <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
@@ -815,7 +845,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                         </div>
 
                                                         {/* APPROVAL ACTIONS */}
-                                                        {po.status === 'PENDING_APPROVAL' && canApprove && (
+                                                        {po.status === 'PENDING_APPROVAL' && (userRole === UserRole.ADMIN || (po.approvalMetadata?.approverRole && userRole === po.approvalMetadata.approverRole) || (!po.approvalMetadata?.approverRole && canApprove)) && (
                                                             <div className="flex gap-3 justify-end pt-2 border-t border-slate-200 dark:border-slate-700">
                                                                 <button 
                                                                     onClick={() => handleApprovalAction(po, 'REJECT')}

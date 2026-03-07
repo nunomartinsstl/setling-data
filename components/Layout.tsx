@@ -86,10 +86,13 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
   };
 
   const getRoleLabel = () => {
-    if (isAdmin) return 'Administrador';
-    if (isManagement) return 'Coordenador';
-    if (isTechnical) return 'Técnico';
-    return 'Logística';
+    const role = user.role;
+    if (role === UserRole.ADMIN) return 'Administrador';
+    if (role === UserRole.MANAGEMENT) return 'Coordenação';
+    if (role === UserRole.TECHNICAL) return 'Técnico';
+    if (role === UserRole.WAREHOUSE) return 'Logística';
+    if (role === UserRole.VIEWER) return 'Viewer';
+    return role;
   };
 
   const getRoleColor = () => {

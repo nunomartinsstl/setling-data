@@ -30,12 +30,13 @@ const Settings: React.FC = () => {
   // Approval Rules
   const [approvalRules, setApprovalRules] = useState<ApprovalRule[]>([]);
   const [newRuleAmount, setNewRuleAmount] = useState('');
-  const [newRuleEmail, setNewRuleEmail] = useState('');
+  const [newRuleRole, setNewRuleRole] = useState('');
   const [newRuleOperator, setNewRuleOperator] = useState<'LTE' | 'GTE'>('LTE');
   const [editingRuleIndex, setEditingRuleIndex] = useState<number | null>(null);
 
   // Permissions
-  const [permissions, setPermissions] = useState<Record<UserRole, RolePermissions>>(DEFAULT_PERMISSIONS);
+  const [permissions, setPermissions] = useState<Record<string, RolePermissions>>(DEFAULT_PERMISSIONS);
+  const [newRoleName, setNewRoleName] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -79,6 +80,7 @@ const Settings: React.FC = () => {
     // Load Approval Rules - Normalize old data (maxAmount -> amount + LTE)
     const normalizedRules = (settings.approvalRules || []).map((r: any) => ({
         amount: r.amount !== undefined ? r.amount : r.maxAmount,
+        approverRole: r.approverRole,
         approverEmail: r.approverEmail,
         operator: r.operator || 'LTE'
     }));
@@ -114,7 +116,7 @@ const Settings: React.FC = () => {
     }
   };
 
-  const togglePermission = (role: UserRole, key: keyof RolePermissions) => {
+  const togglePermission = (role: string, key: keyof RolePermissions) => {
       // Prevent locking Admin out of critical features
       if (role === UserRole.ADMIN && (key === 'canManageSettings' || key === 'canManageUsers')) {
           return;
@@ -127,6 +129,51 @@ const Settings: React.FC = () => {
               [key]: !prev[role][key]
           }
       }));
+  };
+
+  const addRole = () => {
+      if (!newRoleName.trim()) return;
+      const roleKey = newRoleName.trim().toUpperCase().replace(/\s+/g, '_');
+      
+      if (permissions[roleKey]) {
+          alert("Esta função já existe.");
+          return;
+      }
+
+      // Default permissions for new role (copy Viewer or empty)
+      const newPermissions: RolePermissions = {
+          canCreateOrder: false,
+          canViewOpenOrders: false,
+          canViewFinishedOrders: false,
+          canCreatePurchaseOrder: false,
+          canViewStock: false,
+          canManageStock: false,
+          canViewReceipts: false,
+          canViewTransfers: false,
+          canViewShortages: false,
+          canSearch: false,
+          canManageUsers: false,
+          canManageSettings: false
+      };
+
+      setPermissions(prev => ({
+          ...prev,
+          [roleKey]: newPermissions
+      }));
+      setNewRoleName('');
+  };
+
+  const removeRole = (role: string) => {
+      if (role === UserRole.ADMIN) {
+          alert("Não é possível remover a função de Administrador.");
+          return;
+      }
+      
+      if (window.confirm(`Remover a função "${role}"?`)) {
+          const newPerms = { ...permissions };
+          delete newPerms[role];
+          setPermissions(newPerms);
+      }
   };
 
   // ... (Recipients, Companies, Units, Categories logic unchanged)
@@ -158,13 +205,13 @@ const Settings: React.FC = () => {
   // APPROVAL RULES LOGIC
   const saveApprovalRule = () => {
       const amount = parseFloat(newRuleAmount);
-      if (isNaN(amount) || amount <= 0 || !newRuleEmail.trim()) {
-          alert("Preencha um valor válido e um email.");
+      if (isNaN(amount) || amount <= 0 || !newRuleRole.trim()) {
+          alert("Preencha um valor válido e selecione uma função.");
           return;
       }
       
       const newRules = [...approvalRules];
-      const rule: ApprovalRule = { amount: amount, approverEmail: newRuleEmail.trim(), operator: newRuleOperator };
+      const rule: ApprovalRule = { amount: amount, approverRole: newRuleRole, operator: newRuleOperator };
 
       if (editingRuleIndex !== null) {
           // Edit existing
@@ -184,7 +231,7 @@ const Settings: React.FC = () => {
   const editApprovalRule = (idx: number) => {
       const rule = approvalRules[idx];
       setNewRuleAmount(rule.amount.toString());
-      setNewRuleEmail(rule.approverEmail);
+      setNewRuleRole(rule.approverRole || '');
       setNewRuleOperator(rule.operator);
       setEditingRuleIndex(idx);
   };
@@ -200,7 +247,7 @@ const Settings: React.FC = () => {
 
   const resetRuleForm = () => {
       setNewRuleAmount('');
-      setNewRuleEmail('');
+      setNewRuleRole('');
       setNewRuleOperator('LTE');
       setEditingRuleIndex(null);
   };
@@ -266,7 +313,26 @@ const Settings: React.FC = () => {
       canManageSettings: "Gerir Configurações"
   };
 
-  const ROLES_TO_CONFIGURE = [UserRole.MANAGEMENT, UserRole.WAREHOUSE, UserRole.TECHNICAL, UserRole.VIEWER];
+  const ROLES_TO_CONFIGURE = Object.keys(permissions).filter(role => role !== UserRole.ADMIN);
+  const defaultRoles = [UserRole.MANAGEMENT, UserRole.WAREHOUSE, UserRole.TECHNICAL, UserRole.VIEWER];
+  
+  ROLES_TO_CONFIGURE.sort((a, b) => {
+      const idxA = defaultRoles.indexOf(a as any);
+      const idxB = defaultRoles.indexOf(b as any);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB; // Both default: keep original order
+      if (idxA !== -1) return -1; // A is default, B is custom: A comes first
+      if (idxB !== -1) return 1; // B is default, A is custom: B comes first
+      return a.localeCompare(b); // Both custom: sort alphabetically
+  });
+
+  const getRoleLabel = (role: string) => {
+      if (role === UserRole.MANAGEMENT) return 'Coordenação';
+      if (role === UserRole.WAREHOUSE) return 'Logística';
+      if (role === UserRole.TECHNICAL) return 'Técnico';
+      if (role === UserRole.VIEWER) return 'Viewer';
+      if (role === UserRole.ADMIN) return 'Administrador';
+      return role;
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-fade-in pb-12">
@@ -283,14 +349,50 @@ const Settings: React.FC = () => {
             Defina o que cada função pode fazer ou visualizar no sistema.
         </p>
         
+        <div className="flex gap-2 mb-4 items-end">
+            <div className="flex-1">
+                <label className="block text-xs font-bold text-slate-500 mb-1">Nova Função</label>
+                <input 
+                    type="text"
+                    value={newRoleName}
+                    onChange={(e) => setNewRoleName(e.target.value)}
+                    placeholder="Nome da Função (Ex: Supervisor)"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white uppercase"
+                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRole())}
+                />
+            </div>
+            <button 
+                type="button"
+                onClick={addRole}
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium h-[38px]"
+            >
+                Adicionar
+            </button>
+        </div>
+
         <div className="overflow-x-auto">
             <table className="w-full text-sm text-left border-collapse">
                 <thead>
                     <tr className="bg-slate-100 dark:bg-slate-900 border-b dark:border-slate-700">
                         <th className="p-3 font-semibold text-slate-700 dark:text-slate-200 min-w-[200px]">Funcionalidade</th>
                         {ROLES_TO_CONFIGURE.map(role => (
-                            <th key={role} className="p-3 text-center font-semibold text-slate-700 dark:text-slate-200 capitalize">
-                                {role === UserRole.MANAGEMENT ? 'Coordenação' : role === UserRole.WAREHOUSE ? 'Logística' : role === UserRole.TECHNICAL ? 'Técnico' : 'Viewer'}
+                            <th key={role} className="p-3 text-center font-semibold text-slate-700 dark:text-slate-200 capitalize relative group">
+                                <div className="flex items-center justify-center gap-1">
+                                    <span>{getRoleLabel(role)}</span>
+                                    {role !== UserRole.ADMIN ? (
+                                        <button 
+                                            onClick={() => removeRole(role)}
+                                            className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                                            title="Remover Função"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    ) : (
+                                        <div className="text-slate-300 dark:text-slate-600 cursor-help" title="Administrador não pode ser removido">
+                                            <Lock className="w-3 h-3" />
+                                        </div>
+                                    )}
+                                </div>
                             </th>
                         ))}
                     </tr>
@@ -303,7 +405,7 @@ const Settings: React.FC = () => {
                                 <td key={`${role}-${key}`} className="p-3 text-center">
                                     <input 
                                         type="checkbox"
-                                        checked={permissions[role][key]}
+                                        checked={permissions[role]?.[key] || false}
                                         onChange={() => togglePermission(role, key)}
                                         className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-gray-300 cursor-pointer"
                                     />
@@ -369,14 +471,17 @@ const Settings: React.FC = () => {
                 />
             </div>
             <div className="flex-1 w-full">
-                <label className="block text-xs font-bold text-slate-500 mb-1">Email Aprovador</label>
-                <input 
-                    type="email"
-                    value={newRuleEmail}
-                    onChange={(e) => setNewRuleEmail(e.target.value)}
-                    placeholder="gestor@empresa.com"
+                <label className="block text-xs font-bold text-slate-500 mb-1">Função Aprovadora</label>
+                <select 
+                    value={newRuleRole}
+                    onChange={(e) => setNewRuleRole(e.target.value)}
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
-                />
+                >
+                    <option value="">Selecione...</option>
+                    {Object.keys(permissions).map(role => (
+                        <option key={role} value={role}>{getRoleLabel(role)}</option>
+                    ))}
+                </select>
             </div>
             <div className="flex gap-1">
                 {editingRuleIndex !== null && (
@@ -418,7 +523,7 @@ const Settings: React.FC = () => {
                                 <td className="p-3 font-mono font-bold">
                                     {rule.operator === 'GTE' ? '≥' : '≤'} {rule.amount.toLocaleString()} €
                                 </td>
-                                <td className="p-3">{rule.approverEmail}</td>
+                                <td className="p-3">{rule.approverRole ? getRoleLabel(rule.approverRole) : rule.approverEmail}</td>
                                 <td className="p-3 text-center">
                                     <div className="flex justify-center gap-2">
                                         <button onClick={() => editApprovalRule(idx)} className="text-amber-500 hover:text-amber-700 transition-colors">

@@ -8,11 +8,12 @@ import 'firebase/compat/auth';
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [companies, setCompanies] = useState<Company[]>([]);
+    const [availableRoles, setAvailableRoles] = useState<string[]>(Object.values(UserRole));
     const [loading, setLoading] = useState(true);
     
     // Invite State
     const [inviteEmail, setInviteEmail] = useState('');
-    const [inviteRole, setInviteRole] = useState<UserRole>(UserRole.WAREHOUSE);
+    const [inviteRole, setInviteRole] = useState<string>(UserRole.WAREHOUSE);
     const [isInviting, setIsInviting] = useState(false);
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
@@ -36,6 +37,14 @@ const UsersManager: React.FC = () => {
             ]);
             setUsers(usersData);
             setCompanies(settings.companies || []);
+            
+            if (settings.permissions) {
+                const roles = Object.keys(settings.permissions);
+                // Ensure default roles are present if for some reason settings is empty
+                if (roles.length > 0) {
+                    setAvailableRoles(roles);
+                }
+            }
         } catch (e) {
             console.error("Failed to load users or settings", e);
         } finally {
@@ -143,6 +152,15 @@ const UsersManager: React.FC = () => {
         }
     };
 
+    const getRoleLabel = (role: string) => {
+        if (role === UserRole.MANAGEMENT) return 'Coordenação';
+        if (role === UserRole.WAREHOUSE) return 'Logística';
+        if (role === UserRole.TECHNICAL) return 'Técnico';
+        if (role === UserRole.VIEWER) return 'Viewer';
+        if (role === UserRole.ADMIN) return 'Administrador';
+        return role;
+    };
+
     return (
         <div className="space-y-6 animate-fade-in pb-24">
             <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
@@ -169,13 +187,14 @@ const UsersManager: React.FC = () => {
                          <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Função Permitida</label>
                          <select 
                             value={inviteRole}
-                            onChange={(e) => setInviteRole(e.target.value as UserRole)}
+                            onChange={(e) => setInviteRole(e.target.value)}
                             className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                          >
-                             <option value={UserRole.WAREHOUSE}>Logística</option>
-                             <option value={UserRole.TECHNICAL}>Técnico</option>
-                             <option value={UserRole.MANAGEMENT}>Coordenação</option>
-                             <option value={UserRole.ADMIN}>Administrador</option>
+                             {availableRoles.map(role => (
+                                 <option key={role} value={role}>
+                                     {getRoleLabel(role)}
+                                 </option>
+                             ))}
                          </select>
                     </div>
                     <button 
@@ -284,13 +303,15 @@ const UsersManager: React.FC = () => {
                                                         user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
                                                         user.role === UserRole.MANAGEMENT ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30' :
                                                         user.role === UserRole.TECHNICAL ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/30' :
-                                                        'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30'
+                                                        user.role === UserRole.WAREHOUSE ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30' :
+                                                        'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
                                                     }`}
                                                 >
-                                                    <option value={UserRole.WAREHOUSE} className="bg-white dark:bg-slate-800">Logística</option>
-                                                    <option value={UserRole.TECHNICAL} className="bg-white dark:bg-slate-800">Técnico</option>
-                                                    <option value={UserRole.MANAGEMENT} className="bg-white dark:bg-slate-800">Coordenação</option>
-                                                    <option value={UserRole.ADMIN} className="bg-white dark:bg-slate-800">Admin</option>
+                                                    {availableRoles.map(role => (
+                                                        <option key={role} value={role} className="bg-white dark:bg-slate-800">
+                                                            {getRoleLabel(role)}
+                                                        </option>
+                                                    ))}
                                                 </select>
                                             </td>
                                             
