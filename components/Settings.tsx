@@ -326,6 +326,7 @@ const Settings: React.FC = () => {
   });
 
   const getRoleLabel = (role: string) => {
+      if (role === 'NO_APPROVAL') return 'Sem aprovação';
       if (role === UserRole.MANAGEMENT) return 'Coordenação';
       if (role === UserRole.WAREHOUSE) return 'Logística';
       if (role === UserRole.TECHNICAL) return 'Técnico';
@@ -478,6 +479,7 @@ const Settings: React.FC = () => {
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 >
                     <option value="">Selecione...</option>
+                    <option value="NO_APPROVAL">Sem aprovação</option>
                     {Object.keys(permissions).map(role => (
                         <option key={role} value={role}>{getRoleLabel(role)}</option>
                     ))}

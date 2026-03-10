@@ -540,6 +540,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
               }
           }
 
+          if (matchedRule && matchedRule.approverRole === 'NO_APPROVAL') {
+              matchedRule = undefined;
+          }
+
           if (matchedRule) {
               status = 'PENDING_APPROVAL';
           }
@@ -677,6 +681,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   const getRoleLabel = (role: string) => {
+      if (role === 'NO_APPROVAL') return 'Sem aprovação';
       if (role === UserRole.MANAGEMENT) return 'Coordenação';
       if (role === UserRole.WAREHOUSE) return 'Logística';
       if (role === UserRole.TECHNICAL) return 'Técnico';
