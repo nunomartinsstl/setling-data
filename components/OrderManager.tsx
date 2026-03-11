@@ -1028,7 +1028,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       setEditingOrderId(order.id);
       setTargetCompanyId(order.companyId || (isAdmin ? '' : (userCompanyId || '')));
       setCreationStep('INITIAL');
-      setExpandedRowIndex(0);
+      
+      const firstPhotoIndex = rows.findIndex(r => r.inputType === 'PHOTO' || r.sku === 'FOTO_PENDENTE');
+      setExpandedRowIndex(firstPhotoIndex >= 0 ? firstPhotoIndex : 0);
+      
       window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -1281,6 +1284,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
     setIsProcessing(true);
     try {
+        const fullAddress = `${addressStreet}, ${addressZip} ${addressCity}`.trim();
+
         if (editingOrderId) {
             const existingOrder = orders.find(o => o.id === editingOrderId);
             if (!existingOrder) throw new Error("Pedido original não encontrado.");
@@ -1291,7 +1296,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 ...existingOrder,
                 title: orderTitle,
                 pep: pep,
-                address: address,
+                address: fullAddress,
                 dueDate: dueDate,
                 items: pendingItems, 
                 companyId: targetCompanyId, 
@@ -1327,8 +1332,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                     }
                 }
             }
-
-            const fullAddress = `${addressStreet}, ${addressZip} ${addressCity}`.trim();
 
             const newOrder: Order = {
                 id: Math.random().toString(36).substr(2, 9),

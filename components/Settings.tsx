@@ -40,12 +40,50 @@ const Settings: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [isLoaded, setIsLoaded] = useState(false);
+  const isInitialMount = useRef(true);
   
   const supplierFileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadSettings();
   }, []);
+
+  useEffect(() => {
+    if (!isLoaded) return;
+    
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        await StorageService.saveSettings({ 
+            emailRecipients: recipients,
+            notificationEmail: recipients.length > 0 ? recipients[0].email : '',
+            companies: companies,
+            adminAccessCode: adminAccessCode, 
+            unitOptions: unitOptions,
+            suppliers: suppliers,
+            categories: categories,
+            approvalRules: approvalRules,
+            permissions: permissions,
+            synonyms: synonyms,
+            autoDecrementStock: true 
+        });
+        setMessage('Configurações salvas automaticamente.');
+        setTimeout(() => setMessage(''), 3000);
+      } catch (err) {
+        setMessage('Erro ao salvar automaticamente.');
+      } finally {
+        setLoading(false);
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [recipients, companies, adminAccessCode, unitOptions, suppliers, categories, approvalRules, permissions, synonyms, isLoaded]);
 
   const loadSettings = async () => {
     const settings = await StorageService.getSettings();
@@ -88,32 +126,8 @@ const Settings: React.FC = () => {
 
     // Load Synonyms
     setSynonyms(settings.synonyms || []);
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await StorageService.saveSettings({ 
-          emailRecipients: recipients,
-          notificationEmail: recipients.length > 0 ? recipients[0].email : '', // Legacy fallback
-          companies: companies,
-          adminAccessCode: adminAccessCode, 
-          unitOptions: unitOptions,
-          suppliers: suppliers,
-          categories: categories,
-          approvalRules: approvalRules,
-          permissions: permissions,
-          synonyms: synonyms,
-          autoDecrementStock: true 
-      });
-      setMessage('Configurações salvas com sucesso.');
-      setTimeout(() => setMessage(''), 3000);
-    } catch (err) {
-      setMessage('Erro ao salvar.');
-    } finally {
-      setLoading(false);
-    }
+    
+    setIsLoaded(true);
   };
 
   const togglePermission = (role: string, key: keyof RolePermissions) => {
@@ -163,7 +177,7 @@ const Settings: React.FC = () => {
       setNewRoleName('');
   };
 
-  const removeRole = (role: string) => {
+  const removeRole = async (role: string) => {
       if (role === UserRole.ADMIN) {
           alert("Não é possível remover a função de Administrador.");
           return;
@@ -173,6 +187,48 @@ const Settings: React.FC = () => {
           const newPerms = { ...permissions };
           delete newPerms[role];
           setPermissions(newPerms);
+          
+          const newRules = approvalRules.filter(rule => rule.approverRole !== role);
+          setApprovalRules(newRules);
+      }
+  };
+
+  const renameRolePrompt = async (role: string) => {
+      const newName = window.prompt(`Novo nome para a função "${getRoleLabel(role)}":`, getRoleLabel(role));
+      if (!newName || newName.trim() === '' || newName === role) return;
+      
+      const newRoleKey = newName.trim();
+      
+      if (permissions[newRoleKey]) {
+          alert("Já existe uma função com este nome.");
+          return;
+      }
+
+      const newPerms = { ...permissions };
+      newPerms[newRoleKey] = newPerms[role];
+      delete newPerms[role];
+
+      const newRules = approvalRules.map(rule => {
+          if (rule.approverRole === role) {
+              return { ...rule, approverRole: newRoleKey };
+          }
+          return rule;
+      });
+
+      setPermissions(newPerms);
+      setApprovalRules(newRules);
+
+      try {
+          const users = await StorageService.getUsers();
+          const usersToUpdate = users.filter(u => u.role === role);
+          for (const u of usersToUpdate) {
+              await StorageService.updateUserRole(u.uid, newRoleKey);
+          }
+          
+          alert("Função renomeada com sucesso.");
+      } catch (e) {
+          console.error(e);
+          alert("Erro ao renomear função.");
       }
   };
 
@@ -381,13 +437,22 @@ const Settings: React.FC = () => {
                                 <div className="flex items-center justify-center gap-1">
                                     <span>{getRoleLabel(role)}</span>
                                     {role !== UserRole.ADMIN ? (
-                                        <button 
-                                            onClick={() => removeRole(role)}
-                                            className="text-slate-400 hover:text-red-500 transition-colors p-1"
-                                            title="Remover Função"
-                                        >
-                                            <Trash2 className="w-3 h-3" />
-                                        </button>
+                                        <div className="flex items-center">
+                                            <button 
+                                                onClick={() => renameRolePrompt(role)}
+                                                className="text-slate-400 hover:text-blue-500 transition-colors p-1"
+                                                title="Renomear Função"
+                                            >
+                                                <Edit className="w-3 h-3" />
+                                            </button>
+                                            <button 
+                                                onClick={() => removeRole(role)}
+                                                className="text-slate-400 hover:text-red-500 transition-colors p-1"
+                                                title="Remover Função"
+                                            >
+                                                <Trash2 className="w-3 h-3" />
+                                            </button>
+                                        </div>
                                     ) : (
                                         <div className="text-slate-300 dark:text-slate-600 cursor-help" title="Administrador não pode ser removido">
                                             <Lock className="w-3 h-3" />
@@ -862,23 +927,20 @@ const Settings: React.FC = () => {
         </div>
       </div>
 
-      {/* SAVE BUTTON */}
-      <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-700 mt-4">
-            <div>
-                {message && (
-                <span className="text-sm text-green-600 font-medium flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4"/> {message}
-                </span>
-                )}
-            </div>
-            <button 
-                onClick={handleSave} 
-                disabled={loading}
-                className="bg-brand-600 text-white px-8 py-3 rounded-lg hover:bg-brand-700 transition-colors flex items-center gap-2 font-medium shadow-sm"
-            >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
-                Salvar Todas as Configurações
-            </button>
+      {/* AUTO-SAVE INDICATOR */}
+      <div className="fixed bottom-6 right-6 z-50">
+            {loading && (
+                <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                    <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
+                    A guardar...
+                </div>
+            )}
+            {!loading && message && (
+                <div className={`shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm font-medium border ${message.includes('Erro') ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:border-green-800'}`}>
+                    <AlertCircle className="w-4 h-4" />
+                    {message}
+                </div>
+            )}
         </div>
     </div>
   );
