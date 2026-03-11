@@ -1951,7 +1951,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                             return (
                                 <div 
                                     key={idx} 
-                                    className={`rounded-lg border transition-all duration-200 overflow-hidden ${
+                                    className={`rounded-lg border transition-all duration-200 relative ${
+                                        isExpanded ? 'z-10' : 'z-0'
+                                    } ${
                                         isError || isPendingPhoto || isInvalidSku || isUnchecked || isMissingCategory || isDuplicate ? (isPendingPhoto ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/10' : 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800') : 
                                         isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-md ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                     }`}
