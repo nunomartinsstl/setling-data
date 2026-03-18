@@ -1126,9 +1126,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           body += `O pedido "${order.title}" requer atenção para os seguintes itens:\n\n`;
 
           if (issues.missing.length > 0) {
-              body += `-------------------------------------------\n`;
-              body += `⚠️  ALERTA: FALTA DE STOCK\n`;
-              body += `-------------------------------------------\n`;
+              body += `ALERTA: FALTA DE STOCK\n\n`;
               issues.missing.forEach((item: any) => {
                   body += `Ref: ${item.sku}\n`;
                   body += `Desc: ${item.description}\n`;
@@ -1138,9 +1136,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           }
 
           if (issues.exhausting.length > 0) {
-              body += `-------------------------------------------\n`;
-              body += `ℹ️  AVISO: STOCK FICARÁ A ZERO\n`;
-              body += `-------------------------------------------\n`;
+              body += `AVISO: STOCK FICARÁ A ZERO\n\n`;
               issues.exhausting.forEach((item: any) => {
                     body += `Ref: ${item.sku} - ${item.description}\n`;
                     body += `Qtd Pedida: ${item.quantity} (Igual ao Stock Físico)\n\n`;
@@ -1148,9 +1144,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           }
 
           if (issues.custom.length > 0) {
-              body += `-------------------------------------------\n`;
-              body += `🆕  ALERTA: NECESSÁRIO CRIAR CÓDIGO\n`;
-              body += `-------------------------------------------\n`;
+              body += `ALERTA: NECESSÁRIO CRIAR CÓDIGO\n\n`;
               issues.custom.forEach((item: any) => {
                   const uom = unitOptions.find(u => u.value === item.unit);
                   const unitDesc = uom ? `${item.unit} (${uom.description})` : item.unit;

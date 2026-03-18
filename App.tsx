@@ -348,6 +348,7 @@ const App: React.FC = () => {
           <ReceiptsManager 
             receipts={receipts}
             masterList={masterList}
+            companies={companies}
           />
         ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'TRANSFERS':

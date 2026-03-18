@@ -7,9 +7,10 @@ declare const XLSX: any;
 interface ReceiptsManagerProps {
   receipts: Receipt[];
   masterList: MasterMaterial[];
+  companies: Company[];
 }
 
-const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList }) => {
+const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList, companies }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -20,25 +21,60 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
     return item ? item.description : 'Sem descrição';
   };
 
-  // Filter receipts based on search (PO number OR contents of items)
-  const filteredReceipts = useMemo(() => {
+  // Helper to get all items from a receipt (flattened from pedidos)
+  const getAllItemsFromReceipt = (receipt: Receipt) => {
+    const pedidos = receipt.pedidos ? (Array.isArray(receipt.pedidos) ? receipt.pedidos : Object.values(receipt.pedidos)) : [];
+    const allItems: any[] = [];
+    
+    pedidos.forEach((pedido: any) => {
+      const items = pedido.items ? (Array.isArray(pedido.items) ? pedido.items : Object.values(pedido.items)) : [];
+      items.forEach(item => {
+        allItems.push({
+          ...item,
+          poNumber: pedido.poNumber,
+          description: pedido.description,
+          documentImage: pedido.documentImage
+        });
+      });
+    });
+    
+    return allItems;
+  };
+
+  // Filter and group receipts
+  const groupedReceipts = useMemo(() => {
     // Sort by date desc
     const sorted = [...receipts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-    if (!searchQuery) return sorted;
+    const groups: Record<string, Receipt[]> = {};
+    sorted.forEach(r => {
+        const key = r.sessionId || r.id;
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(r);
+    });
+
+    const allGroups = Object.values(groups);
+
+    if (!searchQuery) return allGroups;
+
     const q = searchQuery.toLowerCase();
 
-    return sorted.filter(r => {
-        // Match Top Level data
-        if (r.poNumber && r.poNumber.toLowerCase().includes(q)) return true;
-        
-        // Match Items data
-        const items: ReceiptItem[] = r.items ? (Array.isArray(r.items) ? r.items : Object.values(r.items as any)) : [];
-        return items.some(item => 
-            item.material.toLowerCase().includes(q) || 
-            getDescription(item.material).toLowerCase().includes(q) ||
-            (item.bin && item.bin.toLowerCase().includes(q))
-        );
+    return allGroups.filter(group => {
+        return group.some(r => {
+            // Search in pedidos' PO numbers
+            const pedidos = r.pedidos ? (Array.isArray(r.pedidos) ? r.pedidos : Object.values(r.pedidos)) : [];
+            if (pedidos.some((p: any) => p.poNumber && p.poNumber.toLowerCase().includes(q))) return true;
+            if (r.notes && r.notes.toLowerCase().includes(q)) return true;
+            
+            // Search in items within pedidos
+            const allItems = getAllItemsFromReceipt(r);
+            return allItems.some(item => 
+                (item.material && item.material.toLowerCase().includes(q)) || 
+                (item.material && getDescription(item.material).toLowerCase().includes(q)) ||
+                (item.description && item.description.toLowerCase().includes(q)) ||
+                (item.bin && item.bin.toLowerCase().includes(q))
+            );
+        });
     });
   }, [receipts, searchQuery, masterList]);
 
@@ -46,37 +82,63 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
       setExpandedId(prev => prev === id ? null : id);
   };
 
-  const handleExportSingleExcel = (receipt: Receipt) => {
-    const items: ReceiptItem[] = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items as any)) : [];
-    
-    if (items.length === 0) {
+  const handleExportSingleExcel = (group: Receipt[]) => {
+    const flatData: any[] = [];
+
+    group.forEach(receipt => {
+        const pedidos = receipt.pedidos ? (Array.isArray(receipt.pedidos) ? receipt.pedidos : Object.values(receipt.pedidos)) : [];
+        
+        pedidos.forEach((pedido: any) => {
+            const items = pedido.items ? (Array.isArray(pedido.items) ? pedido.items : Object.values(pedido.items)) : [];
+            let itemCounter = 10;
+
+            // Determine Centro based on companyId
+            let centro = '1700'; // Default
+            if (receipt.companyId) {
+                const comp = companies.find(c => c.id === receipt.companyId);
+                if (comp && comp.name.toLowerCase().includes('hotelaria')) {
+                    centro = '2200';
+                } else if (comp && comp.name.toLowerCase().includes('avac')) {
+                    centro = '1700';
+                }
+            }
+
+            const dateStr = new Date(receipt.date).toLocaleDateString('pt-PT');
+
+            items.forEach((item: any) => {
+                flatData.push({
+                    "ID DOC": item.id || receipt.id,
+                    "Pedido Compra": pedido.poNumber || '-',
+                    "Data Documento": dateStr,
+                    "Data Lançamento": dateStr,
+                    "Texto Cabeçalho": pedido.description || receipt.notes || '',
+                    "Material": item.material || '',
+                    "Centro": centro,
+                    "Depósito": "0002",
+                    "Item": itemCounter.toString().padStart(4, '0'),
+                    "Quantidade": item.qty || 0,
+                    "Texto Item": "",
+                    "Lote": item.bin || '',
+                });
+                itemCounter += 10;
+            });
+        });
+    });
+
+    if (flatData.length === 0) {
         alert("Esta entrada não tem itens para exportar.");
         return;
     }
-
-    // Flatten for Excel
-    const flatData: any[] = [];
-
-    items.forEach(item => {
-        flatData.push({
-            "Centro": "1700",
-            "Depósito": "0004",
-            "Data": new Date(receipt.date).toLocaleDateString(),
-            "Nº Encomenda": receipt.poNumber || '-',
-            "Material": item.material,
-            "Descrição": getDescription(item.material),
-            "Quantidade": item.qty,
-            "Localização": item.bin || '-',
-        });
-    });
 
     const ws = XLSX.utils.json_to_sheet(flatData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Entrada");
     
-    const safePO = (receipt.poNumber || 'S_N').replace(/[^a-z0-9]/gi, '_');
-    const dateStr = new Date(receipt.date).toISOString().split('T')[0];
-    XLSX.writeFile(wb, `Entrada_${safePO}_${dateStr}.xlsx`);
+    // Get first PO number from first pedido
+    const firstPO = group[0].pedidos?.[0]?.poNumber || 'S_N';
+    const safePO = firstPO.replace(/[^a-z0-9]/gi, '_');
+    const exportDateStr = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `Entrada_${safePO}_${exportDateStr}.xlsx`);
   };
 
   return (
@@ -140,21 +202,39 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
 
         {/* List of Receipts */}
         <div className="space-y-4">
-            {filteredReceipts.length === 0 ? (
+            {groupedReceipts.length === 0 ? (
                 <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                     <p className="text-slate-400">Nenhuma entrada encontrada.</p>
                 </div>
             ) : (
-                filteredReceipts.map((receipt) => {
-                    const isExpanded = expandedId === receipt.id;
-                    const items: ReceiptItem[] = receipt.items ? (Array.isArray(receipt.items) ? receipt.items : Object.values(receipt.items as any)) : [];
-                    const itemCount = items.length;
+                groupedReceipts.map((group) => {
+                    const groupKey = group[0].sessionId || group[0].id;
+                    const isExpanded = expandedId === groupKey;
+                    
+                    // Calculate total items across all receipts in the group
+                    const totalItems = group.reduce((acc, r) => {
+                        const allItems = getAllItemsFromReceipt(r);
+                        return acc + allItems.length;
+                    }, 0);
+
+                    // Get unique PO numbers from all pedidos
+                    const allPOs = group.flatMap(r => {
+                        const pedidos = r.pedidos ? (Array.isArray(r.pedidos) ? r.pedidos : Object.values(r.pedidos)) : [];
+                        return pedidos.map((p: any) => p.poNumber).filter(Boolean);
+                    });
+                    const poNumbers = Array.from(new Set(allPOs)).join(', ') || 'N/A';
+
+                    // Check if any pedido has a document image
+                    const hasImage = group.some(r => {
+                        const pedidos = r.pedidos ? (Array.isArray(r.pedidos) ? r.pedidos : Object.values(r.pedidos)) : [];
+                        return pedidos.some((p: any) => p.documentImage);
+                    });
 
                     return (
-                        <div key={receipt.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-all">
+                        <div key={groupKey} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-all">
                             {/* Header / Summary Row */}
                             <div 
-                                onClick={() => toggleExpand(receipt.id)}
+                                onClick={() => toggleExpand(groupKey)}
                                 className={`p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 ${isExpanded ? 'bg-slate-50 dark:bg-slate-700/50' : ''}`}
                             >
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
@@ -163,8 +243,8 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
                                             <Package className="w-5 h-5" />
                                         </div>
                                         <div>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Nº Encomenda</p>
-                                            <p className="text-lg font-bold text-slate-800 dark:text-white">{receipt.poNumber || 'N/A'}</p>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold">Nº Encomenda(s)</p>
+                                            <p className="text-lg font-bold text-slate-800 dark:text-white truncate max-w-[200px]" title={poNumbers}>{poNumbers}</p>
                                         </div>
                                     </div>
 
@@ -172,19 +252,19 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
                                         <div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><Calendar className="w-3 h-3"/> Data</p>
                                             <p className="font-medium text-slate-700 dark:text-slate-300">
-                                                {new Date(receipt.date).toLocaleDateString()} <span className="text-xs text-slate-400">{new Date(receipt.date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
+                                                {new Date(group[0].date).toLocaleDateString()} <span className="text-xs text-slate-400">{new Date(group[0].date).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</span>
                                             </p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1"><User className="w-3 h-3"/> Utilizador</p>
-                                            <p className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[120px]">{receipt.userId}</p>
+                                            <p className="font-medium text-slate-700 dark:text-slate-300 truncate max-w-[120px]">{group[0].userId}</p>
                                         </div>
                                     </div>
 
                                     <div className="flex items-center justify-between md:justify-end gap-4">
                                         <div className="text-right mr-4">
                                             <span className="bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-3 py-1 rounded-full text-xs font-bold border border-slate-200 dark:border-slate-600">
-                                                {itemCount} {itemCount === 1 ? 'Item' : 'Itens'}
+                                                {totalItems} {totalItems === 1 ? 'Item' : 'Itens'}
                                             </span>
                                         </div>
                                     </div>
@@ -192,15 +272,27 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
 
                                 <div className="flex items-center gap-2 pl-4 border-l border-slate-100 dark:border-slate-700 ml-4">
                                     <button 
-                                        onClick={(e) => { e.stopPropagation(); handleExportSingleExcel(receipt); }}
+                                        onClick={(e) => { e.stopPropagation(); handleExportSingleExcel(group); }}
                                         className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-full transition-colors"
                                         title="Exportar Excel"
                                     >
                                         <FileSpreadsheet className="w-5 h-5" /> 
                                     </button>
-                                    {receipt.documentImage && (
+                                    {hasImage && (
                                         <button 
-                                            onClick={(e) => { e.stopPropagation(); setSelectedImage(receipt.documentImage || null); }}
+                                            onClick={(e) => { 
+                                                e.stopPropagation(); 
+                                                // Find first pedido with an image
+                                                for (const r of group) {
+                                                    const pedidos = r.pedidos ? (Array.isArray(r.pedidos) ? r.pedidos : Object.values(r.pedidos)) : [];
+                                                    for (const p of pedidos) {
+                                                        if ((p as any).documentImage) {
+                                                            setSelectedImage((p as any).documentImage);
+                                                            return;
+                                                        }
+                                                    }
+                                                }
+                                            }}
                                             className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
                                             title="Ver Comprovativo"
                                         >
@@ -220,6 +312,9 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
                                         <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300 bg-slate-50/50 dark:bg-slate-900/50">
                                             <thead className="bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 uppercase text-xs">
                                                 <tr>
+                                                    <th className="px-6 py-3 font-semibold">Nº Encomenda</th>
+                                                    <th className="px-6 py-3 font-semibold">ID Doc</th>
+                                                    <th className="px-6 py-3 font-semibold">Texto Cabeçalho</th>
                                                     <th className="px-6 py-3 font-semibold">Material</th>
                                                     <th className="px-6 py-3 font-semibold">Descrição</th>
                                                     <th className="px-6 py-3 font-semibold text-right">Qtd Recebida</th>
@@ -227,24 +322,41 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList 
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                                {items.map((item, idx) => (
-                                                    <tr key={idx} className="hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                                                        <td className="px-6 py-3 font-mono font-medium text-brand-600 dark:text-brand-400">
-                                                            {item.material}
-                                                        </td>
-                                                        <td className="px-6 py-3">
-                                                            {getDescription(item.material)}
-                                                        </td>
-                                                        <td className="px-6 py-3 text-right">
-                                                            <span className="font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-700 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 shadow-sm">
-                                                                {item.qty}
-                                                            </span>
-                                                        </td>
-                                                        <td className="px-6 py-3 font-mono text-xs text-slate-500">
-                                                            {item.bin || '-'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
+                                                {group.flatMap(receipt => {
+                                                    const pedidos = receipt.pedidos ? (Array.isArray(receipt.pedidos) ? receipt.pedidos : Object.values(receipt.pedidos)) : [];
+                                                    
+                                                    return pedidos.flatMap((pedido: any) => {
+                                                        const items = pedido.items ? (Array.isArray(pedido.items) ? pedido.items : Object.values(pedido.items)) : [];
+                                                        
+                                                        return items.map((item: any, idx: number) => (
+                                                            <tr key={`${receipt.id}-${pedido.id}-${idx}`} className="hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                                                <td className="px-6 py-3 font-medium text-slate-700 dark:text-slate-300">
+                                                                    {pedido.poNumber || '-'}
+                                                                </td>
+                                                                <td className="px-6 py-3 font-mono text-xs text-slate-500">
+                                                                    {item.id || receipt.id || '-'}
+                                                                </td>
+                                                                <td className="px-6 py-3 text-xs text-slate-500">
+                                                                    {pedido.description || receipt.notes || '-'}
+                                                                </td>
+                                                                <td className="px-6 py-3 font-mono font-medium text-brand-600 dark:text-brand-400">
+                                                                    {item.material || '-'}
+                                                                </td>
+                                                                <td className="px-6 py-3">
+                                                                    {getDescription(item.material)}
+                                                                </td>
+                                                                <td className="px-6 py-3 text-right">
+                                                                    <span className="font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-700 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 shadow-sm">
+                                                                        {item.qty || 0}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-6 py-3 font-mono text-xs text-slate-500">
+                                                                    {item.bin || '-'}
+                                                                </td>
+                                                            </tr>
+                                                        ));
+                                                    });
+                                                })}
                                             </tbody>
                                         </table>
                                     </div>

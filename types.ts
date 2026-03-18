@@ -154,13 +154,27 @@ export interface ReceiptItem {
   bin?: string;
 }
 
+export interface ReceiptPedido {
+  id: string;
+  description?: string;
+  material?: string;
+  qty?: number;
+  bin?: string;
+  poNumber?: string;
+  items?: ReceiptItem[];
+}
+
 export interface Receipt {
   id: string;
   date: string;
   poNumber: string;
   userId: string;
   documentImage?: string;
-  items: ReceiptItem[];
+  sessionId?: string;
+  notes?: string;
+  companyId?: string;
+  items?: ReceiptItem[]; // Legacy
+  pedidos?: ReceiptPedido[]; // New format
 }
 
 export interface RolePermissions {
