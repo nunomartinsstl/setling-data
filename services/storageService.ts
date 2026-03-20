@@ -404,7 +404,14 @@ export const StorageService = {
 
   saveSettings: async (settings: AppSettings) => {
       if (!db) return;
-      await db.ref(KEYS.SETTINGS).set(settings);
+      try {
+          // Remove undefined values which cause Firebase errors
+          const sanitizedSettings = JSON.parse(JSON.stringify(settings));
+          await db.ref(KEYS.SETTINGS).set(sanitizedSettings);
+      } catch (e) {
+          console.error("Error saving settings to Firebase:", e, "Settings object:", settings);
+          throw e;
+      }
   },
 
   getStock: async (): Promise<StockItem[]> => {
