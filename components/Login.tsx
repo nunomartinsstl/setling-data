@@ -119,24 +119,24 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
         return `${base}${counter}`;
     }
 
-    const getRoleLabel = (r: string) => {
-        if (r === UserRole.MANAGEMENT) return 'Coordenação';
-        if (r === UserRole.WAREHOUSE) return 'Logística';
-        if (r === UserRole.TECHNICAL) return 'Técnico';
-        if (r === UserRole.VIEWER) return 'Viewer';
-        if (r === UserRole.ADMIN) return 'Administrador';
-        return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase().replace(/_/g, ' ');
-    };
-
-    const getRoleIcon = (r: string) => {
-        if (r === UserRole.MANAGEMENT) return UserIcon;
-        if (r === UserRole.WAREHOUSE) return Lock;
-        if (r === UserRole.TECHNICAL) return Wrench;
-        if (r === UserRole.ADMIN) return ShieldCheck;
-        return UserIcon;
-    };
-
     return base;
+  };
+
+  const getRoleLabel = (r: string) => {
+      if (r === UserRole.MANAGEMENT) return 'Coordenação';
+      if (r === UserRole.WAREHOUSE) return 'Logística';
+      if (r === UserRole.TECHNICAL) return 'Técnico';
+      if (r === UserRole.VIEWER) return 'Viewer';
+      if (r === UserRole.ADMIN) return 'Administrador';
+      return r.charAt(0).toUpperCase() + r.slice(1).toLowerCase().replace(/_/g, ' ');
+  };
+
+  const getRoleIcon = (r: string) => {
+      if (r === UserRole.MANAGEMENT) return UserIcon;
+      if (r === UserRole.WAREHOUSE) return Lock;
+      if (r === UserRole.TECHNICAL) return Wrench;
+      if (r === UserRole.ADMIN) return ShieldCheck;
+      return UserIcon;
   };
 
   const handleLogin = async (e: React.FormEvent) => {

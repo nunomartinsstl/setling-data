@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Receipt, MasterMaterial, ReceiptItem } from '../types';
-import { Search, Download, ArrowDownCircle, X, Image as ImageIcon, Calendar, ChevronDown, ChevronUp, User, Package, FileSpreadsheet } from 'lucide-react';
+import { Search, Download, ArrowDownCircle, X, Image as ImageIcon, Calendar, ChevronDown, ChevronUp, User, Package, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 
 declare const XLSX: any;
 
@@ -12,7 +12,8 @@ interface ReceiptsManagerProps {
 
 const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList, companies }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [currentImageIndex, setCurrentImageIndex] = useState<number>(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Helper to find description
@@ -145,23 +146,51 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
     <div className="space-y-6 animate-fade-in pb-12">
         
         {/* Image Modal */}
-        {selectedImage && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedImage(null)}>
-                <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        {selectedImages.length > 0 && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedImages([])}>
+                <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
                     <button 
-                        onClick={() => setSelectedImage(null)}
+                        onClick={() => setSelectedImages([])}
                         className="absolute -top-12 right-0 text-white hover:text-gray-300 p-2"
                     >
                         <X className="w-8 h-8" />
                     </button>
-                    <img 
-                        src={selectedImage} 
-                        alt="Documento de Entrada" 
-                        className="object-contain w-full h-full rounded-lg bg-white"
-                    />
+                    
+                    <div className="relative w-full flex-1 flex items-center justify-center overflow-hidden min-h-[50vh]">
+                        {selectedImages.length > 1 && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(prev => prev > 0 ? prev - 1 : selectedImages.length - 1); }}
+                                className="absolute left-2 z-10 p-2 text-white hover:text-gray-300 bg-black/50 hover:bg-black/70 rounded-full transition-all"
+                            >
+                                <ChevronLeft className="w-8 h-8" />
+                            </button>
+                        )}
+                        
+                        <img 
+                            src={selectedImages[currentImageIndex]} 
+                            alt={`Documento de Entrada ${currentImageIndex + 1}`} 
+                            className="object-contain max-w-full max-h-[80vh] rounded-lg bg-white"
+                        />
+                        
+                        {selectedImages.length > 1 && (
+                            <button 
+                                onClick={(e) => { e.stopPropagation(); setCurrentImageIndex(prev => prev < selectedImages.length - 1 ? prev + 1 : 0); }}
+                                className="absolute right-2 z-10 p-2 text-white hover:text-gray-300 bg-black/50 hover:bg-black/70 rounded-full transition-all"
+                            >
+                                <ChevronRight className="w-8 h-8" />
+                            </button>
+                        )}
+                    </div>
+                    
+                    {selectedImages.length > 1 && (
+                        <div className="mt-4 text-white font-medium bg-black/50 px-4 py-1 rounded-full">
+                            {currentImageIndex + 1} / {selectedImages.length}
+                        </div>
+                    )}
+                    
                     <div className="mt-4 flex justify-center">
                         <a 
-                            href={selectedImage} 
+                            href={selectedImages[currentImageIndex]} 
                             download={`comprovativo_entrada_${Date.now()}.jpg`}
                             className="bg-white text-black px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-100"
                         >
@@ -282,19 +311,23 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                                         <button 
                                             onClick={(e) => { 
                                                 e.stopPropagation(); 
-                                                // Find first pedido with an image
+                                                // Collect all images from the group
+                                                const images: string[] = [];
                                                 for (const r of group) {
                                                     const pedidos = r.pedidos ? (Array.isArray(r.pedidos) ? r.pedidos : Object.values(r.pedidos)) : [];
                                                     for (const p of pedidos) {
                                                         if ((p as any).documentImage) {
-                                                            setSelectedImage((p as any).documentImage);
-                                                            return;
+                                                            images.push((p as any).documentImage);
                                                         }
                                                     }
                                                 }
+                                                if (images.length > 0) {
+                                                    setSelectedImages(images);
+                                                    setCurrentImageIndex(0);
+                                                }
                                             }}
                                             className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-full transition-colors"
-                                            title="Ver Comprovativo"
+                                            title="Ver Comprovativos"
                                         >
                                             <ImageIcon className="w-5 h-5" />
                                         </button>
