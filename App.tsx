@@ -212,8 +212,19 @@ const App: React.FC = () => {
 
   // --- FILTERED ORDERS LOGIC ---
   const visibleOrders = orders.filter(o => {
-      // Admins and Warehouse/Management usually see all, but let's respect company scope for non-admins
+      // Admins usually see all
       if (user?.role === UserRole.ADMIN) return true;
+      
+      const isFinished = o.status === 'COMPLETED';
+      const canViewAll = isFinished ? currentPermissions.canViewFinishedOrders : currentPermissions.canViewOpenOrders;
+      const canViewOwn = isFinished ? currentPermissions.canViewOwnFinishedOrders : currentPermissions.canViewOwnOpenOrders;
+      
+      if (!canViewAll && !canViewOwn) return false;
+      
+      if (!canViewAll && canViewOwn) {
+          if (o.creator !== user?.username) return false;
+      }
+
       if (user?.role === UserRole.WAREHOUSE || user?.role === UserRole.MANAGEMENT) return true;
       return !o.companyId || o.companyId === user?.companyId;
   });
@@ -286,7 +297,7 @@ const App: React.FC = () => {
             />
           ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'OPEN_ORDERS':
-        return currentPermissions.canViewOpenOrders ? (
+        return (currentPermissions.canViewOpenOrders || currentPermissions.canViewOwnOpenOrders) ? (
           <OrderManager 
             orders={visibleOrders} 
             allActiveOrders={orders} 
@@ -305,7 +316,7 @@ const App: React.FC = () => {
           />
         ) : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'FINISHED_ORDERS':
-        return currentPermissions.canViewFinishedOrders ? (
+        return (currentPermissions.canViewFinishedOrders || currentPermissions.canViewOwnFinishedOrders) ? (
           <OrderManager 
             orders={visibleOrders} 
             allActiveOrders={orders} 

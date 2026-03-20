@@ -84,7 +84,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
                     </button>
                 )}
 
-                {permissions?.canViewOpenOrders && (
+                {(permissions?.canViewOpenOrders || permissions?.canViewOwnOpenOrders) && (
                     <StatCard 
                         title="Pedidos Abertos" 
                         value={stats.totalOpenCount} 
@@ -115,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
                     </StatCard>
                 )}
 
-                {permissions?.canViewFinishedOrders && (
+                {(permissions?.canViewFinishedOrders || permissions?.canViewOwnFinishedOrders) && (
                     <StatCard 
                         title="Pedidos Finalizados" 
                         value={stats.finishedCount} 

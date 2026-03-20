@@ -156,7 +156,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
               )}
               
               {/* Nested Warehouse Group - Only show if at least one sub-permission is true */}
-              {(permissions.canCreateOrder || permissions.canViewOpenOrders || permissions.canViewFinishedOrders) && (
+              {(permissions.canCreateOrder || permissions.canViewOpenOrders || permissions.canViewOwnOpenOrders || permissions.canViewFinishedOrders || permissions.canViewOwnFinishedOrders) && (
                   <div className="space-y-1">
                       <button
                         onClick={() => setIsWarehouseGroupOpen(!isWarehouseGroupOpen)}
@@ -187,7 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                                     isChild={true}
                                 />
                             )}
-                            {permissions.canViewOpenOrders && (
+                            {(permissions.canViewOpenOrders || permissions.canViewOwnOpenOrders) && (
                                 <NavItem 
                                     view="OPEN_ORDERS" 
                                     icon={ShoppingCart} 
@@ -197,7 +197,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                                     isChild={true}
                                 />
                             )}
-                            {permissions.canViewFinishedOrders && (
+                            {(permissions.canViewFinishedOrders || permissions.canViewOwnFinishedOrders) && (
                                 <NavItem 
                                     view="FINISHED_ORDERS" 
                                     icon={CheckCircle} 

@@ -180,7 +180,9 @@ export interface Receipt {
 export interface RolePermissions {
     canCreateOrder: boolean;
     canViewOpenOrders: boolean;
+    canViewOwnOpenOrders: boolean;
     canViewFinishedOrders: boolean;
+    canViewOwnFinishedOrders: boolean;
     canCreatePurchaseOrder: boolean;
     canViewStock: boolean;
     canManageStock: boolean; // Upload/Edit

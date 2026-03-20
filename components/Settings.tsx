@@ -158,7 +158,9 @@ const Settings: React.FC = () => {
       const newPermissions: RolePermissions = {
           canCreateOrder: false,
           canViewOpenOrders: false,
+          canViewOwnOpenOrders: false,
           canViewFinishedOrders: false,
+          canViewOwnFinishedOrders: false,
           canCreatePurchaseOrder: false,
           canViewStock: false,
           canManageStock: false,
@@ -357,7 +359,9 @@ const Settings: React.FC = () => {
   const PERMISSION_LABELS: Record<keyof RolePermissions, string> = {
       canCreateOrder: "Criar Pedidos Armazém",
       canViewOpenOrders: "Ver Pedidos Abertos",
+      canViewOwnOpenOrders: "Ver Pedidos Abertos (User)",
       canViewFinishedOrders: "Ver Pedidos Finalizados",
+      canViewOwnFinishedOrders: "Ver Pedidos Finalizados (User)",
       canCreatePurchaseOrder: "Criar Pedidos Compra",
       canViewStock: "Visualizar Stock",
       canManageStock: "Gerir Stock (Upload)",

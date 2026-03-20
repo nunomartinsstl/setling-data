@@ -108,20 +108,20 @@ export const MATERIAL_CATEGORIES = DEFAULT_CATEGORIES;
 // DEFAULT PERMISSIONS (Fallback if not in DB)
 export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
     [UserRole.ADMIN]: {
-        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: true, canManageSettings: true
+        canCreateOrder: true, canViewOpenOrders: true, canViewOwnOpenOrders: true, canViewFinishedOrders: true, canViewOwnFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: true, canManageSettings: true
     },
     [UserRole.MANAGEMENT]: {
-        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
+        canCreateOrder: true, canViewOpenOrders: true, canViewOwnOpenOrders: true, canViewFinishedOrders: true, canViewOwnFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
     },
     [UserRole.WAREHOUSE]: {
-        canCreateOrder: true, canViewOpenOrders: true, canViewFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
+        canCreateOrder: true, canViewOpenOrders: true, canViewOwnOpenOrders: true, canViewFinishedOrders: true, canViewOwnFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: true, canViewReceipts: true, canViewTransfers: true, canViewShortages: true, canSearch: true, canManageUsers: false, canManageSettings: false
     },
     [UserRole.TECHNICAL]: {
         // UPDATED: Now includes canCreatePurchaseOrder: true
-        canCreateOrder: true, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: true, canManageUsers: false, canManageSettings: false
+        canCreateOrder: true, canViewOpenOrders: false, canViewOwnOpenOrders: true, canViewFinishedOrders: false, canViewOwnFinishedOrders: true, canCreatePurchaseOrder: true, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: true, canManageUsers: false, canManageSettings: false
     },
     [UserRole.VIEWER]: {
-        canCreateOrder: false, canViewOpenOrders: false, canViewFinishedOrders: false, canCreatePurchaseOrder: false, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: false, canManageUsers: false, canManageSettings: false
+        canCreateOrder: false, canViewOpenOrders: false, canViewOwnOpenOrders: false, canViewFinishedOrders: false, canViewOwnFinishedOrders: false, canCreatePurchaseOrder: false, canViewStock: true, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: false, canManageUsers: false, canManageSettings: false
     }
 };
 
