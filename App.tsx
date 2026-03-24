@@ -13,7 +13,7 @@ import PurchaseOrderManager from './components/PurchaseOrderManager';
 import ShortagesReport from './components/ShortagesReport';
 import ReceiptsManager from './components/ReceiptsManager';
 import TransfersManager from './components/TransfersManager';
-import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS } from './services/storageService';
+import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS, EMPTY_PERMISSIONS } from './services/storageService';
 import { calculateShortages } from './src/utils/inventory';
 
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
@@ -32,7 +32,7 @@ const App: React.FC = () => {
   const [companies, setCompanies] = useState<Company[]>([]); // Store companies
   const [categories, setCategories] = useState<CategoryOption[]>(DEFAULT_CATEGORIES);
   const [allUsers, setAllUsers] = useState<User[]>([]); // Store all users for lookups
-  const [currentPermissions, setCurrentPermissions] = useState<RolePermissions>(DEFAULT_PERMISSIONS[UserRole.VIEWER]);
+  const [currentPermissions, setCurrentPermissions] = useState<RolePermissions>(EMPTY_PERMISSIONS);
   
   const [loading, setLoading] = useState(false);
   const [authChecking, setAuthChecking] = useState(true);
@@ -98,7 +98,7 @@ const App: React.FC = () => {
       if (user && fetchedSettings.permissions && fetchedSettings.permissions[user.role]) {
           setCurrentPermissions(fetchedSettings.permissions[user.role]);
       } else if (user) {
-          setCurrentPermissions(DEFAULT_PERMISSIONS[user.role] || DEFAULT_PERMISSIONS[UserRole.VIEWER]);
+          setCurrentPermissions(EMPTY_PERMISSIONS);
       }
 
       // 2. Fetch sensitive data independently (Receipts, Users)
@@ -110,7 +110,7 @@ const App: React.FC = () => {
 
       try {
           // Check dynamic permission instead of hardcoded role
-          if (fetchedSettings.permissions?.[user?.role || UserRole.VIEWER]?.canViewReceipts ?? DEFAULT_PERMISSIONS[user?.role || UserRole.VIEWER].canViewReceipts) {
+          if (fetchedSettings.permissions?.[user?.role || '']?.canViewReceipts ?? false) {
               fetchedReceipts = await StorageService.getReceipts();
           }
       } catch (e) {
@@ -118,7 +118,7 @@ const App: React.FC = () => {
       }
 
       try {
-          if (fetchedSettings.permissions?.[user?.role || UserRole.VIEWER]?.canViewTransfers ?? DEFAULT_PERMISSIONS[user?.role || UserRole.VIEWER].canViewTransfers) {
+          if (fetchedSettings.permissions?.[user?.role || '']?.canViewTransfers ?? false) {
               fetchedTransfers = await StorageService.getTransfers();
           }
       } catch (e) {
@@ -126,7 +126,7 @@ const App: React.FC = () => {
       }
 
       try {
-          if (fetchedSettings.permissions?.[user?.role || UserRole.VIEWER]?.canManageUsers ?? DEFAULT_PERMISSIONS[user?.role || UserRole.VIEWER].canManageUsers) {
+          if (fetchedSettings.permissions?.[user?.role || '']?.canManageUsers ?? false) {
               fetchedUsers = await StorageService.getUsers();
           } else if (user?.role === UserRole.TECHNICAL || user?.role === UserRole.MANAGEMENT) {
               // Technicians need a restricted list of supervisors, so we might need a separate call or allow reading users but not editing

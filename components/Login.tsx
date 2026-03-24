@@ -17,6 +17,10 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   
+  // Reset Password State
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [resetMessage, setResetMessage] = useState('');
+
   // Register State
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -137,6 +141,31 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
       if (r === UserRole.TECHNICAL) return Wrench;
       if (r === UserRole.ADMIN) return ShieldCheck;
       return UserIcon;
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTouched(true);
+    setError('');
+    setResetMessage('');
+
+    if (!loginIdentifier) {
+        setError('Por favor, insira o seu email para recuperar a senha.');
+        return;
+    }
+
+    setIsLoading(true);
+    try {
+        await StorageService.sendPasswordResetEmail(loginIdentifier);
+        setResetMessage('Email de recuperação enviado! Verifique a sua caixa de entrada.');
+    } catch (err: any) {
+        let msg = err.message;
+        if (msg.includes('auth/user-not-found')) msg = "Utilizador não encontrado.";
+        else if (msg.includes('auth/invalid-email')) msg = "Formato de email inválido.";
+        setError(msg);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -276,26 +305,71 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                 <h2 className="text-blue-500 font-bold text-lg -mt-2 tracking-widest opacity-80">GESTÃO DE PEDIDOS</h2>
             </div>
             
-            {/* Toggle */}
-            <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg mb-6 mt-4">
-                <button 
-                    type="button"
-                    onClick={() => { setIsRegistering(false); setError(''); setTouched(false); }}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                >
-                    Entrar
-                </button>
-                <button 
-                    type="button"
-                    onClick={() => { setIsRegistering(true); setError(''); setTouched(false); }}
-                    className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
-                >
-                    Criar Conta
-                </button>
-            </div>
+            {isResettingPassword ? (
+                <form onSubmit={handleResetPassword} className="space-y-4 animate-fade-in">
+                    <div className="text-center mb-4">
+                        <h3 className="text-lg font-semibold text-slate-800 dark:text-white">Recuperar Senha</h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Insira o seu email para receber um link de recuperação.</p>
+                    </div>
+                    <div>
+                        <label className={labelClass(loginIdentifier)}>Email</label>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
+                            <input
+                                type="email"
+                                value={loginIdentifier}
+                                onChange={(e) => setLoginIdentifier(e.target.value)}
+                                className={`pl-10 ${inputClass(loginIdentifier)}`}
+                                placeholder="seu@email.com"
+                            />
+                        </div>
+                    </div>
+                    
+                    {resetMessage && (
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm rounded-md border border-green-200 dark:border-green-800">
+                            {resetMessage}
+                        </div>
+                    )}
 
-            {isRegistering ? (
-                <form onSubmit={handleRegister} className="space-y-4 animate-fade-in">
+                    <div className="flex flex-col gap-2 pt-2">
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                        >
+                            {isLoading ? 'Enviando...' : 'Enviar Link'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setIsResettingPassword(false); setError(''); setResetMessage(''); }}
+                            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors font-medium"
+                        >
+                            Voltar ao Login
+                        </button>
+                    </div>
+                </form>
+            ) : (
+                <>
+                    {/* Toggle */}
+                    <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg mb-6 mt-4">
+                        <button 
+                            type="button"
+                            onClick={() => { setIsRegistering(false); setError(''); setTouched(false); }}
+                            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            Entrar
+                        </button>
+                        <button 
+                            type="button"
+                            onClick={() => { setIsRegistering(true); setError(''); setTouched(false); }}
+                            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                        >
+                            Criar Conta
+                        </button>
+                    </div>
+
+                    {isRegistering ? (
+                        <form onSubmit={handleRegister} className="space-y-4 animate-fade-in">
                     <div>
                         <label className={labelClass(email)}>Email*</label>
                         <div className="relative">
@@ -498,7 +572,17 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         </div>
                     </div>
                     <div>
-                        <label className={labelClass(loginPassword)}>Senha</label>
+                        <div className="flex justify-between items-center">
+                            <label className={labelClass(loginPassword)}>Senha</label>
+                            <button
+                                type="button"
+                                onClick={() => { setIsResettingPassword(true); setError(''); setTouched(false); }}
+                                className="text-xs text-brand-600 dark:text-brand-400 hover:underline focus:outline-none"
+                                tabIndex={-1}
+                            >
+                                Esqueceu a senha?
+                            </button>
+                        </div>
                         <div className="relative">
                             <input
                                 type={showLoginPassword ? "text" : "password"}
@@ -526,6 +610,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         {isLoading ? 'Entrando...' : <><LogIn className="w-4 h-4" /> Entrar</>}
                     </button>
                 </form>
+            )}
+            </>
             )}
 
             {error && (

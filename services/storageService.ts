@@ -105,6 +105,10 @@ export const DEFAULT_CATEGORIES = [
 // Re-export for compatibility
 export const MATERIAL_CATEGORIES = DEFAULT_CATEGORIES;
 
+export const EMPTY_PERMISSIONS: RolePermissions = {
+    canCreateOrder: false, canViewOpenOrders: false, canViewOwnOpenOrders: false, canViewFinishedOrders: false, canViewOwnFinishedOrders: false, canCreatePurchaseOrder: false, canViewStock: false, canManageStock: false, canViewReceipts: false, canViewTransfers: false, canViewShortages: false, canSearch: false, canManageUsers: false, canManageSettings: false
+};
+
 // DEFAULT PERMISSIONS (Fallback if not in DB)
 export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
     [UserRole.ADMIN]: {
@@ -185,6 +189,12 @@ export const StorageService = {
     const cred = await auth.signInWithEmailAndPassword(identifier, password);
     const snapshot = await db.ref(`${KEYS.USERS}/${cred.user!.uid}`).get();
     return snapshot.val() as User;
+  },
+
+  sendPasswordResetEmail: async (email: string) => {
+    if (!auth) throw new Error("Serviço offline.");
+    if (!email || !email.includes('@')) throw new Error("Por favor, insira um email válido.");
+    await auth.sendPasswordResetEmail(email);
   },
 
   registerUser: async (email: string, password: string, firstName: string, lastName: string, role: UserRole, adminCode: string, companyId: string) => {
@@ -374,16 +384,22 @@ export const StorageService = {
       if (!val.permissions) {
           val.permissions = DEFAULT_PERMISSIONS;
       } else {
-          // Merge deep to ensure new roles/keys are added to existing config
-          Object.keys(DEFAULT_PERMISSIONS).forEach((role) => {
+          // Merge deep to ensure new keys are added to existing config, but don't re-add deleted roles
+          Object.keys(val.permissions).forEach((role) => {
               const r = role as UserRole;
-              if (!val.permissions[r]) {
-                  val.permissions[r] = DEFAULT_PERMISSIONS[r];
-              } else {
+              if (DEFAULT_PERMISSIONS[r]) {
                   // Ensure all keys exist within role
                   val.permissions[r] = { ...DEFAULT_PERMISSIONS[r], ...val.permissions[r] };
+              } else {
+                  // For custom roles, ensure they have all keys from a base role (like VIEWER)
+                  val.permissions[r] = { ...EMPTY_PERMISSIONS, ...val.permissions[r] };
               }
           });
+          
+          // Ensure ADMIN always exists
+          if (!val.permissions[UserRole.ADMIN]) {
+              val.permissions[UserRole.ADMIN] = DEFAULT_PERMISSIONS[UserRole.ADMIN];
+          }
       }
 
       return val;
