@@ -66,8 +66,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
 
   return (
     <div className="space-y-8 animate-fade-in">
-      <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Controlo de Pedidos</h2>
-
       {/* Group 1: Pedidos ao Armazém */}
       <div className="space-y-3">
           <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">

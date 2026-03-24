@@ -149,7 +149,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                   <NavItem 
                     view="DASHBOARD" 
                     icon={LayoutDashboard} 
-                    label="Painel" 
+                    label="Dashboard" 
                     isActive={currentView === 'DASHBOARD'} 
                     onClick={() => handleNavClick('DASHBOARD')} 
                   />
