@@ -202,66 +202,13 @@ export const StorageService = {
       
       let uid = '';
       let userCredential;
+      let isOrphan = false;
 
       try {
           // 1. Attempt standard registration (Creates Auth User)
           userCredential = await auth.createUserWithEmailAndPassword(email, password);
           uid = userCredential.user!.uid;
-          
-          // --- SECURITY CHECKS (Post-Auth, Pre-DB) ---
-          try {
-              // A. Validate Admin Code
-              if (role === UserRole.ADMIN) {
-                  const settingsSnap = await db.ref(KEYS.SETTINGS).get();
-                  const settings = settingsSnap.val() || {};
-                  // Default code if not set: "admin123" (Should be changed!)
-                  const validCode = settings.adminAccessCode; 
-                  
-                  if (!validCode) {
-                       // If no code is configured in DB, we might block or allow. 
-                       // Safe default: Block if input is empty, or warn.
-                       // For now, let's assume if DB has no code, we can't verify, so we block to be safe 
-                       // UNLESS it's the very first setup (bootstrap).
-                       // Let's check if any users exist.
-                       const usersSnap = await db.ref(KEYS.USERS).limitToFirst(1).get();
-                       if (usersSnap.exists()) {
-                           throw new Error("Erro de configuração: Código Mestre não definido no sistema.");
-                       }
-                       // If no users exist, allow first admin (Bootstrap)
-                  } else if (adminCode !== validCode) {
-                      throw new Error("Código de Acesso Mestre incorreto.");
-                  }
-              } 
-              // B. Validate Invite (Non-Admin)
-              else {
-                  // Check for invite
-                  const inviteSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
-                  if (!inviteSnap.exists()) {
-                      throw new Error("Este email não possui um convite válido. Peça ao Administrador.");
-                  }
-                  
-                  // Optional: Validate Role matches Invite?
-                  // For now, we just ensure they were invited. 
-                  // We could also enforce the role from the invite:
-                  const inviteKey = Object.keys(inviteSnap.val())[0];
-                  const inviteData = inviteSnap.val()[inviteKey];
-                  
-                  // Consume Invite (Delete it so it can't be reused)
-                  await db.ref(`${KEYS.INVITES}/${inviteKey}`).remove();
-                  
-                  // Force role from invite to prevent client-side tampering
-                  if (inviteData.role) {
-                      role = inviteData.role; 
-                  }
-              }
-          } catch (securityErr) {
-              // ROLLBACK: Delete the Auth user if security checks fail
-              await userCredential.user!.delete();
-              throw securityErr;
-          }
-
       } catch (err: any) {
-          // ... (existing error handling for email-already-in-use) ...
           if (err.code === 'auth/email-already-in-use') {
               try {
                   const loginCred = await auth.signInWithEmailAndPassword(email, password);
@@ -271,9 +218,7 @@ export const StorageService = {
                       console.log("Recuperando utilizador órfão (Auth sem DB).");
                       uid = loginCred.user!.uid;
                       userCredential = loginCred;
-                      
-                      // Note: We skip security checks here because they already proved ownership 
-                      // of an existing Auth account. We assume they passed checks originally.
+                      isOrphan = true;
                   } else {
                       throw new Error("Este email já está em uso.");
                   }
@@ -284,6 +229,49 @@ export const StorageService = {
           } else {
               throw err;
           }
+      }
+
+      // --- SECURITY CHECKS (Post-Auth, Pre-DB) ---
+      try {
+          // A. Validate Admin Code
+          if (role === UserRole.ADMIN) {
+              const settingsSnap = await db.ref(KEYS.SETTINGS).get();
+              const settings = settingsSnap.val() || {};
+              const validCode = settings.adminAccessCode; 
+              
+              if (!validCode) {
+                   const usersSnap = await db.ref(KEYS.USERS).limitToFirst(1).get();
+                   if (usersSnap.exists()) {
+                       throw new Error("Erro de configuração: Código Mestre não definido no sistema.");
+                   }
+              } else if (adminCode !== validCode) {
+                  throw new Error("Código de Acesso Mestre incorreto.");
+              }
+          } 
+          // B. Validate Invite (Non-Admin)
+          else {
+              const inviteSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
+              if (!inviteSnap.exists()) {
+                  throw new Error("Este email não possui um convite válido. Peça ao Administrador para enviar um novo convite.");
+              }
+              
+              const inviteKey = Object.keys(inviteSnap.val())[0];
+              const inviteData = inviteSnap.val()[inviteKey];
+              
+              // Consume Invite (Delete it so it can't be reused)
+              await db.ref(`${KEYS.INVITES}/${inviteKey}`).remove();
+              
+              // Force role from invite to prevent client-side tampering
+              if (inviteData.role) {
+                  role = inviteData.role; 
+              }
+          }
+      } catch (securityErr) {
+          // ROLLBACK: Delete the Auth user if security checks fail
+          if (userCredential && userCredential.user) {
+              await userCredential.user.delete();
+          }
+          throw securityErr;
       }
 
       // --- SMART RECOVERY: Check if this email existed in DB (Auth deleted, DB remained) ---
@@ -347,7 +335,23 @@ export const StorageService = {
               role,
               companyId
           };
-          await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
+          try {
+              await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
+          } catch (dbErr) {
+              console.error("Failed to save user to DB, rolling back Auth", dbErr);
+              if (userCredential && userCredential.user) {
+                  await userCredential.user.delete();
+              }
+              // Restore invite if it was consumed
+              if (role !== UserRole.ADMIN) {
+                  try {
+                      await db.ref(KEYS.INVITES).push().set({ email, role, createdAt: new Date().toISOString() });
+                  } catch (restoreErr) {
+                      console.error("Failed to restore invite", restoreErr);
+                  }
+              }
+              throw new Error("Erro ao guardar dados do utilizador. O registo foi cancelado.");
+          }
       }
 
       // 3. Update Public Mapping (Username -> Email)

@@ -428,30 +428,20 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">Função</label>
-                        <div className="grid grid-cols-2 gap-2">
-                            {availableRoles.map(r => {
-                                const Icon = getRoleIcon(r);
-                                const isSelected = role === r;
-                                let colorClass = 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700';
-                                
-                                if (isSelected) {
-                                    if (r === UserRole.WAREHOUSE) colorClass = 'border-amber-500 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300';
-                                    else if (r === UserRole.TECHNICAL) colorClass = 'border-cyan-500 bg-cyan-50 dark:bg-cyan-900/20 text-cyan-700 dark:text-cyan-300';
-                                    else if (r === UserRole.MANAGEMENT) colorClass = 'border-brand-500 bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-300';
-                                    else if (r === UserRole.ADMIN) colorClass = 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300';
-                                    else colorClass = 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300';
-                                }
-
-                                return (
-                                    <label key={r} className={`cursor-pointer border rounded-md p-2 flex flex-col items-center justify-center gap-1 transition-all ${colorClass}`}>
-                                        <input type="radio" name="role" className="hidden" checked={isSelected} onChange={() => setRole(r as UserRole)} />
-                                        <Icon className={`w-4 h-4 ${!isSelected ? 'text-slate-500 dark:text-slate-400' : ''}`} />
-                                        <span className={`font-semibold text-xs ${!isSelected ? 'text-slate-500 dark:text-slate-400' : ''}`}>{getRoleLabel(r)}</span>
-                                    </label>
-                                );
-                            })}
-                        </div>
+                        <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
+                            <input 
+                                type="checkbox" 
+                                checked={role === UserRole.ADMIN}
+                                onChange={(e) => setRole(e.target.checked ? UserRole.ADMIN : UserRole.VIEWER)}
+                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                            />
+                            <span className="font-semibold">Registar como Administrador</span>
+                        </label>
+                        {role !== UserRole.ADMIN && (
+                            <p className="text-xs text-slate-500 mt-1">
+                                A sua função será atribuída automaticamente com base no convite recebido.
+                            </p>
+                        )}
                     </div>
 
                     {role !== UserRole.ADMIN && (
