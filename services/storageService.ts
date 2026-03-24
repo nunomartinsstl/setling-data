@@ -150,28 +150,46 @@ export const StorageService = {
         callback(null);
         return () => {};
     }
-    return auth.onAuthStateChanged(async (firebaseUser) => {
+
+    let dbUnsubscribe: (() => void) | null = null;
+
+    const authUnsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      // Clean up previous DB listener if it exists
+      if (dbUnsubscribe) {
+          dbUnsubscribe();
+          dbUnsubscribe = null;
+      }
+
       if (firebaseUser && db) {
-        try {
-            const snapshot = await db.ref(`${KEYS.USERS}/${firebaseUser.uid}`).get();
+        const userRef = db.ref(`${KEYS.USERS}/${firebaseUser.uid}`);
+        
+        const listener = userRef.on('value', (snapshot) => {
             if (snapshot.exists()) {
-            callback(snapshot.val() as User);
+                callback(snapshot.val() as User);
             } else {
-            callback({
-                uid: firebaseUser.uid,
-                email: firebaseUser.email || '',
-                username: firebaseUser.displayName || 'User',
-                role: UserRole.VIEWER
-            });
+                // Return a temporary VIEWER user while the profile is being created
+                callback({
+                    uid: firebaseUser.uid,
+                    email: firebaseUser.email || '',
+                    username: firebaseUser.displayName || 'User',
+                    role: UserRole.VIEWER
+                });
             }
-        } catch (e) {
-            console.error("Error fetching user profile:", e);
+        }, (error) => {
+            console.error("Error fetching user profile:", error);
             callback(null);
-        }
+        });
+
+        dbUnsubscribe = () => userRef.off('value', listener);
       } else {
         callback(null);
       }
     });
+
+    return () => {
+        authUnsubscribe();
+        if (dbUnsubscribe) dbUnsubscribe();
+    };
   },
 
   logout: async () => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, Briefcase } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck } from 'lucide-react';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 
@@ -245,9 +245,7 @@ const UsersManager: React.FC = () => {
                                     <th className="p-4 w-[15%]">Empresa</th>
                                     <th className="p-4 w-[15%]">Função</th>
                                     <th className="p-4 w-[20%]">
-                                        <div className="flex items-center gap-1">
-                                            <Briefcase className="w-3 h-3"/> Supervisor (Chefia)
-                                        </div>
+                                        Supervisor (Chefia)
                                     </th>
                                     <th className="p-4 text-center w-[10%]">Ações</th>
                                 </tr>
@@ -315,34 +313,30 @@ const UsersManager: React.FC = () => {
                                                 </select>
                                             </td>
                                             
-                                            {/* SUPERVISOR SELECTOR (Only for Technical) */}
+                                            {/* SUPERVISOR SELECTOR */}
                                             <td className="p-4">
-                                                {isTechnical ? (
-                                                    <div className="relative w-full">
-                                                        <select
-                                                            value={user.supervisorId || ''}
-                                                            onChange={(e) => handleChangeSupervisor(user, e.target.value)}
-                                                            disabled={isProcessing}
-                                                            className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded bg-white dark:bg-slate-800 focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
-                                                                !user.supervisorId 
-                                                                ? 'border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-900/10' 
-                                                                : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
-                                                            }`}
-                                                        >
-                                                            <option value="">-- Selecione Chefia --</option>
-                                                            {availableSupervisors.map(m => (
-                                                                <option key={m.uid} value={m.uid}>
-                                                                    {m.firstName} {m.lastName} ({m.username})
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        <div className="absolute right-2 top-2 pointer-events-none text-slate-400">
-                                                            <ChevronDown className="w-3 h-3" />
-                                                        </div>
+                                                <div className="relative w-full">
+                                                    <select
+                                                        value={user.supervisorId || ''}
+                                                        onChange={(e) => handleChangeSupervisor(user, e.target.value)}
+                                                        disabled={isProcessing}
+                                                        className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded bg-white dark:bg-slate-800 focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
+                                                            !user.supervisorId 
+                                                            ? 'border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-900/10' 
+                                                            : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                                                        }`}
+                                                    >
+                                                        <option value="">-- Selecione Chefia --</option>
+                                                        {availableSupervisors.map(m => (
+                                                            <option key={m.uid} value={m.uid}>
+                                                                {m.firstName} {m.lastName} ({m.username})
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                    <div className="absolute right-2 top-2 pointer-events-none text-slate-400">
+                                                        <ChevronDown className="w-3 h-3" />
                                                     </div>
-                                                ) : (
-                                                    <span className="text-slate-300 text-xs italic pl-2">N/A</span>
-                                                )}
+                                                </div>
                                             </td>
 
                                             <td className="p-4 text-center">
