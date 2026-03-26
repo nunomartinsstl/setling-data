@@ -37,6 +37,9 @@ const Settings: React.FC = () => {
   // Permissions
   const [permissions, setPermissions] = useState<Record<string, RolePermissions>>(DEFAULT_PERMISSIONS);
   const [newRoleName, setNewRoleName] = useState('');
+  
+  // Supervisor Roles
+  const [supervisorRoles, setSupervisorRoles] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
@@ -71,6 +74,7 @@ const Settings: React.FC = () => {
             approvalRules: approvalRules,
             permissions: permissions,
             synonyms: synonyms,
+            supervisorRoles: supervisorRoles,
             autoDecrementStock: true 
         });
         setMessage('Configurações salvas automaticamente.');
@@ -83,7 +87,7 @@ const Settings: React.FC = () => {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [recipients, companies, adminAccessCode, unitOptions, suppliers, categories, approvalRules, permissions, synonyms, isLoaded]);
+  }, [recipients, companies, adminAccessCode, unitOptions, suppliers, categories, approvalRules, permissions, synonyms, supervisorRoles, isLoaded]);
 
   const loadSettings = async () => {
     const settings = await StorageService.getSettings();
@@ -126,6 +130,9 @@ const Settings: React.FC = () => {
 
     // Load Synonyms
     setSynonyms(settings.synonyms || []);
+    
+    // Load Supervisor Roles
+    setSupervisorRoles(settings.supervisorRoles || [UserRole.ADMIN, UserRole.MANAGEMENT]);
     
     setIsLoaded(true);
   };
@@ -485,6 +492,35 @@ const Settings: React.FC = () => {
                     ))}
                 </tbody>
             </table>
+        </div>
+      </div>
+
+      {/* SUPERVISOR ROLES */}
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+        <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
+            <ShieldCheck className="w-5 h-5 text-blue-600"/> Chefias / Supervisores
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            Selecione quais funções podem atuar como Chefia/Supervisor de outros utilizadores.
+        </p>
+        <div className="flex flex-wrap gap-3">
+            {Object.keys(permissions).map(role => (
+                <label key={role} className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                    <input 
+                        type="checkbox"
+                        checked={supervisorRoles.includes(role)}
+                        onChange={(e) => {
+                            if (e.target.checked) {
+                                setSupervisorRoles([...supervisorRoles, role]);
+                            } else {
+                                setSupervisorRoles(supervisorRoles.filter(r => r !== role));
+                            }
+                        }}
+                        className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                    />
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{getRoleLabel(role)}</span>
+                </label>
+            ))}
         </div>
       </div>
 

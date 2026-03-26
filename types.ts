@@ -211,6 +211,7 @@ export interface AppSettings {
   approvalRules?: ApprovalRule[];
   permissions?: Record<UserRole, RolePermissions>;
   synonyms?: SynonymGroup[];
+  supervisorRoles?: string[];
 }
 
 export interface Transfer {

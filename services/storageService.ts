@@ -215,6 +215,94 @@ export const StorageService = {
     await auth.sendPasswordResetEmail(email);
   },
 
+  completeRegistration: async (email: string, code: string, password: string) => {
+      if (!auth || !db) throw new Error("Serviço offline.");
+
+      // 1. Verify the code and email in INVITES
+      const inviteSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
+      if (!inviteSnap.exists()) {
+          throw new Error("Não foi encontrado nenhum convite para este email.");
+      }
+
+      let validInviteKey = null;
+      let inviteData = null;
+
+      inviteSnap.forEach((child) => {
+          const data = child.val();
+          if (data.code === code) {
+              validInviteKey = child.key;
+              inviteData = data;
+          }
+      });
+
+      if (!validInviteKey || !inviteData) {
+          throw new Error("Código de acesso inválido.");
+      }
+
+      let uid = '';
+      let userCredential;
+
+      // 2. Create Auth User
+      try {
+          userCredential = await auth.createUserWithEmailAndPassword(email, password);
+          uid = userCredential.user!.uid;
+      } catch (err: any) {
+          if (err.code === 'auth/email-already-in-use') {
+              throw new Error("Este email já está registado. Se esqueceu a senha, use a opção de recuperar senha.");
+          }
+          throw err;
+      }
+
+      // 3. Create DB User Profile
+      try {
+          // Generate username
+          const usersSnap = await db.ref(KEYS.USERS).get();
+          const existingUsernames = new Set<string>();
+          if (usersSnap.exists()) {
+              usersSnap.forEach((child) => {
+                  const u = child.val();
+                  if (u.username) existingUsernames.add(u.username.toLowerCase());
+              });
+          }
+
+          const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
+          let baseUsername = `${norm(inviteData.firstName || 'user')}-${norm(inviteData.lastName || '')}`;
+          if (baseUsername.endsWith('-')) baseUsername = baseUsername.slice(0, -1);
+          let username = baseUsername;
+          let counter = 2;
+          
+          while (existingUsernames.has(username)) {
+              username = `${baseUsername}${counter}`;
+              counter++;
+          }
+
+          const newUser: User = {
+              uid,
+              email,
+              username,
+              firstName: inviteData.firstName || '',
+              lastName: inviteData.lastName || '',
+              role: inviteData.role || UserRole.WAREHOUSE,
+              companyId: inviteData.companyId || '',
+              supervisorId: inviteData.supervisorId || ''
+          };
+
+          await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
+
+          // 4. Consume Invite (Delete it)
+          await db.ref(`${KEYS.INVITES}/${validInviteKey}`).remove();
+
+          return newUser;
+
+      } catch (dbErr) {
+          // ROLLBACK: Delete the Auth user if DB creation fails
+          if (userCredential && userCredential.user) {
+              await userCredential.user.delete();
+          }
+          throw dbErr;
+      }
+  },
+
   registerUser: async (email: string, password: string, firstName: string, lastName: string, role: UserRole, adminCode: string, companyId: string) => {
       if (!auth || !db) throw new Error("Serviço offline.");
       
@@ -694,10 +782,22 @@ export const StorageService = {
   },
 
   // User Management
-  createInvite: async (email: string, role: UserRole) => {
-      if (!db) return;
+  createInvite: async (email: string, role: UserRole, firstName: string, lastName: string, companyId: string, supervisorId: string) => {
+      if (!db) return '';
+      // Generate a random 6-digit code
+      const code = Math.floor(100000 + Math.random() * 900000).toString();
       const newRef = db.ref(KEYS.INVITES).push();
-      await newRef.set({ email, role, createdAt: new Date().toISOString() });
+      await newRef.set({ 
+          email, 
+          role, 
+          firstName, 
+          lastName, 
+          companyId, 
+          supervisorId, 
+          code, 
+          createdAt: new Date().toISOString() 
+      });
+      return code;
   },
 
   updateUserRole: async (uid: string, role: UserRole) => {

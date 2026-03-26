@@ -23,20 +23,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
 
   // Register State
   const [email, setEmail] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showRegPassword, setShowRegPassword] = useState(false);
 
-  const [role, setRole] = useState<UserRole>(UserRole.WAREHOUSE);
   const [adminCode, setAdminCode] = useState('');
-  const [companyId, setCompanyId] = useState('');
 
   // Data
   const [companies, setCompanies] = useState<Company[]>([]);
   const [availableRoles, setAvailableRoles] = useState<string[]>(Object.values(UserRole));
-  const [existingUsernames, setExistingUsernames] = useState<Set<string>>(new Set());
 
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -79,23 +74,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   }, []);
 
   // Fetch usernames when entering registration mode to check for collisions
-  useEffect(() => {
-    if (isRegistering) {
-        const loadUsernames = async () => {
-            try {
-                const users = await StorageService.getUsers();
-                if (users && users.length > 0) {
-                    const names = new Set(users.map(u => u.username.toLowerCase()));
-                    setExistingUsernames(names);
-                }
-            } catch (e) {
-                // Warning expected if users list is private
-                console.warn("Could not load usernames for preview (likely permission issue)");
-            }
-        };
-        loadUsernames();
-    }
-  }, [isRegistering]);
+  // Removed useEffect for existingUsernames
 
   // Developer Helper: Log Hash when typing admin code
   useEffect(() => {
@@ -107,24 +86,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   }, [adminCode]);
 
   // Helper to preview username
-  const getPreviewUsername = () => {
-    const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
-    if (!firstName && !lastName) return '';
-    const first = norm(firstName);
-    const last = norm(lastName);
-    const base = `${first}-${last}`;
-
-    // Collision detection
-    if (existingUsernames.has(base)) {
-        let counter = 2;
-        while (existingUsernames.has(`${base}${counter}`) && counter < 50) {
-            counter++;
-        }
-        return `${base}${counter}`;
-    }
-
-    return base;
-  };
+  // Removed getPreviewUsername
 
   const getRoleLabel = (r: string) => {
       if (r === UserRole.MANAGEMENT) return 'Coordenação';
@@ -200,8 +162,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     setTouched(true);
     setError('');
     
-    if (!email || !firstName || !lastName || !regPassword || !confirmPassword) {
-        setError("Preencha os campos obrigatórios.");
+    if (!email || !adminCode || !regPassword || !confirmPassword) {
+        setError("Preencha todos os campos.");
         return;
     }
 
@@ -215,24 +177,22 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
         return;
     }
 
-    if (role === UserRole.ADMIN) {
-        if (!adminCode) {
-            setError("Administradores precisam do Código de Acesso Mestre.");
-            return;
-        }
-    } else {
-        // Non-admin roles must select a company
-        if (!companyId) {
-            setError("Selecione a sua empresa.");
-            return;
-        }
-    }
-
     setIsLoading(true);
 
     try {
-        // Automatically handles incremental usernames inside service
-        const user = await StorageService.registerUser(email, regPassword, firstName, lastName, role, adminCode, companyId);
+        let user;
+        try {
+            // 1. Try to complete registration using an invite code
+            user = await StorageService.completeRegistration(email, adminCode, regPassword);
+        } catch (inviteErr: any) {
+            // 2. If no invite found, check if it's the Master Code to create an Admin
+            if (inviteErr.message === "Não foi encontrado nenhum convite para este email.") {
+                user = await StorageService.registerUser(email, regPassword, "Admin", "", UserRole.ADMIN, adminCode, "");
+            } else {
+                throw inviteErr;
+            }
+        }
+
         localStorage.setItem('last_login_identifier', user.email); // Store email for next login convenience
         
         // SHOW SUCCESS SCREEN INSTEAD OF DIRECT LOGIN
@@ -263,7 +223,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     </div>
                 </div>
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Conta Criada!</h2>
-                <p className="text-slate-500 dark:text-slate-400 mb-6">Seu registo foi realizado com sucesso.</p>
+                <p className="text-slate-500 dark:text-slate-400 mb-6">Registo realizado com sucesso.</p>
                 
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
                     <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Email de Acesso</p>
@@ -320,7 +280,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                                 value={loginIdentifier}
                                 onChange={(e) => setLoginIdentifier(e.target.value)}
                                 className={`pl-10 ${inputClass(loginIdentifier)}`}
-                                placeholder="seu@email.com"
+                                placeholder="email@setling.pt"
                             />
                         </div>
                     </div>
@@ -364,7 +324,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                             onClick={() => { setIsRegistering(true); setError(''); setTouched(false); }}
                             className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
-                            Criar Conta
+                            Completar Registo
                         </button>
                     </div>
 
@@ -384,93 +344,21 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className={labelClass(firstName)}>Nome*</label>
-                            <input
-                                type="text"
-                                value={firstName}
-                                onChange={(e) => setFirstName(e.target.value)}
-                                className={inputClass(firstName)}
-                                placeholder="Ex: João"
-                            />
-                        </div>
-                        <div>
-                            <label className={labelClass(lastName)}>Apelido*</label>
-                            <input
-                                type="text"
-                                value={lastName}
-                                onChange={(e) => setLastName(e.target.value)}
-                                className={inputClass(lastName)}
-                                placeholder="Ex: Silva"
-                            />
-                        </div>
-                    </div>
-
-                    {/* USERNAME PREVIEW */}
-                    <div className="bg-slate-50 dark:bg-slate-900 p-2 rounded border border-slate-200 dark:border-slate-700">
-                        <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1">
-                            Utilizador Gerado (Automático)
+                    <div>
+                        <label className={`block text-xs font-bold mb-1 flex items-center gap-1 ${touched && !adminCode ? 'text-red-600' : 'text-brand-600 dark:text-brand-400'}`}>
+                            <Key className="w-3 h-3" /> Código de Acesso*
                         </label>
-                        <div className="flex items-center gap-2">
-                            <UserIcon className="w-4 h-4 text-slate-400" />
-                            <span className="font-mono text-sm font-semibold text-slate-700 dark:text-slate-300">
-                                {getPreviewUsername() || '...'}
-                            </span>
-                            {getPreviewUsername() && (
-                                existingUsernames.has(getPreviewUsername().replace(/\d+$/, '')) && /[0-9]$/.test(getPreviewUsername()) ? (
-                                    <span className="text-[10px] text-amber-500 ml-auto flex items-center gap-1 font-medium">
-                                        <AlertCircle className="w-3 h-3"/> Nome ajustado (repetido)
-                                    </span>
-                                ) : null
-                            )}
-                        </div>
+                        <input
+                            type="text"
+                            value={adminCode}
+                            onChange={(e) => setAdminCode(e.target.value)}
+                            className={`w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm dark:bg-slate-900 dark:text-white ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 bg-white dark:bg-slate-900 focus:ring-brand-500 dark:border-slate-700'}`}
+                            placeholder="Insira o código de 6 dígitos"
+                        />
                     </div>
 
                     <div>
-                        <label className="flex items-center gap-2 cursor-pointer text-sm text-slate-700 dark:text-slate-300">
-                            <input 
-                                type="checkbox" 
-                                checked={role === UserRole.ADMIN}
-                                onChange={(e) => setRole(e.target.checked ? UserRole.ADMIN : UserRole.VIEWER)}
-                                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500"
-                            />
-                            <span className="font-semibold">Registar como Administrador</span>
-                        </label>
-                        {role !== UserRole.ADMIN && (
-                            <p className="text-xs text-slate-500 mt-1">
-                                A sua função será atribuída automaticamente com base no convite recebido.
-                            </p>
-                        )}
-                    </div>
-
-                    {role !== UserRole.ADMIN && (
-                        <div className="animate-fade-in">
-                            <label className={labelClass(companyId)}>Empresa*</label>
-                            <div className="relative">
-                                <Building className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
-                                <select
-                                    value={companyId}
-                                    onChange={(e) => setCompanyId(e.target.value)}
-                                    className={`pl-9 ${inputClass(companyId)} appearance-none bg-white dark:bg-slate-900`}
-                                >
-                                    <option value="">Selecione sua empresa</option>
-                                    {companies.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-700 dark:text-slate-400">
-                                    <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
-                                </div>
-                            </div>
-                            {companies.length === 0 && (
-                                <p className="text-[10px] text-red-500 mt-1">Nenhuma empresa cadastrada no sistema. Peça ao Administrador para adicionar em Configurações.</p>
-                            )}
-                        </div>
-                    )}
-
-                    <div>
-                        <label className={labelClass(regPassword)}>Senha Pessoal (min 6 chars)</label>
+                        <label className={labelClass(regPassword)}>Senha Pessoal (min 6 chars)*</label>
                         <div className="relative">
                             <input
                                 type={showRegPassword ? "text" : "password"}
@@ -491,7 +379,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     </div>
 
                     <div>
-                        <label className={labelClass(confirmPassword)}>Confirmar Senha</label>
+                        <label className={labelClass(confirmPassword)}>Confirmar Senha*</label>
                         <div className="relative">
                             <input
                                 type={showRegPassword ? "text" : "password"}
@@ -515,35 +403,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         )}
                     </div>
 
-                    {role === UserRole.ADMIN ? (
-                         <div className="animate-fade-in">
-                            <label className={`block text-xs font-bold mb-1 flex items-center gap-1 ${touched && !adminCode ? 'text-red-600' : 'text-purple-600 dark:text-purple-400'}`}>
-                                <Key className="w-3 h-3" /> Código Mestre (Admin)
-                            </label>
-                            <input
-                                type="password"
-                                value={adminCode}
-                                onChange={(e) => setAdminCode(e.target.value)}
-                                className={`w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm dark:bg-slate-900 dark:text-white ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-purple-300 bg-purple-50 dark:bg-purple-900/20 focus:ring-purple-500 dark:border-purple-800'}`}
-                                placeholder="Insira o código de acesso"
-                            />
-                        </div>
-                    ) : (
-                        <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800 rounded text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
-                            <Mail className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                            <div>
-                                <p className="font-bold">Convite necessário</p>
-                                <p>Para se registar, o seu email já deve ter sido autorizado por um Administrador.</p>
-                            </div>
-                        </div>
-                    )}
-
                     <button
                         type="submit"
                         disabled={isLoading}
                         className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2 mt-2"
                     >
-                        {isLoading ? 'Criando...' : <><UserPlus className="w-4 h-4" /> Criar Conta</>}
+                        {isLoading ? 'Completando...' : <><UserPlus className="w-4 h-4" /> Completar Registo</>}
                     </button>
                 </form>
             ) : (

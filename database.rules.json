@@ -1,0 +1,52 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "nexus_users": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (auth.uid === $uid || root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN')"
+      },
+      ".indexOn": ["username", "email"]
+    },
+    "nexus_invites": {
+      ".read": "auth != null",
+      "$invite_id": {
+        ".write": "auth != null && (!data.exists() ? (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT') : true)"
+      },
+      ".indexOn": ["email"]
+    },
+    "nexus_settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN'"
+    },
+    "nexus_stock": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE' || root.child('nexus_users').child(auth.uid).child('role').val() === 'TECHNICAL')"
+    },
+    "nexus_master": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE')"
+    },
+    "nexus_orders": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE' || root.child('nexus_users').child(auth.uid).child('role').val() === 'TECHNICAL')"
+    },
+    "nexus_receipts": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE')"
+    },
+    "nexus_transfers": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE')"
+    },
+    "nexus_purchase_orders": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE')"
+    },
+    "nexus_public_usernames": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

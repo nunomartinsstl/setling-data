@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, UserPlus } from 'lucide-react';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 
@@ -9,10 +9,15 @@ const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
     const [companies, setCompanies] = useState<Company[]>([]);
     const [availableRoles, setAvailableRoles] = useState<string[]>(Object.values(UserRole));
+    const [supervisorRoles, setSupervisorRoles] = useState<string[]>([UserRole.ADMIN, UserRole.MANAGEMENT]);
     const [loading, setLoading] = useState(true);
     
     // Invite State
     const [inviteEmail, setInviteEmail] = useState('');
+    const [inviteFirstName, setInviteFirstName] = useState('');
+    const [inviteLastName, setInviteLastName] = useState('');
+    const [inviteCompanyId, setInviteCompanyId] = useState('');
+    const [inviteSupervisorId, setInviteSupervisorId] = useState('');
     const [inviteRole, setInviteRole] = useState<string>(UserRole.WAREHOUSE);
     const [isInviting, setIsInviting] = useState(false);
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
@@ -37,6 +42,7 @@ const UsersManager: React.FC = () => {
             ]);
             setUsers(usersData);
             setCompanies(settings.companies || []);
+            setSupervisorRoles(settings.supervisorRoles || [UserRole.ADMIN, UserRole.MANAGEMENT]);
             
             if (settings.permissions) {
                 const roles = Object.keys(settings.permissions);
@@ -52,9 +58,8 @@ const UsersManager: React.FC = () => {
         }
     };
 
-    // Filter potential supervisors (Coordinators and Admins)
-    // Used to populate the dropdown for Technicians
-    const availableSupervisors = users.filter(u => u.role === UserRole.MANAGEMENT || u.role === UserRole.ADMIN);
+    // Filter potential supervisors based on settings
+    const availableSupervisors = users.filter(u => supervisorRoles.includes(u.role));
 
     const handleCreateInvite = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -62,11 +67,25 @@ const UsersManager: React.FC = () => {
         setMessage(null);
         try {
             if(!inviteEmail) throw new Error("Email obrigatório");
+            if(!inviteFirstName) throw new Error("Nome obrigatório");
+            if(!inviteLastName) throw new Error("Apelido obrigatório");
+            if(inviteRole !== UserRole.ADMIN && !inviteCompanyId) throw new Error("Empresa obrigatória");
             
-            await StorageService.createInvite(inviteEmail, inviteRole);
+            const code = await StorageService.createInvite(
+                inviteEmail, 
+                inviteRole, 
+                inviteFirstName, 
+                inviteLastName, 
+                inviteCompanyId, 
+                inviteSupervisorId
+            );
             
-            setMessage({ type: 'success', text: `Convite criado para ${inviteEmail}. O utilizador já pode se registar.` });
+            setMessage({ type: 'success', text: `Utilizador criado! O CÓDIGO DE ACESSO é: ${code}. Envie este código para o utilizador.` });
             setInviteEmail('');
+            setInviteFirstName('');
+            setInviteLastName('');
+            setInviteCompanyId('');
+            setInviteSupervisorId('');
         } catch(err: any) {
             setMessage({ type: 'error', text: err.message });
         } finally {
@@ -170,41 +189,95 @@ const UsersManager: React.FC = () => {
             {/* Invite Section */}
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-purple-200 dark:border-purple-900/50">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-900 dark:text-purple-300">
-                    <Mail className="w-5 h-5 text-purple-600 dark:text-purple-400" /> Convidar Novo Utilizador
+                    <UserPlus className="w-5 h-5 text-purple-600 dark:text-purple-400" /> Criar Novo Utilizador
                 </h3>
-                <form onSubmit={handleCreateInvite} className="flex flex-col md:flex-row gap-4 items-end">
-                    <div className="flex-1 w-full">
-                        <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email do Colaborador</label>
-                        <input 
-                            type="email" 
-                            value={inviteEmail}
-                            onChange={(e) => setInviteEmail(e.target.value)}
-                            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
-                            placeholder="colaborador@empresa.com"
-                        />
+                <form onSubmit={handleCreateInvite} className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Email do Colaborador</label>
+                            <input 
+                                type="email" 
+                                value={inviteEmail}
+                                onChange={(e) => setInviteEmail(e.target.value)}
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                placeholder="colaborador@empresa.com"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Nome</label>
+                            <input 
+                                type="text" 
+                                value={inviteFirstName}
+                                onChange={(e) => setInviteFirstName(e.target.value)}
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                placeholder="Primeiro Nome"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Apelido</label>
+                            <input 
+                                type="text" 
+                                value={inviteLastName}
+                                onChange={(e) => setInviteLastName(e.target.value)}
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                placeholder="Último Nome"
+                            />
+                        </div>
+                        <div>
+                             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Função Permitida</label>
+                             <select 
+                                value={inviteRole}
+                                onChange={(e) => setInviteRole(e.target.value)}
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                             >
+                                 {availableRoles.map(role => (
+                                     <option key={role} value={role}>
+                                         {getRoleLabel(role)}
+                                     </option>
+                                 ))}
+                             </select>
+                        </div>
+                        {inviteRole !== UserRole.ADMIN && (
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Empresa</label>
+                                <select 
+                                    value={inviteCompanyId}
+                                    onChange={(e) => setInviteCompanyId(e.target.value)}
+                                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                >
+                                    <option value="">Selecione a Empresa...</option>
+                                    {companies.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                        <div>
+                            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Chefia / Supervisor (Opcional)</label>
+                            <select 
+                                value={inviteSupervisorId}
+                                onChange={(e) => setInviteSupervisorId(e.target.value)}
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                            >
+                                <option value="">-- Sem Chefia --</option>
+                                {availableSupervisors.map(m => (
+                                    <option key={m.uid} value={m.uid}>
+                                        {m.firstName} {m.lastName} ({m.username})
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
-                    <div className="w-full md:w-48">
-                         <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Função Permitida</label>
-                         <select 
-                            value={inviteRole}
-                            onChange={(e) => setInviteRole(e.target.value)}
-                            className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
-                         >
-                             {availableRoles.map(role => (
-                                 <option key={role} value={role}>
-                                     {getRoleLabel(role)}
-                                 </option>
-                             ))}
-                         </select>
+                    <div className="flex justify-end">
+                        <button 
+                            type="submit"
+                            disabled={isInviting}
+                            className="bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 font-medium whitespace-nowrap"
+                        >
+                            {isInviting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>}
+                            Gerar Acesso
+                        </button>
                     </div>
-                    <button 
-                        type="submit"
-                        disabled={isInviting}
-                        className="bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 font-medium whitespace-nowrap"
-                    >
-                        {isInviting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>}
-                        Gerar Acesso
-                    </button>
                 </form>
 
                 {message && (
