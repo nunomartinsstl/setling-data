@@ -25,6 +25,7 @@ const UsersManager: React.FC = () => {
 
     // Editing State (Map of UID -> Loading State)
     const [processingUsers, setProcessingUsers] = useState<Record<string, boolean>>({});
+    const [viewMode, setViewMode] = useState<'ACTIVE' | 'PENDING'>('ACTIVE');
     
     // Reset State
     const [isResetting, setIsResetting] = useState(false);
@@ -187,12 +188,14 @@ const UsersManager: React.FC = () => {
 
     const handleDeleteInvite = async (inviteId: string) => {
         if (!window.confirm("Tem certeza que deseja cancelar este acesso pendente?")) return;
+        setProcessingUsers(prev => ({ ...prev, [inviteId]: true }));
         try {
             await StorageService.deleteInvite(inviteId);
-            const updatedInvites = await StorageService.getPendingInvites();
-            setInvites(updatedInvites);
+            await fetchData(); // Use fetchData to ensure both lists are synced
         } catch(err: any) {
             alert(err.message);
+        } finally {
+            setProcessingUsers(prev => ({ ...prev, [inviteId]: false }));
         }
     };
 
@@ -313,198 +316,222 @@ const UsersManager: React.FC = () => {
                 )}
             </div>
 
-            {/* Pending Invites Section */}
-            {invites.length > 0 && (
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
-                        <h3 className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                            <Mail className="w-4 h-4 text-brand-600" /> Acessos Pendentes ({invites.length})
-                        </h3>
-                    </div>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
-                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
-                                <tr>
-                                    <th className="p-4">Utilizador Atribuído</th>
-                                    <th className="p-4">Email</th>
-                                    <th className="p-4">Função</th>
-                                    <th className="p-4">Código</th>
-                                    <th className="p-4 text-center">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                {invites.map((invite) => (
-                                    <tr key={invite.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                        <td className="p-4">
-                                            <div className="font-medium text-slate-800 dark:text-white">{invite.username}</div>
-                                            <div className="text-xs text-slate-400">{invite.firstName} {invite.lastName}</div>
-                                        </td>
-                                        <td className="p-4 font-mono text-xs">{invite.email}</td>
-                                        <td className="p-4">
-                                            <span className="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                                                {getRoleLabel(invite.role)}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 font-mono font-bold text-brand-600 dark:text-brand-400">{invite.code}</td>
-                                        <td className="p-4 text-center">
-                                            <button 
-                                                onClick={() => handleDeleteInvite(invite.id)}
-                                                className="text-red-400 hover:text-red-600 p-2 rounded-lg transition-colors"
-                                                title="Cancelar Acesso"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* Users List */}
+            {/* Unified Users/Invites Section */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-                <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
-                    <h3 className="font-bold text-slate-700 dark:text-slate-300">Utilizadores Ativos ({users.length})</h3>
+                <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-lg">
+                        <button 
+                            onClick={() => setViewMode('ACTIVE')}
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                viewMode === 'ACTIVE' 
+                                ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600 dark:text-purple-400' 
+                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                        >
+                            Ativos ({users.length})
+                        </button>
+                        <button 
+                            onClick={() => setViewMode('PENDING')}
+                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                                viewMode === 'PENDING' 
+                                ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600 dark:text-purple-400' 
+                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                        >
+                            Pendentes ({invites.length})
+                        </button>
+                    </div>
                     
-                    <button 
-                        onClick={handleResetAll}
-                        disabled={isResetting}
-                        className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800"
-                    >
-                        {isResetting ? <Loader2 className="w-3 h-3 animate-spin"/> : <AlertTriangle className="w-3 h-3"/>}
-                        Resetar Todos
-                    </button>
+                    {viewMode === 'ACTIVE' && (
+                        <button 
+                            onClick={handleResetAll}
+                            disabled={isResetting}
+                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800"
+                        >
+                            {isResetting ? <Loader2 className="w-3 h-3 animate-spin"/> : <AlertTriangle className="w-3 h-3"/>}
+                            Resetar Todos
+                        </button>
+                    )}
                 </div>
+
                 {loading ? (
-                    <div className="p-8 text-center text-slate-500 dark:text-slate-400">Carregando utilizadores...</div>
+                    <div className="p-12 text-center">
+                        <Loader2 className="w-8 h-8 animate-spin text-purple-500 mx-auto mb-2" />
+                        <p className="text-slate-500 dark:text-slate-400 text-sm">Carregando dados...</p>
+                    </div>
                 ) : (
-                    <div className="overflow-x-auto pb-4">
-                        {/* 
-                           Added min-w-[1200px] to enforce wider horizontal scroll on mobile 
-                           and ensure columns have enough room for dropdowns
-                        */}
-                        <table className="w-full min-w-[1200px] text-left text-sm text-slate-600 dark:text-slate-300">
-                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
-                                <tr>
-                                    <th className="p-4 w-[20%]">Utilizador</th>
-                                    <th className="p-4 w-[20%]">Email</th>
-                                    <th className="p-4 w-[15%]">Empresa</th>
-                                    <th className="p-4 w-[15%]">Função</th>
-                                    <th className="p-4 w-[20%]">
-                                        Supervisor (Chefia)
-                                    </th>
-                                    <th className="p-4 text-center w-[10%]">Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
-                                {users.map((user, idx) => {
-                                    const isProcessing = !!(user.uid && processingUsers[user.uid]);
-                                    const isTechnical = user.role === UserRole.TECHNICAL;
-                                    
-                                    return (
-                                        <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                                            <td className="p-4">
-                                                <div className="font-medium text-slate-800 dark:text-white flex items-center gap-2">
-                                                    <div className="bg-slate-100 dark:bg-slate-700 p-1.5 rounded-full flex-shrink-0">
-                                                        <UserIcon className="w-4 h-4 text-slate-500 dark:text-slate-300" />
-                                                    </div>
-                                                    <span className="truncate">{user.username}</span>
-                                                </div>
-                                                <div className="text-xs text-slate-400 mt-1 pl-8 truncate">
-                                                    {user.firstName} {user.lastName}
-                                                </div>
-                                            </td>
-                                            <td className="p-4 font-mono text-xs text-slate-500 truncate max-w-[200px]" title={user.email}>{user.email}</td>
-                                            <td className="p-4 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                                                {user.role === UserRole.ADMIN ? (
-                                                    <span className="text-purple-600 dark:text-purple-400 italic">Global</span>
-                                                ) : (
-                                                    <div className="relative group w-full">
+                    <div className="overflow-x-auto">
+                        {viewMode === 'ACTIVE' ? (
+                            <table className="w-full min-w-[1000px] text-left text-sm text-slate-600 dark:text-slate-300">
+                                <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
+                                    <tr>
+                                        <th className="p-4">Utilizador</th>
+                                        <th className="p-4">Email</th>
+                                        <th className="p-4">Empresa</th>
+                                        <th className="p-4">Função</th>
+                                        <th className="p-4">Supervisor</th>
+                                        <th className="p-4 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                    {users.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={6} className="p-8 text-center text-slate-400 italic">Nenhum utilizador ativo encontrado.</td>
+                                        </tr>
+                                    ) : (
+                                        users.map((user, idx) => {
+                                            const isProcessing = !!(user.uid && processingUsers[user.uid]);
+                                            return (
+                                                <tr key={user.uid || idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                    <td className="p-4">
+                                                        <div className="font-medium text-slate-800 dark:text-white flex items-center gap-2">
+                                                            <div className="bg-slate-100 dark:bg-slate-700 p-1.5 rounded-full flex-shrink-0">
+                                                                <UserIcon className="w-4 h-4 text-slate-500 dark:text-slate-300" />
+                                                            </div>
+                                                            <span className="truncate">{user.username}</span>
+                                                        </div>
+                                                        <div className="text-xs text-slate-400 mt-1 pl-8 truncate">
+                                                            {user.firstName} {user.lastName}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 font-mono text-xs text-slate-500 truncate max-w-[200px]" title={user.email}>{user.email}</td>
+                                                    <td className="p-4">
+                                                        {user.role === UserRole.ADMIN ? (
+                                                            <span className="text-purple-600 dark:text-purple-400 italic text-xs">Global</span>
+                                                        ) : (
+                                                            <div className="relative group w-full max-w-[150px]">
+                                                                <select
+                                                                    value={user.companyId || ''}
+                                                                    onChange={(e) => handleChangeCompany(user, e.target.value)}
+                                                                    disabled={isProcessing}
+                                                                    className="w-full appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 py-1.5 pl-2 pr-6 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 rounded text-slate-600 dark:text-slate-300 text-xs truncate"
+                                                                >
+                                                                    <option value="" disabled>Selecione...</option>
+                                                                    {companies.map(c => (
+                                                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                                                    ))}
+                                                                </select>
+                                                                <div className="absolute right-1 top-2 pointer-events-none text-slate-400">
+                                                                    <Building className="w-3 h-3" />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                    <td className="p-4">
                                                         <select
-                                                            value={user.companyId || ''}
-                                                            onChange={(e) => handleChangeCompany(user, e.target.value)}
+                                                            value={user.role}
+                                                            onChange={(e) => handleChangeRole(user, e.target.value)}
                                                             disabled={isProcessing}
-                                                            className="w-full appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 py-1.5 pl-2 pr-6 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 rounded text-slate-600 dark:text-slate-300 text-xs truncate"
-                                                            title="Clique para alterar a empresa"
+                                                            className={`appearance-none text-xs font-bold px-2 py-1.5 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none w-full max-w-[120px] truncate ${
+                                                                user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
+                                                                user.role === UserRole.MANAGEMENT ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30' :
+                                                                user.role === UserRole.TECHNICAL ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/30' :
+                                                                user.role === UserRole.WAREHOUSE ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30' :
+                                                                'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
+                                                            }`}
                                                         >
-                                                            <option value="" disabled>Selecione...</option>
-                                                            {companies.map(c => (
-                                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                                            {availableRoles.map(role => (
+                                                                <option key={role} value={role} className="bg-white dark:bg-slate-800">
+                                                                    {getRoleLabel(role)}
+                                                                </option>
                                                             ))}
                                                         </select>
-                                                        <div className="absolute right-1 top-2 pointer-events-none text-slate-400">
-                                                            <Building className="w-3 h-3" />
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="relative w-full max-w-[180px]">
+                                                            <select
+                                                                value={user.supervisorId || ''}
+                                                                onChange={(e) => handleChangeSupervisor(user, e.target.value)}
+                                                                disabled={isProcessing}
+                                                                className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded bg-white dark:bg-slate-800 focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
+                                                                    !user.supervisorId 
+                                                                    ? 'border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-900/10' 
+                                                                    : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                                                                }`}
+                                                            >
+                                                                <option value="">-- Sem Chefia --</option>
+                                                                {availableSupervisors.map(m => (
+                                                                    <option key={m.uid} value={m.uid}>
+                                                                        {m.firstName} {m.lastName}
+                                                                    </option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute right-2 top-2 pointer-events-none text-slate-400">
+                                                                <ChevronDown className="w-3 h-3" />
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </td>
-                                            <td className="p-4">
-                                                <select
-                                                    value={user.role}
-                                                    onChange={(e) => handleChangeRole(user, e.target.value)}
-                                                    disabled={isProcessing}
-                                                    className={`appearance-none text-xs font-bold px-2 py-1.5 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none w-full truncate ${
-                                                        user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
-                                                        user.role === UserRole.MANAGEMENT ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30' :
-                                                        user.role === UserRole.TECHNICAL ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/30' :
-                                                        user.role === UserRole.WAREHOUSE ? 'text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/30' :
-                                                        'text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800'
-                                                    }`}
-                                                >
-                                                    {availableRoles.map(role => (
-                                                        <option key={role} value={role} className="bg-white dark:bg-slate-800">
-                                                            {getRoleLabel(role)}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </td>
-                                            
-                                            {/* SUPERVISOR SELECTOR */}
-                                            <td className="p-4">
-                                                <div className="relative w-full">
-                                                    <select
-                                                        value={user.supervisorId || ''}
-                                                        onChange={(e) => handleChangeSupervisor(user, e.target.value)}
-                                                        disabled={isProcessing}
-                                                        className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded bg-white dark:bg-slate-800 focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
-                                                            !user.supervisorId 
-                                                            ? 'border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-900/10' 
-                                                            : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
-                                                        }`}
-                                                    >
-                                                        <option value="">-- Selecione Chefia --</option>
-                                                        {availableSupervisors.map(m => (
-                                                            <option key={m.uid} value={m.uid}>
-                                                                {m.firstName} {m.lastName} ({m.username})
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    <div className="absolute right-2 top-2 pointer-events-none text-slate-400">
-                                                        <ChevronDown className="w-3 h-3" />
-                                                    </div>
-                                                </div>
-                                            </td>
-
-                                            <td className="p-4 text-center">
-                                                {isProcessing ? (
-                                                    <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
-                                                ) : (
-                                                    <button 
-                                                        onClick={() => handleDeleteUser(user)}
-                                                        className="text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 p-2 rounded-lg transition-colors"
-                                                        title="Remover Acesso (Atenção: Não apaga Auth)"
-                                                    >
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
-                                                )}
-                                            </td>
+                                                    </td>
+                                                    <td className="p-4 text-center">
+                                                        {isProcessing ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => handleDeleteUser(user)}
+                                                                className="text-red-400 hover:text-red-600 p-2 rounded-lg transition-colors"
+                                                                title="Remover Utilizador"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <table className="w-full min-w-[800px] text-left text-sm text-slate-600 dark:text-slate-300">
+                                <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
+                                    <tr>
+                                        <th className="p-4">Utilizador Atribuído</th>
+                                        <th className="p-4">Email</th>
+                                        <th className="p-4">Função</th>
+                                        <th className="p-4">Código</th>
+                                        <th className="p-4 text-center">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                    {invites.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="p-8 text-center text-slate-400 italic">Nenhum acesso pendente encontrado.</td>
                                         </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
+                                    ) : (
+                                        invites.map((invite) => {
+                                            const isProcessing = !!processingUsers[invite.id];
+                                            return (
+                                                <tr key={invite.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                                    <td className="p-4">
+                                                        <div className="font-medium text-slate-800 dark:text-white">{invite.username}</div>
+                                                        <div className="text-xs text-slate-400">{invite.firstName} {invite.lastName}</div>
+                                                    </td>
+                                                    <td className="p-4 font-mono text-xs">{invite.email}</td>
+                                                    <td className="p-4">
+                                                        <span className="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                                            {getRoleLabel(invite.role)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 font-mono font-bold text-purple-600 dark:text-purple-400">{invite.code}</td>
+                                                    <td className="p-4 text-center">
+                                                        {isProcessing ? (
+                                                            <Loader2 className="w-4 h-4 animate-spin text-slate-400 mx-auto" />
+                                                        ) : (
+                                                            <button 
+                                                                onClick={() => handleDeleteInvite(invite.id)}
+                                                                className="text-red-400 hover:text-red-600 p-2 rounded-lg transition-colors"
+                                                                title="Cancelar Acesso"
+                                                            >
+                                                                <Trash2 className="w-4 h-4" />
+                                                            </button>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
                     </div>
                 )}
             </div>
