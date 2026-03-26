@@ -36,21 +36,39 @@ const UsersManager: React.FC = () => {
 
     const fetchData = async () => {
         try {
-            // We fetch both, but catch potential errors if user has restricted access
-            // though UsersManager is typically admin-only anyway.
             const [usersData, invitesData, settings] = await Promise.all([
                 StorageService.getUsers(),
                 StorageService.getPendingInvites(),
                 StorageService.getSettings()
             ]);
+
+            // Filter out invites for users that are already active
+            const activeEmails = new Set(usersData.map(u => u.email.toLowerCase()));
+            
+            // Deduplicate invites by email, keeping the most recent one
+            const inviteMap = new Map<string, Invite>();
+            invitesData.forEach(invite => {
+                const email = invite.email.toLowerCase();
+                if (!activeEmails.has(email)) {
+                    const existing = inviteMap.get(email);
+                    // If no existing or current is newer
+                    const currentIsNewer = !existing || 
+                        (invite.dateCreated && existing.dateCreated && new Date(invite.dateCreated) > new Date(existing.dateCreated)) ||
+                        (!existing.dateCreated && invite.dateCreated);
+                    
+                    if (currentIsNewer) {
+                        inviteMap.set(email, invite);
+                    }
+                }
+            });
+
             setUsers(usersData);
-            setInvites(invitesData);
+            setInvites(Array.from(inviteMap.values()));
             setCompanies(settings.companies || []);
             setSupervisorRoles(settings.supervisorRoles || [UserRole.ADMIN, UserRole.MANAGEMENT]);
             
             if (settings.permissions) {
                 const roles = Object.keys(settings.permissions);
-                // Ensure default roles are present if for some reason settings is empty
                 if (roles.length > 0) {
                     setAvailableRoles(roles);
                 }
@@ -84,13 +102,11 @@ const UsersManager: React.FC = () => {
                 inviteSupervisorId
             );
             
-            // Re-fetch invites to update the table
-            const updatedInvites = await StorageService.getPendingInvites();
-            setInvites(updatedInvites);
+            // Re-fetch everything to ensure lists are synced and filtered
+            await fetchData();
             
-            // Find the invite we just created to get the username
-            const currentInvite = updatedInvites.find(i => i.email === inviteEmail);
-            const username = currentInvite?.username || '';
+            // Find the username from the newly updated state (or just use the inputs)
+            const username = `${inviteFirstName.toLowerCase()}-${inviteLastName.toLowerCase()}`;
             
             setMessage({ 
                 type: 'success', 

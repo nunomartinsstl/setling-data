@@ -243,16 +243,30 @@ export const StorageService = {
       if (!auth || !db) throw new Error("Serviço offline.");
 
       // 1. Verify the code and email in INVITES
-      const emailKey = normalizeText(email).replace(/\./g, '_');
-      const inviteSnap = await db.ref(`${KEYS.INVITES}/${emailKey}`).get();
+      // Search by email to find any invite, even if created with a random key
+      const inviteSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
       
       if (!inviteSnap.exists()) {
           throw new Error("Não foi encontrado nenhum convite para este email.");
       }
 
-      const inviteData = inviteSnap.val() as Invite;
-      if (inviteData.code !== code) {
-          throw new Error("Código de acesso inválido.");
+      const invites = inviteSnap.val();
+      const inviteKeys = Object.keys(invites);
+      
+      // Find the specific invite that matches the code
+      let matchingInviteKey = '';
+      let inviteData: Invite | null = null;
+      
+      for (const key of inviteKeys) {
+          if (invites[key].code === code) {
+              matchingInviteKey = key;
+              inviteData = invites[key];
+              break;
+          }
+      }
+      
+      if (!inviteData) {
+          throw new Error("Código de acesso inválido para este email.");
       }
 
       let uid = '';
@@ -291,7 +305,12 @@ export const StorageService = {
           }
 
           // 4. Consume Invite (Delete it)
-          await db.ref(`${KEYS.INVITES}/${emailKey}`).remove();
+          // Delete ALL invites for this email to clean up any duplicates
+          const cleanupUpdates: any = {};
+          inviteKeys.forEach(key => {
+              cleanupUpdates[`${KEYS.INVITES}/${key}`] = null;
+          });
+          await db.ref().update(cleanupUpdates);
 
           return newUser;
 
@@ -786,6 +805,16 @@ export const StorageService = {
   createInvite: async (email: string, role: UserRole, firstName: string, lastName: string, companyId: string, supervisorId: string) => {
       if (!db) return '';
       
+      // Clean up any existing invites for this email first to prevent duplicates
+      const existingSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
+      if (existingSnap.exists()) {
+          const cleanupUpdates: any = {};
+          Object.keys(existingSnap.val()).forEach(key => {
+              cleanupUpdates[`${KEYS.INVITES}/${key}`] = null;
+          });
+          await db.ref().update(cleanupUpdates);
+      }
+
       // 1. Generate a random 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       
@@ -837,16 +866,30 @@ export const StorageService = {
 
   getInviteByEmail: async (email: string): Promise<Invite | null> => {
       if (!db) return null;
-      const emailKey = normalizeText(email).replace(/\./g, '_');
-      const snapshot = await db.ref(`${KEYS.INVITES}/${emailKey}`).get();
-      return snapshot.exists() ? snapshot.val() : null;
+      const snapshot = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
+      if (!snapshot.exists()) return null;
+      const invites = snapshot.val();
+      const keys = Object.keys(invites);
+      // If multiple exist (should be rare now), return the one with latest dateCreated
+      let latestInvite: any = null;
+      keys.forEach(key => {
+          const invite = invites[key];
+          if (!latestInvite || (invite.dateCreated && latestInvite.dateCreated && new Date(invite.dateCreated) > new Date(latestInvite.dateCreated))) {
+              latestInvite = { ...invite, id: key };
+          }
+      });
+      return latestInvite;
   },
 
   getPendingInvites: async (): Promise<Invite[]> => {
       if (!db) return [];
       const snapshot = await db.ref(KEYS.INVITES).get();
       if (!snapshot.exists()) return [];
-      return Object.values(snapshot.val());
+      const data = snapshot.val();
+      return Object.keys(data).map(key => ({
+          ...data[key],
+          id: key
+      }));
   },
 
   deleteInvite: async (inviteId: string) => {
