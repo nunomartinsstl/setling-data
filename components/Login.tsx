@@ -13,7 +13,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   
   // Login State
-  const [loginIdentifier, setLoginIdentifier] = useState(''); // Email ONLY
+  const [loginIdentifier, setLoginIdentifier] = useState(''); // Email or Username
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   
@@ -39,6 +39,8 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   
   // New State for Success Screen
   const [createdUser, setCreatedUser] = useState<User | null>(null);
+  const [inviteUsername, setInviteUsername] = useState('');
+  const [isInviteValid, setIsInviteValid] = useState(false);
 
   // Persistence logic & Fetch Companies
   useEffect(() => {
@@ -60,10 +62,6 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                 const roles = Object.keys(settings.permissions);
                 if (roles.length > 0) {
                     setAvailableRoles(roles);
-                    // If current role is not in the list, default to WAREHOUSE or first available
-                    if (!roles.includes(role)) {
-                        setRole((roles.includes(UserRole.WAREHOUSE) ? UserRole.WAREHOUSE : roles[0]) as UserRole);
-                    }
                 }
             }
         } catch (e) {
@@ -72,6 +70,31 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
     };
     loadData();
   }, []);
+
+  // Fetch invite info when email is typed in registration
+  useEffect(() => {
+    if (isRegistering && email.includes('@')) {
+      const timer = setTimeout(async () => {
+        try {
+          const invite = await StorageService.getInviteByEmail(email);
+          if (invite) {
+            setInviteUsername(invite.username);
+            setIsInviteValid(true);
+          } else {
+            setInviteUsername('');
+            setIsInviteValid(false);
+          }
+        } catch (e) {
+          setInviteUsername('');
+          setIsInviteValid(false);
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    } else {
+      setInviteUsername('');
+      setIsInviteValid(false);
+    }
+  }, [email, isRegistering]);
 
   // Fetch usernames when entering registration mode to check for collisions
   // Removed useEffect for existingUsernames
@@ -226,9 +249,9 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Registo realizado com sucesso.</p>
                 
                 <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
-                    <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Email de Acesso</p>
-                    <p className="text-xl font-mono font-bold text-brand-600 dark:text-brand-400 tracking-wide">{createdUser.email}</p>
-                    <p className="text-xs text-slate-400 mt-2">Use este email para entrar.</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Utilizador/Email de Acesso</p>
+                    <p className="text-xl font-mono font-bold text-brand-600 dark:text-brand-400 tracking-wide">{createdUser.username}</p>
+                    <p className="text-xs text-slate-400 mt-2">Pode usar o seu utilizador ou o email ({createdUser.email}) para entrar.</p>
                 </div>
 
                 <button
@@ -272,15 +295,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Insira o seu email para receber um link de recuperação.</p>
                     </div>
                     <div>
-                        <label className={labelClass(loginIdentifier)}>Email</label>
+                        <label className={labelClass(loginIdentifier)}>Utilizador ou Email</label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                             <input
-                                type="email"
+                                type="text"
                                 value={loginIdentifier}
                                 onChange={(e) => setLoginIdentifier(e.target.value)}
                                 className={`pl-10 ${inputClass(loginIdentifier)}`}
-                                placeholder="email@setling.pt"
+                                placeholder="nome.apelido ou email@setling.pt"
                             />
                         </div>
                     </div>
@@ -330,8 +353,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
 
                     {isRegistering ? (
                         <form onSubmit={handleRegister} className="space-y-4 animate-fade-in">
-                    <div>
-                        <label className={labelClass(email)}>Email*</label>
+                            {inviteUsername && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 mb-2">
+                                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase mb-1">Utilizador Atribuído</p>
+                                    <p className="text-lg font-mono font-bold text-blue-800 dark:text-blue-200">{inviteUsername}</p>
+                                    <p className="text-[10px] text-blue-500 mt-1">Este será o seu nome de utilizador para entrar na plataforma.</p>
+                                </div>
+                            )}
+                            <div>
+                                <label className={labelClass(email)}>Email*</label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                             <input
@@ -398,8 +428,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                                 {showRegPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </button>
                         </div>
-                        {regPassword && confirmPassword && regPassword !== confirmPassword && (
-                            <p className="text-[10px] text-red-500 mt-1">As senhas não coincidem.</p>
+                        {regPassword && confirmPassword && (
+                            <div className="mt-1 flex items-center gap-1">
+                                {regPassword === confirmPassword ? (
+                                    <><CheckCircle className="w-3 h-3 text-green-500" /> <span className="text-[10px] text-green-500 font-medium">As senhas coincidem</span></>
+                                ) : (
+                                    <><AlertCircle className="w-3 h-3 text-red-500" /> <span className="text-[10px] text-red-500 font-medium">As senhas não coincidem</span></>
+                                )}
+                            </div>
                         )}
                     </div>
 
@@ -414,15 +450,15 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
             ) : (
                 <form onSubmit={handleLogin} className="space-y-4 animate-fade-in">
                     <div>
-                        <label className={labelClass(loginIdentifier)}>Email</label>
+                        <label className={labelClass(loginIdentifier)}>Utilizador ou Email</label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                             <input
-                                type="email"
+                                type="text"
                                 value={loginIdentifier}
                                 onChange={(e) => setLoginIdentifier(e.target.value)}
                                 className={`pl-10 ${inputClass(loginIdentifier)}`}
-                                placeholder="seu@email.com"
+                                placeholder="nome.apelido ou email@setling.pt"
                             />
                         </div>
                     </div>

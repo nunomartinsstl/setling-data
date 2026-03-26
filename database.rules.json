@@ -10,7 +10,7 @@
       ".indexOn": ["username", "email"]
     },
     "nexus_invites": {
-      ".read": "auth != null",
+      ".read": "true",
       "$invite_id": {
         ".write": "auth != null && (!data.exists() ? (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT') : true)"
       },
@@ -45,7 +45,7 @@
       ".write": "auth != null && (root.child('nexus_users').child(auth.uid).child('role').val() === 'ADMIN' || root.child('nexus_users').child(auth.uid).child('role').val() === 'MANAGEMENT' || root.child('nexus_users').child(auth.uid).child('role').val() === 'WAREHOUSE')"
     },
     "nexus_public_usernames": {
-      ".read": "auth != null",
+      ".read": "true",
       ".write": "auth != null"
     }
   }

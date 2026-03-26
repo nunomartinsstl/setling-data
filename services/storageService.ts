@@ -2,7 +2,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/database';
-import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Company, OrderLineItem, PickedItem, Receipt, RolePermissions } from '../types';
+import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Company, OrderLineItem, PickedItem, Receipt, RolePermissions, Invite } from '../types';
 
 // Safely access environment variables
 const env = ((import.meta as any).env || {}) as any;
@@ -199,19 +199,43 @@ export const StorageService = {
   authenticateUser: async (identifier: string, password: string) => {
     if (!auth || !db) throw new Error("Serviço offline. Verifique a configuração.");
     
-    // STRICT EMAIL LOGIN ONLY
+    let email = identifier;
+    
+    // If not an email, try to look up as username
     if (!identifier.includes('@')) {
-        throw new Error("Por favor, use o seu email para entrar.");
+        const usernameKey = normalizeText(identifier);
+        const usernameSnap = await db.ref(`${KEYS.USERNAMES}/${usernameKey}`).get();
+        
+        if (usernameSnap.exists()) {
+            email = usernameSnap.val();
+        } else {
+            throw new Error("Utilizador ou email não encontrado.");
+        }
     }
 
-    const cred = await auth.signInWithEmailAndPassword(identifier, password);
+    const cred = await auth.signInWithEmailAndPassword(email, password);
     const snapshot = await db.ref(`${KEYS.USERS}/${cred.user!.uid}`).get();
     return snapshot.val() as User;
   },
 
-  sendPasswordResetEmail: async (email: string) => {
-    if (!auth) throw new Error("Serviço offline.");
-    if (!email || !email.includes('@')) throw new Error("Por favor, insira um email válido.");
+  sendPasswordResetEmail: async (identifier: string) => {
+    if (!auth || !db) throw new Error("Serviço offline.");
+    if (!identifier) throw new Error("Por favor, insira um utilizador ou email.");
+    
+    let email = identifier;
+    
+    // If not an email, try to look up as username
+    if (!identifier.includes('@')) {
+        const usernameKey = normalizeText(identifier);
+        const usernameSnap = await db.ref(`${KEYS.USERNAMES}/${usernameKey}`).get();
+        
+        if (usernameSnap.exists()) {
+            email = usernameSnap.val();
+        } else {
+            throw new Error("Utilizador não encontrado.");
+        }
+    }
+
     await auth.sendPasswordResetEmail(email);
   },
 
@@ -219,23 +243,15 @@ export const StorageService = {
       if (!auth || !db) throw new Error("Serviço offline.");
 
       // 1. Verify the code and email in INVITES
-      const inviteSnap = await db.ref(KEYS.INVITES).orderByChild('email').equalTo(email).get();
+      const emailKey = normalizeText(email).replace(/\./g, '_');
+      const inviteSnap = await db.ref(`${KEYS.INVITES}/${emailKey}`).get();
+      
       if (!inviteSnap.exists()) {
           throw new Error("Não foi encontrado nenhum convite para este email.");
       }
 
-      let validInviteKey = null;
-      let inviteData = null;
-
-      inviteSnap.forEach((child) => {
-          const data = child.val();
-          if (data.code === code) {
-              validInviteKey = child.key;
-              inviteData = data;
-          }
-      });
-
-      if (!validInviteKey || !inviteData) {
+      const inviteData = inviteSnap.val() as Invite;
+      if (inviteData.code !== code) {
           throw new Error("Código de acesso inválido.");
       }
 
@@ -255,31 +271,10 @@ export const StorageService = {
 
       // 3. Create DB User Profile
       try {
-          // Generate username
-          const usersSnap = await db.ref(KEYS.USERS).get();
-          const existingUsernames = new Set<string>();
-          if (usersSnap.exists()) {
-              usersSnap.forEach((child) => {
-                  const u = child.val();
-                  if (u.username) existingUsernames.add(u.username.toLowerCase());
-              });
-          }
-
-          const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
-          let baseUsername = `${norm(inviteData.firstName || 'user')}-${norm(inviteData.lastName || '')}`;
-          if (baseUsername.endsWith('-')) baseUsername = baseUsername.slice(0, -1);
-          let username = baseUsername;
-          let counter = 2;
-          
-          while (existingUsernames.has(username)) {
-              username = `${baseUsername}${counter}`;
-              counter++;
-          }
-
           const newUser: User = {
               uid,
               email,
-              username,
+              username: inviteData.username || '',
               firstName: inviteData.firstName || '',
               lastName: inviteData.lastName || '',
               role: inviteData.role || UserRole.WAREHOUSE,
@@ -288,9 +283,15 @@ export const StorageService = {
           };
 
           await db.ref(`${KEYS.USERS}/${uid}`).set(newUser);
+          
+          // Save username mapping
+          if (newUser.username) {
+              const usernameKey = normalizeText(newUser.username);
+              await db.ref(`${KEYS.USERNAMES}/${usernameKey}`).set(email);
+          }
 
           // 4. Consume Invite (Delete it)
-          await db.ref(`${KEYS.INVITES}/${validInviteKey}`).remove();
+          await db.ref(`${KEYS.INVITES}/${emailKey}`).remove();
 
           return newUser;
 
@@ -784,20 +785,73 @@ export const StorageService = {
   // User Management
   createInvite: async (email: string, role: UserRole, firstName: string, lastName: string, companyId: string, supervisorId: string) => {
       if (!db) return '';
-      // Generate a random 6-digit code
+      
+      // 1. Generate a random 6-digit code
       const code = Math.floor(100000 + Math.random() * 900000).toString();
-      const newRef = db.ref(KEYS.INVITES).push();
-      await newRef.set({ 
-          email, 
-          role, 
-          firstName, 
-          lastName, 
-          companyId, 
-          supervisorId, 
-          code, 
-          createdAt: new Date().toISOString() 
-      });
+      
+      // 2. Generate username
+      const usersSnap = await db.ref(KEYS.USERS).get();
+      const existingUsernames = new Set<string>();
+      if (usersSnap.exists()) {
+          Object.values(usersSnap.val()).forEach((u: any) => {
+              if (u.username) existingUsernames.add(u.username.toLowerCase());
+          });
+      }
+      
+      // Also check existing invites for usernames
+      const invitesSnap = await db.ref(KEYS.INVITES).get();
+      if (invitesSnap.exists()) {
+          Object.values(invitesSnap.val()).forEach((i: any) => {
+              if (i.username) existingUsernames.add(i.username.toLowerCase());
+          });
+      }
+
+      const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
+      let baseUsername = `${norm(firstName || 'user')}.${norm(lastName || '')}`;
+      if (baseUsername.endsWith('.')) baseUsername = baseUsername.slice(0, -1);
+      let username = baseUsername;
+      let counter = 2;
+      
+      while (existingUsernames.has(username)) {
+          username = `${baseUsername}${counter}`;
+          counter++;
+      }
+
+      const emailKey = normalizeText(email).replace(/\./g, '_');
+      const newInvite: Invite = {
+          id: emailKey,
+          email,
+          username,
+          role,
+          firstName,
+          lastName,
+          companyId,
+          supervisorId,
+          code,
+          dateCreated: new Date().toISOString()
+      };
+      
+      await db.ref(`${KEYS.INVITES}/${emailKey}`).set(newInvite);
       return code;
+  },
+
+  getInviteByEmail: async (email: string): Promise<Invite | null> => {
+      if (!db) return null;
+      const emailKey = normalizeText(email).replace(/\./g, '_');
+      const snapshot = await db.ref(`${KEYS.INVITES}/${emailKey}`).get();
+      return snapshot.exists() ? snapshot.val() : null;
+  },
+
+  getPendingInvites: async (): Promise<Invite[]> => {
+      if (!db) return [];
+      const snapshot = await db.ref(KEYS.INVITES).get();
+      if (!snapshot.exists()) return [];
+      return Object.values(snapshot.val());
+  },
+
+  deleteInvite: async (inviteId: string) => {
+      if (!db) return;
+      await db.ref(`${KEYS.INVITES}/${inviteId}`).remove();
   },
 
   updateUserRole: async (uid: string, role: UserRole) => {
@@ -987,14 +1041,14 @@ export const StorageService = {
                   quantity: d.missingQty, // Only what's missing
                   quantityPicked: 0,
                   backorderCreated: false,
-                  fulfilledInOrderId: null,
-                  image: d.originalItem.image || null // Ensure no undefined
+                  fulfilledInOrderId: undefined,
+                  image: d.originalItem.image // Ensure no undefined
               }));
 
               const newOrder: Order = {
                   ...originalOrder,
                   id: newOrderId,
-                  displayId: null, // Let system generate or keep null? Usually null or new logic.
+                  displayId: undefined, // Let system generate or keep null? Usually null or new logic.
                   title: `${originalOrder.title} (Reabertura #${nextReopenCount})`,
                   status: 'OPEN',
                   dateCreated: new Date().toISOString(),
@@ -1074,7 +1128,7 @@ export const StorageService = {
 
           for (const order of orders) {
               // Only check active orders or pending ones (Allow COMPLETED to fix retroactive SKU matches)
-              if (order.status === 'REJECTED') continue;
+              if ((order.status as any) === 'REJECTED') continue;
 
               let orderModified = false;
               let hasPendingCustom = false;

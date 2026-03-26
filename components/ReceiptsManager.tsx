@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Receipt, MasterMaterial, ReceiptItem } from '../types';
+import { Receipt, MasterMaterial, ReceiptItem, Company } from '../types';
 import { Search, Download, ArrowDownCircle, X, Image as ImageIcon, Calendar, ChevronDown, ChevronUp, User, Package, FileSpreadsheet, ChevronLeft, ChevronRight } from 'lucide-react';
 
 declare const XLSX: any;
@@ -29,7 +29,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
     
     pedidos.forEach((pedido: any) => {
       const items = pedido.items ? (Array.isArray(pedido.items) ? pedido.items : Object.values(pedido.items)) : [];
-      items.forEach(item => {
+      items.forEach((item: any) => {
         allItems.push({
           ...item,
           poNumber: pedido.poNumber,

@@ -13,6 +13,7 @@ import PurchaseOrderManager from './components/PurchaseOrderManager';
 import ShortagesReport from './components/ShortagesReport';
 import ReceiptsManager from './components/ReceiptsManager';
 import TransfersManager from './components/TransfersManager';
+import UserProfile from './components/UserProfile';
 import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS, EMPTY_PERMISSIONS } from './services/storageService';
 import { calculateShortages } from './src/utils/inventory';
 
@@ -383,6 +384,8 @@ const App: React.FC = () => {
         return currentPermissions.canManageSettings ? <Settings /> : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
       case 'USERS':
         return currentPermissions.canManageUsers ? <UsersManager /> : <p className="p-8 text-center text-slate-500">Acesso negado.</p>;
+      case 'PROFILE':
+        return <UserProfile user={user} companies={companies} allUsers={allUsers} />;
       default:
         return <Dashboard orders={visibleOrders} stock={stock} userRole={user.role} permissions={currentPermissions} onNavigate={setView} shortageCount={shortageCount} />;
     }

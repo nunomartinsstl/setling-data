@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, UserRole, Company } from '../types';
+import { User, UserRole, Company, Invite } from '../types';
 import { StorageService } from '../services/storageService';
 import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, UserPlus } from 'lucide-react';
 import firebase from 'firebase/compat/app';
@@ -7,6 +7,7 @@ import 'firebase/compat/auth';
 
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
+    const [invites, setInvites] = useState<Invite[]>([]);
     const [companies, setCompanies] = useState<Company[]>([]);
     const [availableRoles, setAvailableRoles] = useState<string[]>(Object.values(UserRole));
     const [supervisorRoles, setSupervisorRoles] = useState<string[]>([UserRole.ADMIN, UserRole.MANAGEMENT]);
@@ -36,11 +37,13 @@ const UsersManager: React.FC = () => {
         try {
             // We fetch both, but catch potential errors if user has restricted access
             // though UsersManager is typically admin-only anyway.
-            const [usersData, settings] = await Promise.all([
+            const [usersData, invitesData, settings] = await Promise.all([
                 StorageService.getUsers(),
+                StorageService.getPendingInvites(),
                 StorageService.getSettings()
             ]);
             setUsers(usersData);
+            setInvites(invitesData);
             setCompanies(settings.companies || []);
             setSupervisorRoles(settings.supervisorRoles || [UserRole.ADMIN, UserRole.MANAGEMENT]);
             
@@ -80,7 +83,18 @@ const UsersManager: React.FC = () => {
                 inviteSupervisorId
             );
             
-            setMessage({ type: 'success', text: `Utilizador criado! O CÓDIGO DE ACESSO é: ${code}. Envie este código para o utilizador.` });
+            // Re-fetch invites to update the table
+            const updatedInvites = await StorageService.getPendingInvites();
+            setInvites(updatedInvites);
+            
+            // Find the invite we just created to get the username
+            const currentInvite = updatedInvites.find(i => i.email === inviteEmail);
+            const username = currentInvite?.username || '';
+            
+            setMessage({ 
+                type: 'success', 
+                text: `Acesso gerado! UTILIZADOR: ${username} | CÓDIGO: ${code}. Envie estes dados para o colaborador.` 
+            });
             setInviteEmail('');
             setInviteFirstName('');
             setInviteLastName('');
@@ -168,6 +182,17 @@ const UsersManager: React.FC = () => {
             alert("Erro ao resetar: " + err.message);
         } finally {
             setIsResetting(false);
+        }
+    };
+
+    const handleDeleteInvite = async (inviteId: string) => {
+        if (!window.confirm("Tem certeza que deseja cancelar este acesso pendente?")) return;
+        try {
+            await StorageService.deleteInvite(inviteId);
+            const updatedInvites = await StorageService.getPendingInvites();
+            setInvites(updatedInvites);
+        } catch(err: any) {
+            alert(err.message);
         }
     };
 
@@ -288,6 +313,56 @@ const UsersManager: React.FC = () => {
                 )}
             </div>
 
+            {/* Pending Invites Section */}
+            {invites.length > 0 && (
+                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                    <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900">
+                        <h3 className="font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                            <Mail className="w-4 h-4 text-brand-600" /> Acessos Pendentes ({invites.length})
+                        </h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                            <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
+                                <tr>
+                                    <th className="p-4">Utilizador Atribuído</th>
+                                    <th className="p-4">Email</th>
+                                    <th className="p-4">Função</th>
+                                    <th className="p-4">Código</th>
+                                    <th className="p-4 text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                {invites.map((invite) => (
+                                    <tr key={invite.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                        <td className="p-4">
+                                            <div className="font-medium text-slate-800 dark:text-white">{invite.username}</div>
+                                            <div className="text-xs text-slate-400">{invite.firstName} {invite.lastName}</div>
+                                        </td>
+                                        <td className="p-4 font-mono text-xs">{invite.email}</td>
+                                        <td className="p-4">
+                                            <span className="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                                {getRoleLabel(invite.role)}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 font-mono font-bold text-brand-600 dark:text-brand-400">{invite.code}</td>
+                                        <td className="p-4 text-center">
+                                            <button 
+                                                onClick={() => handleDeleteInvite(invite.id)}
+                                                className="text-red-400 hover:text-red-600 p-2 rounded-lg transition-colors"
+                                                title="Cancelar Acesso"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
+
             {/* Users List */}
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex justify-between items-center">
@@ -325,7 +400,7 @@ const UsersManager: React.FC = () => {
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                                 {users.map((user, idx) => {
-                                    const isProcessing = user.uid && processingUsers[user.uid];
+                                    const isProcessing = !!(user.uid && processingUsers[user.uid]);
                                     const isTechnical = user.role === UserRole.TECHNICAL;
                                     
                                     return (

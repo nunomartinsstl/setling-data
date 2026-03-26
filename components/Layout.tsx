@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { User, ViewState, UserRole, RolePermissions } from '../types';
-import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle, ArrowDownCircle, ArrowRightLeft } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CheckCircle, Package, Search, LogOut, Menu, Wifi, WifiOff, Settings, PlusCircle, RefreshCw, Users, Moon, Sun, ShoppingBag, ChevronDown, ChevronRight, AlertTriangle, ArrowDownCircle, ArrowRightLeft, User as UserIcon } from 'lucide-react';
 
 interface LayoutProps {
   user: User;
@@ -302,6 +302,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                {isConnected ? <Wifi className="w-4 h-4"/> : <WifiOff className="w-4 h-4"/>}
                <span className="font-semibold">{isConnected ? 'Online' : 'Offline'}</span>
             </div>
+
+            <NavItem 
+              view="PROFILE" 
+              icon={UserIcon} 
+              label="Área Pessoal" 
+              isActive={currentView === 'PROFILE'} 
+              onClick={() => handleNavClick('PROFILE')} 
+            />
 
             <button
               onClick={onLogout}

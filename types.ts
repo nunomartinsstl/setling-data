@@ -20,6 +20,19 @@ export interface User {
   supervisorId?: string; // Link to the Coordinator responsible for this Technician
 }
 
+export interface Invite {
+  id: string;
+  email: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  role: UserRole;
+  companyId: string;
+  supervisorId: string;
+  code: string;
+  dateCreated: string;
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -224,6 +237,6 @@ export interface Transfer {
   userId: string;
 }
 
-export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS' | 'TRANSFERS';
+export type ViewState = 'LOGIN' | 'DASHBOARD' | 'CREATE_ORDER' | 'OPEN_ORDERS' | 'FINISHED_ORDERS' | 'STOCK' | 'QUERY' | 'SETTINGS' | 'USERS' | 'PURCHASE_ORDERS' | 'SHORTAGES' | 'RECEIPTS' | 'TRANSFERS' | 'PROFILE';
 
 export type OrderItem = Order;

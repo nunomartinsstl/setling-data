@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Fuse from 'fuse.js';
 import { PORTUGAL_ZIP_CODES } from '../constants/zipCodes';
-import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User, SynonymGroup } from '../types';
+import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User, SynonymGroup, ViewState } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell, RefreshCw, Maximize2 } from 'lucide-react';
@@ -120,6 +120,7 @@ const resizeImage = (file: File): Promise<string> => {
 const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, stock, masterList, type, mode, userRole, refreshData, currentUsername, userCompanyId, companies, categories = [], currentUser, allUsers = [], onNavigate }) => {
   // ... (existing state)
   const [isProcessing, setIsProcessing] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
   // Creation/Edit States
@@ -713,7 +714,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         }))
     };
     
-    const results = fuse.search(query);
+    const results = fuse.search(query as any);
     
     // Return top 500 results (increased from 50)
     return results.slice(0, 500).map(r => r.item);
@@ -970,10 +971,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 sku: row.sku || 'N/A', // Could be FOTO_PENDENTE
                 description: row.customDesc,
                 quantity: qtyNum,
-                unit: row.unit || null,
-                category: finalCategory || null,
+                unit: row.unit || undefined,
+                category: finalCategory || undefined,
                 isCustom: true,
-                image: row.image || null
+                image: row.image || undefined
             });
         } else {
             items.push({
@@ -981,7 +982,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 description: getMaterialDescription(row.sku),
                 quantity: qtyNum,
                 isCustom: false,
-                image: row.image || null
+                image: row.image || undefined
             });
         }
     }
@@ -2084,7 +2085,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                         {row.image && (
                                                             <div 
                                                                 className="relative group cursor-pointer mr-2" 
-                                                                onClick={() => setSelectedImage(row.image)}
+                                                                onClick={() => setSelectedImage(row.image || null)}
                                                                 title="Ver imagem anexada"
                                                             >
                                                                 <img 
@@ -2321,8 +2322,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                 Stock: {stockQty}
                                                             </span>
                                                             {(() => {
-                                                                const openQty = allActiveOrders
-                                                                    .filter(o => o.status !== 'COMPLETED' && o.status !== 'REJECTED')
+                                                                const openQty = (allActiveOrders || [])
+                                                                    .filter(o => (o.status as any) !== 'COMPLETED' && (o.status as any) !== 'REJECTED')
                                                                     .reduce((acc, o) => {
                                                                         const item = o.items.find(i => i.sku === row.sku);
                                                                         if (!item) return acc;
