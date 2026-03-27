@@ -802,6 +802,38 @@ export const StorageService = {
   },
 
   // User Management
+  generateUniqueUsername: async (firstName: string, lastName: string): Promise<string> => {
+      if (!db) return '';
+      
+      const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
+      const baseUsername = `${norm(firstName || 'user')}-${norm(lastName || '')}`.replace(/-+$/, '').replace(/^-+/, '');
+      
+      const usersSnap = await db.ref(KEYS.USERS).get();
+      const existingUsernames = new Set<string>();
+      if (usersSnap.exists()) {
+          Object.values(usersSnap.val()).forEach((u: any) => {
+              if (u.username) existingUsernames.add(u.username.toLowerCase());
+          });
+      }
+      
+      const invitesSnap = await db.ref(KEYS.INVITES).get();
+      if (invitesSnap.exists()) {
+          Object.values(invitesSnap.val()).forEach((i: any) => {
+              if (i.username) existingUsernames.add(i.username.toLowerCase());
+          });
+      }
+
+      let username = baseUsername;
+      let counter = 2;
+      
+      while (existingUsernames.has(username)) {
+          username = `${baseUsername}${counter}`;
+          counter++;
+      }
+      
+      return username;
+  },
+
   createInvite: async (email: string, role: UserRole, firstName: string, lastName: string, companyId: string, supervisorId: string) => {
       if (!db) return '';
       
@@ -819,32 +851,7 @@ export const StorageService = {
       const code = Math.floor(100000 + Math.random() * 900000).toString();
       
       // 2. Generate username
-      const usersSnap = await db.ref(KEYS.USERS).get();
-      const existingUsernames = new Set<string>();
-      if (usersSnap.exists()) {
-          Object.values(usersSnap.val()).forEach((u: any) => {
-              if (u.username) existingUsernames.add(u.username.toLowerCase());
-          });
-      }
-      
-      // Also check existing invites for usernames
-      const invitesSnap = await db.ref(KEYS.INVITES).get();
-      if (invitesSnap.exists()) {
-          Object.values(invitesSnap.val()).forEach((i: any) => {
-              if (i.username) existingUsernames.add(i.username.toLowerCase());
-          });
-      }
-
-      const norm = (str: string) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim().replace(/\s+/g, '-');
-      let baseUsername = `${norm(firstName || 'user')}.${norm(lastName || '')}`;
-      if (baseUsername.endsWith('.')) baseUsername = baseUsername.slice(0, -1);
-      let username = baseUsername;
-      let counter = 2;
-      
-      while (existingUsernames.has(username)) {
-          username = `${baseUsername}${counter}`;
-          counter++;
-      }
+      const username = await StorageService.generateUniqueUsername(firstName, lastName);
 
       const emailKey = normalizeText(email).replace(/\./g, '_');
       const newInvite: Invite = {

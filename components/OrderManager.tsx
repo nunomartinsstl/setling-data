@@ -158,10 +158,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   // Company Selection for Admins
   const [targetCompanyId, setTargetCompanyId] = useState<string>('');
   
-  // Import State
-  const [importModalOpen, setImportModalOpen] = useState(false);
-  const [importText, setImportText] = useState('');
-
   // UI State
   const [expandedRowIndex, setExpandedRowIndex] = useState<number>(0);
   const [formErrors, setFormErrors] = useState<{title?: boolean, date?: boolean, company?: boolean, pep?: boolean, rows: number[], duplicateCustom?: number[], invalidSkus?: number[], unchecked?: number[], missingCategory?: number[]}>({ rows: [], duplicateCustom: [], invalidSkus: [], unchecked: [], missingCategory: [] });
@@ -720,40 +716,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     return results.slice(0, 500).map(r => r.item);
   };
 
-  // ... (Import Logic omitted for brevity, unchanged)
-  const handleImportProcess = () => {
-      const parsedItems = ParserService.parseOrderImport(importText);
-      if (parsedItems.length === 0) {
-          alert("Não foi possível identificar itens no texto colado. Use o formato: 'Referência, Quantidade'.");
-          return;
-      }
-
-      const newRows: ManualRow[] = parsedItems.map(item => {
-          const isKnown = isKnownSku(item.sku);
-          return {
-              sku: isKnown ? item.sku : '',
-              qty: item.quantity,
-              unit: 'UN',
-              category: '',
-              customCategory: '',
-              isCustom: !isKnown,
-              customDesc: !isKnown ? (item.description || item.sku) : '',
-              similarityChecked: isKnown,
-              inputType: 'TEXT'
-          };
-      });
-
-      let currentRows = [...manualRows];
-      if (currentRows.length === 1 && !currentRows[0].sku && !currentRows[0].customDesc) {
-          currentRows = [];
-      }
-
-      setManualRows([...currentRows, ...newRows]);
-      setImportModalOpen(false);
-      setImportText('');
-      setMessage({ type: 'success', text: `${newRows.length} itens importados com sucesso. Verifique se há itens novos (customizados).` });
-  };
-  
   const validateForm = (): boolean => {
       const errors: number[] = [];
       const duplicateErrors: number[] = [];
@@ -1576,27 +1538,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           </div>
       )}
 
-      {/* Import Modal Omitted for brevity (same as previous) */}
-      {importModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg p-6 border border-slate-200 dark:border-slate-700 animate-fade-in">
-                  <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
-                      <FileText className="w-5 h-5 text-brand-600" /> Importar Lista
-                  </h3>
-                  <textarea
-                      value={importText}
-                      onChange={(e) => setImportText(e.target.value)}
-                      placeholder="REFERENCIA, QUANTIDADE"
-                      className="w-full h-40 p-3 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none dark:bg-slate-900 dark:text-white font-mono text-sm"
-                  />
-                  <div className="flex justify-end gap-3 mt-4">
-                      <button onClick={() => setImportModalOpen(false)} className="px-4 py-2 text-slate-600 dark:text-slate-400">Cancelar</button>
-                      <button onClick={handleImportProcess} className="px-4 py-2 bg-brand-600 text-white rounded-lg">Processar</button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {/* Similarity Search Modal Omitted for brevity (same as previous) */}
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -2363,13 +2304,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                             className="flex-1 py-3 bg-brand-50 dark:bg-brand-900/20 border-2 border-dashed border-brand-200 dark:border-brand-800 rounded-lg text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors flex items-center justify-center gap-2"
                         >
                             <Plus className="w-5 h-5" /> Adicionar Outro Item
-                        </button>
-                        <button
-                            onClick={() => setImportModalOpen(true)}
-                            className="px-6 py-3 bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
-                            title="Importar de Texto (CSV)"
-                        >
-                            <FileText className="w-5 h-5" /> Importar
                         </button>
                     </div>
 

@@ -47,45 +47,5 @@ export const ParserService = {
     });
 
     return items;
-  },
-
-  /**
-   * Parse CSV-like text into Order Line Items
-   * Format: SKU, Description, Quantity
-   * Returns OrderLineItem[] (does not create full Order object)
-   */
-  parseOrderImport: (text: string): OrderLineItem[] => {
-    if (!text.trim()) return [];
-
-    const lines = text.split(/\n/);
-    const items: OrderLineItem[] = [];
-
-    lines.forEach(line => {
-      const parts = line.split(/[,;]/);
-      if (parts.length >= 2) {
-        const sku = parts[0].trim();
-        let quantity = 0;
-        let description = "Item Importado";
-
-        if (parts.length === 2) {
-             const p1 = parseFloat(parts[1].trim());
-             if (!isNaN(p1)) quantity = p1;
-        } else {
-            description = parts[1].trim();
-            const p2 = parseFloat(parts[2].trim());
-            if (!isNaN(p2)) quantity = p2;
-        }
-
-        if (sku && quantity > 0) {
-            items.push({
-                sku,
-                description,
-                quantity
-            });
-        }
-      }
-    });
-
-    return items;
   }
 };

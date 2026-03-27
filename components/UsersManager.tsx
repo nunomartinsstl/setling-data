@@ -20,6 +20,7 @@ const UsersManager: React.FC = () => {
     const [inviteCompanyId, setInviteCompanyId] = useState('');
     const [inviteSupervisorId, setInviteSupervisorId] = useState('');
     const [inviteRole, setInviteRole] = useState<string>(UserRole.WAREHOUSE);
+    const [inviteUsernamePreview, setInviteUsernamePreview] = useState('');
     const [isInviting, setIsInviting] = useState(false);
     const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
 
@@ -33,6 +34,18 @@ const UsersManager: React.FC = () => {
     useEffect(() => {
         fetchData();
     }, []);
+
+    useEffect(() => {
+        if (inviteFirstName || inviteLastName) {
+            const timer = setTimeout(async () => {
+                const username = await StorageService.generateUniqueUsername(inviteFirstName, inviteLastName);
+                setInviteUsernamePreview(username);
+            }, 500);
+            return () => clearTimeout(timer);
+        } else {
+            setInviteUsernamePreview('');
+        }
+    }, [inviteFirstName, inviteLastName]);
 
     const fetchData = async () => {
         try {
@@ -267,6 +280,16 @@ const UsersManager: React.FC = () => {
                                 placeholder="Último Nome"
                             />
                         </div>
+                        {inviteUsernamePreview && (
+                            <div className="col-span-full bg-purple-50 dark:bg-purple-900/20 p-2 rounded border border-purple-100 dark:border-purple-800 flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <UserCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                                    <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">Utilizador Gerado:</span>
+                                    <span className="text-sm font-mono font-bold text-purple-900 dark:text-purple-100">{inviteUsernamePreview}</span>
+                                </div>
+                                <span className="text-[10px] text-purple-500 italic">Gerado automaticamente</span>
+                            </div>
+                        )}
                         <div>
                              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Função Permitida</label>
                              <select 
