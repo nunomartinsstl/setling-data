@@ -223,6 +223,7 @@ export interface AppSettings {
   autoDecrementStock?: boolean;
   approvalRules?: ApprovalRule[];
   permissions?: Record<UserRole, RolePermissions>;
+  roleHierarchy?: Record<string, number>;
   synonyms?: SynonymGroup[];
   supervisorRoles?: string[];
 }

@@ -36,7 +36,9 @@ const Settings: React.FC = () => {
 
   // Permissions
   const [permissions, setPermissions] = useState<Record<string, RolePermissions>>(DEFAULT_PERMISSIONS);
+  const [roleHierarchy, setRoleHierarchy] = useState<Record<string, number>>({});
   const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleHierarchy, setNewRoleHierarchy] = useState('5');
   
   // Supervisor Roles
   const [supervisorRoles, setSupervisorRoles] = useState<string[]>([]);
@@ -73,6 +75,7 @@ const Settings: React.FC = () => {
             categories: categories,
             approvalRules: approvalRules,
             permissions: permissions,
+            roleHierarchy: roleHierarchy,
             synonyms: synonyms,
             supervisorRoles: supervisorRoles,
             autoDecrementStock: true 
@@ -87,7 +90,7 @@ const Settings: React.FC = () => {
     }, 1000);
 
     return () => clearTimeout(timer);
-  }, [recipients, companies, adminAccessCode, unitOptions, suppliers, categories, approvalRules, permissions, synonyms, supervisorRoles, isLoaded]);
+  }, [recipients, companies, adminAccessCode, unitOptions, suppliers, categories, approvalRules, permissions, roleHierarchy, synonyms, supervisorRoles, isLoaded]);
 
   const loadSettings = async () => {
     const settings = await StorageService.getSettings();
@@ -117,6 +120,15 @@ const Settings: React.FC = () => {
     // Load Permissions
     if (settings.permissions) {
         setPermissions(settings.permissions);
+    }
+
+    // Load Hierarchy
+    if (settings.roleHierarchy) {
+        setRoleHierarchy(settings.roleHierarchy);
+    } else {
+        import('../services/storageService').then(mod => {
+            setRoleHierarchy(mod.DEFAULT_HIERARCHY);
+        });
     }
 
     // Load Approval Rules - Normalize old data (maxAmount -> amount + LTE)
@@ -183,7 +195,12 @@ const Settings: React.FC = () => {
           ...prev,
           [roleKey]: newPermissions
       }));
+      setRoleHierarchy(prev => ({
+          ...prev,
+          [roleKey]: parseInt(newRoleHierarchy) || 5
+      }));
       setNewRoleName('');
+      setNewRoleHierarchy('5');
   };
 
   const removeRole = async (role: string) => {
@@ -417,7 +434,7 @@ const Settings: React.FC = () => {
             Defina o que cada função pode fazer ou visualizar no sistema.
         </p>
         
-        <div className="flex gap-2 mb-4 items-end">
+        <div className="flex flex-col md:flex-row gap-2 mb-4 items-end">
             <div className="flex-1">
                 <label className="block text-xs font-bold text-slate-500 mb-1">Nova Função</label>
                 <input 
@@ -427,6 +444,17 @@ const Settings: React.FC = () => {
                     placeholder="Nome da Função (Ex: Supervisor)"
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white uppercase"
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRole())}
+                />
+            </div>
+            <div className="w-full md:w-32">
+                <label className="block text-xs font-bold text-slate-500 mb-1">Nível Hierárquico</label>
+                <input 
+                    type="number"
+                    value={newRoleHierarchy}
+                    onChange={(e) => setNewRoleHierarchy(e.target.value)}
+                    min="1"
+                    max="99"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 />
             </div>
             <button 
@@ -475,6 +503,23 @@ const Settings: React.FC = () => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                    <tr className="bg-slate-50/50 dark:bg-slate-900/30">
+                        <td className="p-3 font-bold text-slate-700 dark:text-slate-200">Nível Hierárquico (1=Topo)</td>
+                        {ROLES_TO_CONFIGURE.map(role => (
+                            <td key={`hierarchy-${role}`} className="p-3 text-center">
+                                <input 
+                                    type="number"
+                                    value={roleHierarchy[role] || 5}
+                                    onChange={(e) => {
+                                        const val = parseInt(e.target.value);
+                                        setRoleHierarchy(prev => ({ ...prev, [role]: val }));
+                                    }}
+                                    min="1"
+                                    className="w-16 p-1 text-center border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                                />
+                            </td>
+                        ))}
+                    </tr>
                     {(Object.keys(PERMISSION_LABELS) as Array<keyof RolePermissions>).map(key => (
                         <tr key={key} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                             <td className="p-3 font-medium text-slate-600 dark:text-slate-300">{PERMISSION_LABELS[key]}</td>

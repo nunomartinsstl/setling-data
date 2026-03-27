@@ -1,9 +1,114 @@
 import React, { useState, useEffect } from 'react';
 import { User, UserRole, Company, Invite } from '../types';
 import { StorageService } from '../services/storageService';
-import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, UserPlus } from 'lucide-react';
+import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, UserPlus, ChevronRight, Network } from 'lucide-react';
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
+
+const OrganogramNode: React.FC<{ user: any, children: any[], getRoleLabel: (role: string) => string }> = ({ user, children, getRoleLabel }) => {
+    const hasChildren = children.length > 0;
+
+    return (
+        <div className="flex flex-col items-center">
+            {/* Node Box */}
+            <div className={`
+                relative z-10 min-w-[160px] px-4 py-3 rounded-lg shadow-lg text-center
+                ${user.role === UserRole.ADMIN ? 'bg-[#E65100]' : user.role === UserRole.MANAGEMENT ? 'bg-[#EF6C00]' : 'bg-[#F57C00]'}
+                text-white transform transition-all hover:scale-105 border border-white/20
+            `}>
+                <div className="text-[10px] font-bold uppercase tracking-widest opacity-80 mb-0.5">
+                    {getRoleLabel(user.role)}
+                </div>
+                <div className="text-sm font-black uppercase tracking-tight">
+                    {user.firstName} {user.lastName}
+                </div>
+                {user.isInvite && (
+                    <div className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black px-2 py-0.5 rounded-full shadow-md border border-white">
+                        PENDENTE
+                    </div>
+                )}
+            </div>
+
+            {/* Vertical line down from parent */}
+            {hasChildren && (
+                <div className="relative w-px h-10 bg-slate-400 dark:bg-slate-500">
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                </div>
+            )}
+
+            {/* Children row */}
+            {hasChildren && (
+                <div className="flex justify-center relative pt-10">
+                    {/* Horizontal connecting line */}
+                    {children.length > 1 && (
+                        <div className="absolute top-0 h-px bg-slate-400 dark:bg-slate-500" 
+                             style={{ 
+                                 left: `${100 / (children.length * 2)}%`, 
+                                 right: `${100 / (children.length * 2)}%` 
+                             }} 
+                        />
+                    )}
+                    
+                    <div className="flex gap-8">
+                        {children.map((child, idx) => (
+                            <div key={idx} className="flex flex-col items-center relative">
+                                {/* Vertical line up to horizontal bar */}
+                                <div className="w-px h-10 bg-slate-400 dark:bg-slate-500 absolute -top-10 left-1/2 -translate-x-1/2">
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
+                                </div>
+                                <OrganogramNode user={child.user} children={child.children} getRoleLabel={getRoleLabel} />
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const RoleHierarchyInfo: React.FC<{ roleHierarchy: Record<string, number>, getRoleLabel: (role: string) => string }> = ({ roleHierarchy, getRoleLabel }) => {
+    const sortedRoles = Object.keys(roleHierarchy).sort((a, b) => roleHierarchy[a] - roleHierarchy[b]);
+
+    return (
+        <div className="mt-8 bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-purple-600" />
+                Hierarquia e Funções
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">Níveis de Autoridade (Ordenados)</h4>
+                    <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                        {sortedRoles.map(role => (
+                            <li key={role} className="flex items-start gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-purple-500 mt-1.5 shrink-0" />
+                                <span>
+                                    <strong>{getRoleLabel(role)}:</strong> 
+                                    {role === UserRole.ADMIN ? ' Acesso total ao sistema e gestão global.' : 
+                                     role === UserRole.MANAGEMENT ? ' Supervisão de equipas e aprovação de pedidos.' : 
+                                     ' Nível ' + roleHierarchy[role] + ' na estrutura organizacional.'}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+                <div className="space-y-3">
+                    <h4 className="font-bold text-slate-800 dark:text-slate-200 text-sm">Relevância da Hierarquia</h4>
+                    <ul className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+                        <li className="flex items-start gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                            <span><strong>Aprovação de Pedidos:</strong> Pedidos de compra podem requerer aprovação de um nível superior dependendo das regras de valor.</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-amber-500 mt-1.5 shrink-0" />
+                            <span><strong>Visibilidade de Dados:</strong> Supervisores podem visualizar e gerir os pedidos em aberto dos seus subordinados diretos no organograma.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const UsersManager: React.FC = () => {
     const [users, setUsers] = useState<User[]>([]);
@@ -11,6 +116,7 @@ const UsersManager: React.FC = () => {
     const [companies, setCompanies] = useState<Company[]>([]);
     const [availableRoles, setAvailableRoles] = useState<string[]>(Object.values(UserRole));
     const [supervisorRoles, setSupervisorRoles] = useState<string[]>([UserRole.ADMIN, UserRole.MANAGEMENT]);
+    const [roleHierarchy, setRoleHierarchy] = useState<Record<string, number>>({});
     const [loading, setLoading] = useState(true);
     
     // Invite State
@@ -47,6 +153,40 @@ const UsersManager: React.FC = () => {
         }
     }, [inviteFirstName, inviteLastName]);
 
+    const buildTree = () => {
+        const allPeople = [
+            ...users.map(u => ({ ...u, id: u.uid })),
+            ...invites.map(i => ({ ...i, isInvite: true }))
+        ];
+        const map = new Map();
+        allPeople.forEach((p: any) => map.set(p.id, { user: p, children: [] }));
+        const roots: any[] = [];
+        allPeople.forEach((p: any) => {
+            const id = p.id;
+            const node = map.get(id);
+            if (p.supervisorId && map.has(p.supervisorId)) {
+                map.get(p.supervisorId).children.push(node);
+            } else {
+                roots.push(node);
+            }
+        });
+
+        // Sort children by hierarchy level
+        const sortNodes = (nodes: any[]) => {
+            nodes.sort((a, b) => {
+                const levelA = roleHierarchy[a.user.role] || 10;
+                const levelB = roleHierarchy[b.user.role] || 10;
+                return levelA - levelB;
+            });
+            nodes.forEach(node => sortNodes(node.children));
+        };
+        sortNodes(roots);
+
+        return roots;
+    };
+
+    const treeData = buildTree();
+
     const fetchData = async () => {
         try {
             const [usersData, invitesData, settings] = await Promise.all([
@@ -79,6 +219,7 @@ const UsersManager: React.FC = () => {
             setInvites(Array.from(inviteMap.values()));
             setCompanies(settings.companies || []);
             setSupervisorRoles(settings.supervisorRoles || [UserRole.ADMIN, UserRole.MANAGEMENT]);
+            setRoleHierarchy(settings.roleHierarchy || {});
             
             if (settings.permissions) {
                 const roles = Object.keys(settings.permissions);
@@ -573,6 +714,33 @@ const UsersManager: React.FC = () => {
                         )}
                     </div>
                 )}
+
+                <div className="mt-12">
+                    <div className="bg-white dark:bg-slate-900 p-12 rounded-3xl border-4 border-slate-100 dark:border-slate-800 shadow-2xl overflow-x-auto relative min-h-[500px] flex justify-center">
+                        {/* Decorative dots in corners like the image */}
+                        <div className="absolute top-4 left-4 grid grid-cols-4 gap-1 opacity-20">
+                            {[...Array(16)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-[#E65100]" />)}
+                        </div>
+                        <div className="absolute bottom-4 right-4 grid grid-cols-4 gap-1 opacity-20">
+                            {[...Array(16)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-[#E65100]" />)}
+                        </div>
+
+                        {treeData.length > 0 ? (
+                            <div className="inline-flex py-10">
+                                {treeData.map((node, idx) => (
+                                    <OrganogramNode key={idx} user={node.user} children={node.children} getRoleLabel={getRoleLabel} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center text-slate-400 italic">
+                                <Users className="w-12 h-12 mb-2 opacity-20" />
+                                <p>Nenhuma estrutura definida para visualização.</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                <RoleHierarchyInfo roleHierarchy={roleHierarchy} getRoleLabel={getRoleLabel} />
             </div>
         </div>
     );

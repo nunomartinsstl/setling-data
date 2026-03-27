@@ -129,6 +129,14 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, RolePermissions> = {
     }
 };
 
+export const DEFAULT_HIERARCHY: Record<string, number> = {
+    [UserRole.ADMIN]: 1,
+    [UserRole.MANAGEMENT]: 2,
+    [UserRole.WAREHOUSE]: 3,
+    [UserRole.TECHNICAL]: 4,
+    [UserRole.VIEWER]: 5
+};
+
 // Helper to normalize string for matching descriptions (keep this for fuzzy description search)
 const normalizeText = (text: string): string => {
     if (!text) return '';
@@ -530,6 +538,17 @@ export const StorageService = {
           if (!val.permissions[UserRole.ADMIN]) {
               val.permissions[UserRole.ADMIN] = DEFAULT_PERMISSIONS[UserRole.ADMIN];
           }
+      }
+
+      if (!val.roleHierarchy) {
+          val.roleHierarchy = DEFAULT_HIERARCHY;
+      } else {
+          // Ensure all current roles have a hierarchy level
+          Object.keys(val.permissions).forEach(role => {
+              if (val.roleHierarchy[role] === undefined) {
+                  val.roleHierarchy[role] = DEFAULT_HIERARCHY[role] || 10; // Default to 10 for custom roles
+              }
+          });
       }
 
       return val;
