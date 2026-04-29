@@ -569,9 +569,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           grandTotal,
           creator: currentUsername,
           status: status,
-          // FIX: Do not assign undefined directly to a property that will be sent to Firebase
           ...(matchedRule ? { approvalMetadata: { approverEmail: matchedRule.approverEmail } } : {}),
-          companyId: targetCompanyId || undefined
+          ...(targetCompanyId ? { companyId: targetCompanyId } : {})
       };
 
       setLoading(true);

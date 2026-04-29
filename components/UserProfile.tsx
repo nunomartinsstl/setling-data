@@ -21,7 +21,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, companies, allUsers }) 
         </div>
         <div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Área Pessoal</h2>
-          <p className="text-slate-500 dark:text-slate-400">Gerencie suas informações de conta</p>
+          <p className="text-slate-500 dark:text-slate-400">Confira os dados da sua conta</p>
         </div>
       </div>
 

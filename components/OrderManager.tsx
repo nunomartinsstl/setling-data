@@ -929,23 +929,27 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 if (catObj) finalCategory = `${catObj.code} - ${catObj.name}`;
             }
 
-            items.push({
+            const item: OrderLineItem = {
                 sku: row.sku || 'N/A', // Could be FOTO_PENDENTE
                 description: row.customDesc,
                 quantity: qtyNum,
-                unit: row.unit || undefined,
-                category: finalCategory || undefined,
-                isCustom: true,
-                image: row.image || undefined
-            });
+                isCustom: true
+            };
+            if (row.unit) item.unit = row.unit;
+            if (finalCategory) item.category = finalCategory;
+            if (row.image) item.image = row.image;
+
+            items.push(item);
         } else {
-            items.push({
+            const item: OrderLineItem = {
                 sku: row.sku,
                 description: getMaterialDescription(row.sku),
                 quantity: qtyNum,
-                isCustom: false,
-                image: row.image || undefined
-            });
+                isCustom: false
+            };
+            if (row.image) item.image = row.image;
+            
+            items.push(item);
         }
     }
     setPendingItems(items);
@@ -1988,7 +1992,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                 <button 
                                                                     onClick={() => {
                                                                         const newRows = [...manualRows];
-                                                                        newRows[idx].image = undefined;
+                                                                        delete newRows[idx].image;
                                                                         newRows[idx].sku = '';
                                                                         newRows[idx].customDesc = '';
                                                                         newRows[idx].isCustom = false;
@@ -2041,7 +2045,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     onClick={(e) => {
                                                                         e.stopPropagation();
                                                                         const newRows = [...manualRows];
-                                                                        newRows[idx].image = undefined;
+                                                                        delete newRows[idx].image;
                                                                         setManualRows(newRows);
                                                                     }}
                                                                     className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-600"

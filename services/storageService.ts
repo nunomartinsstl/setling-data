@@ -1105,19 +1105,27 @@ export const StorageService = {
               const nextReopenCount = (originalOrder.reopenCount || 0) + 1;
               const newOrderId = `${originalOrder.id}_re_${nextReopenCount}`;
               
-              const newItems: OrderLineItem[] = allocatedDemands.map(d => ({
-                  ...d.originalItem,
-                  quantity: d.missingQty, // Only what's missing
-                  quantityPicked: 0,
-                  backorderCreated: false,
-                  fulfilledInOrderId: undefined,
-                  image: d.originalItem.image // Ensure no undefined
-              }));
+              const newItems: OrderLineItem[] = allocatedDemands.map(d => {
+                  const item = {
+                      ...d.originalItem,
+                      quantity: d.missingQty, // Only what's missing
+                      quantityPicked: 0,
+                      backorderCreated: false
+                  };
+                  delete item.fulfilledInOrderId;
+                  if (!item.image) delete item.image;
+                  // Ensure no undefined
+                  Object.keys(item).forEach(key => {
+                      if ((item as any)[key] === undefined) {
+                          delete (item as any)[key];
+                      }
+                  });
+                  return item;
+              });
 
               const newOrder: Order = {
                   ...originalOrder,
                   id: newOrderId,
-                  displayId: undefined, // Let system generate or keep null? Usually null or new logic.
                   title: `${originalOrder.title} (Reabertura #${nextReopenCount})`,
                   status: 'OPEN',
                   dateCreated: new Date().toISOString(),
@@ -1132,6 +1140,7 @@ export const StorageService = {
                   reopenCount: 0, // Reset for the new order
                   stockProcessed: false
               };
+              delete newOrder.displayId;
 
               updates[`${KEYS.ORDERS}/${newOrderId}`] = newOrder;
 
