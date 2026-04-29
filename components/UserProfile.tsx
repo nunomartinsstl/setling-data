@@ -12,6 +12,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, companies, allUsers }) 
   const companyName = companies.find(c => c.id === user.companyId)?.name || 'Não atribuída';
   const supervisor = allUsers.find(u => u.uid === user.supervisorId);
   const supervisorName = supervisor ? `${supervisor.firstName} ${supervisor.lastName}` : 'Nenhum';
+  const subordinates = allUsers.filter(u => u.supervisorId === user.uid);
 
   return (
     <div className="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
@@ -60,6 +61,21 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, companies, allUsers }) 
               <UserCheck className="w-3 h-3" /> Supervisor / Coordenador
             </label>
             <p className="text-lg font-medium text-slate-800 dark:text-slate-200">{supervisorName}</p>
+          </div>
+        )}
+
+        {subordinates.length > 0 && (
+          <div className="space-y-1 md:col-span-2 mt-4">
+            <label className="text-xs font-semibold text-slate-500 uppercase flex items-center gap-1">
+              <UserIcon className="w-3 h-3" /> Subordinados
+            </label>
+            <ul className="list-disc list-inside text-slate-800 dark:text-slate-200 mt-2 space-y-1">
+              {subordinates.map(sub => (
+                <li key={sub.uid} className="font-medium">
+                  {sub.firstName} {sub.lastName} <span className="text-sm font-normal text-slate-500">({sub.username})</span>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>

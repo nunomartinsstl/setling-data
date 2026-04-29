@@ -127,13 +127,7 @@ const App: React.FC = () => {
       }
 
       try {
-          if (fetchedSettings.permissions?.[user?.role || '']?.canManageUsers ?? false) {
-              fetchedUsers = await StorageService.getUsers();
-          } else if (user?.role === UserRole.TECHNICAL || user?.role === UserRole.MANAGEMENT) {
-              // Technicians need a restricted list of supervisors, so we might need a separate call or allow reading users but not editing
-              // For now, let's try to fetch for everyone but fail silently, as OrderManager needs allUsers for email lookup
-              fetchedUsers = await StorageService.getUsers();
-          }
+          fetchedUsers = await StorageService.getUsers();
       } catch (e) {
           console.warn("Users list access restricted or failed.", e);
       }
@@ -223,7 +217,9 @@ const App: React.FC = () => {
       if (!canViewAll && !canViewOwn) return false;
       
       if (!canViewAll && canViewOwn) {
-          if (o.creator !== user?.username) return false;
+          const creatorUser = allUsers.find(u => u.username === o.creator);
+          const isCreatorSubordinate = creatorUser?.supervisorId === user?.uid;
+          if (o.creator !== user?.username && !isCreatorSubordinate) return false;
       }
 
       if (user?.role === UserRole.WAREHOUSE || user?.role === UserRole.MANAGEMENT) return true;

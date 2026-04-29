@@ -429,7 +429,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   const canEdit = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const canApprove = userRole === UserRole.MANAGEMENT || userRole === UserRole.ADMIN;
   const isAdmin = userRole === UserRole.ADMIN;
-  const isTechnical = userRole === UserRole.TECHNICAL;
+  // A user requires supervisor approval if they have a supervisor assigned, or if they are technically a 'TECHNICAL' role natively, or if their role literally includes 'téc'
+  const isTechnical = userRole === UserRole.TECHNICAL || !!currentUser?.supervisorId || userRole.toLowerCase().includes('téc') || userRole.toLowerCase().includes('tec');
 
   // ... (materialOptions, settings load, persistence)
   
@@ -2366,6 +2367,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                // Check for pending photos
                                const hasPendingPhotos = order.items.some(i => i.image && (!i.sku || i.sku === 'FOTO_PENDENTE'));
 
+                               const creatorUser = allUsers?.find(u => u.username === order.creator);
+                               const isOrderSupervisor = Boolean(currentUser?.uid && creatorUser?.supervisorId === currentUser.uid);
+                               const orderCanApprove = isAdmin || isOrderSupervisor || canApprove;
+                               const orderCanEdit = canEdit || orderCanApprove;
+
                                // FIFO Status
                                const allocationStatus = allocationMap.orderStatus.get(order.id) || 'FULL'; // Default full for completed/untracked
                                const isFullAlloc = allocationStatus === 'FULL';
@@ -2547,7 +2553,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                {/* Action Buttons */}
                                                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100 dark:border-slate-700 flex-wrap">
                                                     
-                                                    {isPendingApproval && canApprove && (
+                                                    {isPendingApproval && orderCanApprove && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleApproveOrder(order); }}
                                                             className={`flex items-center gap-1 px-4 py-2 text-xs font-bold text-white rounded-lg shadow-sm transition-colors ${hasPendingPhotos ? 'bg-slate-400 cursor-not-allowed opacity-50' : 'bg-green-600 hover:bg-green-700 animate-pulse'}`}
@@ -2588,7 +2594,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                         <Download className="w-3 h-3" /> Excel
                                                     </button>
                                                     
-                                                    {type === 'OPEN' && canEdit && (
+                                                    {type === 'OPEN' && orderCanEdit && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
                                                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
@@ -2597,7 +2603,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                         </button>
                                                     )}
 
-                                                    {(isAdmin || (isTechnical && isPendingApproval)) && (
+                                                    {(isAdmin || (orderCanApprove && isPendingApproval)) && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
                                                             className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
