@@ -2478,7 +2478,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     <th className="p-3 whitespace-nowrap">Material</th>
                                                                     <th className="p-3 whitespace-nowrap">Descrição</th>
                                                                     <th className="p-3 text-right whitespace-nowrap">Qtd</th>
-                                                                    {type === 'OPEN' && !isCompleted && <th className="p-3 text-right whitespace-nowrap">Stock Alloc</th>}
+                                                                    {type === 'OPEN' && !isCompleted && <th className="p-3 text-right whitespace-nowrap">Stock</th>}
                                                                     {(type === 'FINISHED' || isGhost) && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
                                                                     {(type === 'FINISHED' || isGhost) && <th className="p-3 whitespace-nowrap">Status</th>}
                                                                 </tr>
