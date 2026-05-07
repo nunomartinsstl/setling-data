@@ -826,9 +826,42 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       setSimilarityStep('CONFIRM_MATCH');
   };
 
-  const handleConfirmMatch = () => {
+  const handleConfirmMatch = async () => {
       if (similarityTargetIdx === null || !selectedCandidate) return;
       
+      if (similarityTargetIdx === -1) {
+          // Inline mode via Rejeitar
+          if (!rejectMatchData) return;
+          try {
+              setIsProcessing(true);
+              const { order, itemIdx } = rejectMatchData;
+              const updatedOrder = JSON.parse(JSON.stringify(order));
+              const item = updatedOrder.items[itemIdx];
+              
+              item.unverifiedMatch = false;
+              item.isCustom = false;
+              item.sku = selectedCandidate.sku;
+              item.description = selectedCandidate.description;
+              
+              if (!updatedOrder.changeLog) updatedOrder.changeLog = [];
+              updatedOrder.changeLog.push({
+                  date: new Date().toISOString(),
+                  actor: currentUser?.username || 'Utilizador',
+                  details: `Correspondência corrigida manualmente para: ${selectedCandidate.sku} - ${selectedCandidate.description}`
+              });
+              
+              await StorageService.updateOrder(updatedOrder);
+              setSimilarityModalOpen(false);
+              setRejectMatchData(null);
+              if (refreshData) refreshData();
+          } catch(e:any) {
+              setMessage({ type: 'error', text: e.message });
+          } finally {
+              setIsProcessing(false);
+          }
+          return;
+      }
+
       const newRows = [...manualRows];
       const prevText = newRows[similarityTargetIdx].isCustom 
           ? newRows[similarityTargetIdx].customDesc 
@@ -863,6 +896,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   const handleConfirmNew = () => {
       if (similarityTargetIdx === null) return;
       
+      if (similarityTargetIdx === -1) {
+          // Redirect to RevertToOriginal which handles making it a new string again inline
+          handleRevertToOriginal();
+          setSimilarityModalOpen(false);
+          return;
+      }
+
       const newRows = [...manualRows];
       const currentText = newRows[similarityTargetIdx].isCustom 
           ? newRows[similarityTargetIdx].customDesc 
@@ -1623,8 +1663,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                       <div className="space-y-3">
                           <button 
                               onClick={() => {
+                                  if (!rejectMatchData) return;
+                                  const item = rejectMatchData.order.items[rejectMatchData.itemIdx];
+                                  const query = item.originalDescription || item.description;
+                                  
+                                  const candidates = masterList
+                                      .map(m => ({ ...m, score: calculateRelevance(m.description, query) }))
+                                      .filter(m => m.score > 0)
+                                      .sort((a, b) => b.score - a.score)
+                                      .slice(0, 10); 
+                                      
+                                  setSimilarityResults(candidates);
+                                  setSimilarityStep('LIST');
+                                  setSimilarityTargetIdx(-1);
                                   setRejectMatchModalOpen(false);
-                                  handleEditStart(rejectMatchData.order);
+                                  setSimilarityModalOpen(true);
                               }}
                               className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
                           >
@@ -1673,10 +1726,17 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                             <button onClick={() => setSimilarityModalOpen(false)}><X className="w-6 h-6" /></button>
                         </div>
                         <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
-                            {similarityResults.map((res, idx) => (
-                                <button key={idx} onClick={() => handleSelectCandidate(res)} className="w-full text-left p-3 border rounded hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2">
-                                    <div className="font-bold text-brand-600">{res.sku}</div>
-                                    <div className="text-sm">{res.description}</div>
+                            {similarityResults.map((res: any, idx) => (
+                                <button key={idx} onClick={() => handleSelectCandidate(res)} className="w-full text-left p-3 border dark:border-slate-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2 flex justify-between items-center group">
+                                    <div>
+                                        <div className="font-bold text-brand-600 dark:text-brand-400 group-hover:underline">{res.sku}</div>
+                                        <div className="text-sm text-slate-700 dark:text-slate-300">{res.description}</div>
+                                    </div>
+                                    {res.score !== undefined && (
+                                        <div className="flex-shrink-0 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                                            Score: {res.score > 100 ? 100 : Math.round(res.score)}%
+                                        </div>
+                                    )}
                                 </button>
                             ))}
                             <button onClick={handleNotFound} className="w-full py-3 bg-white dark:bg-slate-800 border text-slate-600 dark:text-slate-300 rounded mt-4">Não consta na lista</button>

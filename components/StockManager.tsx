@@ -1,19 +1,20 @@
 import React, { useState, useRef } from 'react';
-import { StockItem, UserRole, MasterMaterial } from '../types';
+import { StockItem, UserRole, MasterMaterial, Order } from '../types';
 import { StorageService } from '../services/storageService';
-import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info, FilePlus, RefreshCw, X } from 'lucide-react';
+import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info, FilePlus, RefreshCw, X, AlertCircle, Search, Clock } from 'lucide-react';
 
 declare const XLSX: any;
 
 interface StockManagerProps {
   stock: StockItem[];
   masterList: MasterMaterial[];
+  orders: Order[];
   userRole: UserRole;
   refreshData: () => void;
 }
 
-const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole, refreshData }) => {
-  const [activeTab, setActiveTab] = useState<'STOCK' | 'MASTER'>('STOCK');
+const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, userRole, refreshData }) => {
+  const [activeTab, setActiveTab] = useState<'STOCK' | 'MASTER' | 'PENDING'>('STOCK');
   const [loadingState, setLoadingState] = useState<'' | 'READING' | 'UPLOADING' | 'PROCESSING'>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
@@ -186,6 +187,21 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
     reader.readAsArrayBuffer(file);
   };
 
+  const unverifiedItems = React.useMemo(() => {
+    if (!orders) return [];
+    const items: { order: Order, itemIdx: number, item: any }[] = [];
+    orders.forEach(order => {
+        if (order.items) {
+           order.items.forEach((item, idx) => {
+               if (item.unverifiedMatch) {
+                   items.push({ order, itemIdx: idx, item });
+               }
+           });
+        }
+    });
+    return items;
+  }, [orders]);
+
   const executeMasterUpdate = async (mode: 'MERGE' | 'REPLACE') => {
       setLoadingState('UPLOADING');
       try {
@@ -298,6 +314,12 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                     Stock Atual
                 </button>
                 <button 
+                    onClick={() => { setActiveTab('PENDING'); setMessage(null); }}
+                    className={`px-4 py-1 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'PENDING' ? 'bg-white dark:bg-slate-800 shadow text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}
+                >
+                    Pendentes
+                </button>
+                <button 
                     onClick={() => { setActiveTab('MASTER'); setMessage(null); }}
                     className={`px-4 py-1 text-sm font-medium rounded-md transition-all ${activeTab === 'MASTER' ? 'bg-white dark:bg-slate-800 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                 >
@@ -389,6 +411,58 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, userRole
                 </div>
             </div>
           </>
+      ) : activeTab === 'PENDING' ? (
+        <div className="space-y-4 animate-fade-in">
+             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+                <div className="bg-amber-50 dark:bg-amber-900/20 p-4 border-b border-amber-100 dark:border-amber-900/50 flex items-center gap-2 justify-between">
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                        <h3 className="font-bold text-amber-800 dark:text-amber-300">Validação de Novos Materiais ({unverifiedItems.length})</h3>
+                    </div>
+                </div>
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 text-sm text-slate-600 dark:text-slate-400 border-b dark:border-slate-700">
+                    Aqui estão listados os itens cujo código foi sugerido automaticamente com base na descrição fornecida noutros pedidos e não tiveram correspondência exata. Por favor verifique se o material atribuído está correto.
+                </div>
+                <div className="overflow-x-auto w-full">
+                    <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
+                        <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
+                        <tr>
+                            <th className="p-3 whitespace-nowrap">Pedido Original</th>
+                            <th className="p-3 whitespace-nowrap">Descrição Inserida</th>
+                            <th className="p-3 whitespace-nowrap">Correspondência Automática</th>
+                            <th className="p-3 whitespace-nowrap">Ação</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                        {unverifiedItems.length === 0 ? (
+                             <tr><td colSpan={4} className="p-8 text-center text-slate-400">Nenhum material pendente de validação.</td></tr>
+                        ) : (
+                            unverifiedItems.map((val, idx) => (
+                                <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                                    <td className="p-3">
+                                        <div className="font-bold text-slate-800 dark:text-white">{val.order.title}</div>
+                                        <div className="text-xs text-slate-400 flex items-center gap-1 mt-1"><Clock className="w-3 h-3"/> {new Date(val.order.dateCreated).toLocaleDateString('pt-BR')}</div>
+                                    </td>
+                                    <td className="p-3 font-medium text-slate-800 dark:text-white max-w-xs">{val.item.originalDescription}</td>
+                                    <td className="p-3">
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-2 rounded border border-blue-100 dark:border-blue-900/50 inline-block w-full max-w-sm">
+                                            <div className="font-mono text-xs font-bold">{val.item.sku}</div>
+                                            <div className="truncate" title={val.item.description}>{val.item.description}</div>
+                                        </div>
+                                    </td>
+                                    <td className="p-3">
+                                        <div className="flex gap-2">
+                                           <span className="text-xs font-bold text-slate-400">Valide os itens através dos Pedidos Abertos</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
       ) : (
         <div className="space-y-4 animate-fade-in">
              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-purple-200 dark:border-purple-900/50">

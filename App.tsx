@@ -347,6 +347,7 @@ const App: React.FC = () => {
           <StockManager 
             stock={stock} 
             masterList={masterList}
+            orders={orders}
             userRole={user.role} 
             refreshData={refreshData} 
           />
