@@ -2,6 +2,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/auth';
 import 'firebase/compat/database';
+import Fuse from 'fuse.js';
 import { User, UserRole, Order, StockItem, MasterMaterial, AppSettings, PurchaseOrder, Company, OrderLineItem, PickedItem, Receipt, RolePermissions, Invite } from '../types';
 
 // Safely access environment variables
@@ -1191,18 +1192,23 @@ export const StorageService = {
           // Helper to normalize
           const norm = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-          // Create a lookup map from Stock (and Master) descriptions to SKUs
-          const descToSku = new Map<string, string>();
+          // Create a searchable list from MasterList and Stock
+          const searchOptions = {
+              keys: ['normDesc', 'description', 'sku'],
+              threshold: 0.4,
+              includeScore: true
+          };
           
-          // Populate from MasterList first
+          const searchableItems = new Map<string, { sku: string, description: string, normDesc: string }>();
+          
           masterList.forEach(m => {
-              if (m.description) descToSku.set(norm(m.description), m.sku);
+              if (m.description) searchableItems.set(m.sku, { sku: m.sku, description: m.description, normDesc: norm(m.description) });
           });
-          
-          // Override/Augment with Stock (higher priority if description matches exactly what was entered)
           currentStock.forEach(s => {
-              if (s.description) descToSku.set(norm(s.description), s.sku);
+              if (s.description) searchableItems.set(s.sku, { sku: s.sku, description: s.description, normDesc: norm(s.description) });
           });
+
+          const fuse = new Fuse(Array.from(searchableItems.values()), searchOptions);
 
           for (const order of orders) {
               // Only check active orders or pending ones (Allow COMPLETED to fix retroactive SKU matches)
@@ -1218,15 +1224,34 @@ export const StorageService = {
                   // Also check if it is "FOTO_PENDENTE" - we can't resolve photos by description usually, but if they typed a description...
                   if ((item.isCustom || item.sku === 'N/A' || !item.sku) && item.sku !== 'FOTO_PENDENTE') {
                       const d = norm(item.description);
-                      if (descToSku.has(d)) {
+                      
+                      const results = fuse.search(d);
+                      let bestMatch = null;
+                      
+                      // Check for exact match first (which fuse handles but just to be safe)
+                      const exactMatch = Array.from(searchableItems.values()).find(i => i.normDesc === d);
+                      if (exactMatch) {
+                          bestMatch = exactMatch;
+                      } else if (results.length > 0 && results[0].score !== undefined && results[0].score < 0.3) {
+                          bestMatch = results[0].item;
+                      }
+
+                      if (bestMatch) {
                           // MATCH FOUND!
-                          const newSku = descToSku.get(d)!;
+                          const newSku = bestMatch.sku;
                           
                           // Update Item
                           item.sku = newSku;
                           item.isCustom = false; // No longer custom
-                          // We keep the original description to avoid confusion, or we could update it.
-                          // Prompt says "convert the 'N/A' into the actual code".
+                          item.originalDescription = item.description;
+                          // If it was a fuzzy match, it needs validation
+                          if (!exactMatch) {
+                              item.unverifiedMatch = true;
+                          }
+                          
+                          // Update to official description from masterList if available
+                          const officialDesc = masterList.find(m => m.sku === newSku)?.description || bestMatch.description;
+                          item.description = officialDesc;
                           
                           orderModified = true;
                           
@@ -1235,7 +1260,7 @@ export const StorageService = {
                           order.changeLog.push({
                               date: new Date().toISOString(),
                               actor: 'SYSTEM',
-                              details: `Material "${item.description}" identificado em stock. Código atribuído: ${newSku}`
+                              details: `Material "${item.originalDescription}" identificado automaticamente. ${!exactMatch ? '(Por validar)' : ''} Código atribuído: ${newSku}`
                           });
                       } else {
                           hasPendingCustom = true;

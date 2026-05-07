@@ -35,6 +35,7 @@ interface ManualRow {
     customCategory: string; // If 'A00' or other generic is selected and user types manually
     isCustom: boolean;
     customDesc: string;
+    originalDesc?: string;
     similarityChecked: boolean;
     image?: string; // Base64 image
     inputType: 'TEXT' | 'PHOTO';
@@ -168,6 +169,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   const [similarityResults, setSimilarityResults] = useState<MasterMaterial[]>([]);
   const [similarityStep, setSimilarityStep] = useState<'LIST' | 'CONFIRM_MATCH' | 'CONFIRM_NEW'>('LIST');
   const [selectedCandidate, setSelectedCandidate] = useState<MasterMaterial | null>(null);
+
+  // Reject Match State
+  const [rejectMatchModalOpen, setRejectMatchModalOpen] = useState(false);
+  const [rejectMatchData, setRejectMatchData] = useState<{order: Order, itemIdx: number} | null>(null);
 
   // View Image Modal
   const [viewImage, setViewImage] = useState<string | null>(null);
@@ -825,11 +830,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       if (similarityTargetIdx === null || !selectedCandidate) return;
       
       const newRows = [...manualRows];
+      const prevText = newRows[similarityTargetIdx].isCustom 
+          ? newRows[similarityTargetIdx].customDesc 
+          : newRows[similarityTargetIdx].sku;
+
       newRows[similarityTargetIdx] = {
           ...newRows[similarityTargetIdx],
           sku: selectedCandidate.sku,
           isCustom: false,
           customDesc: '',
+          originalDesc: prevText !== 'FOTO_PENDENTE' ? prevText : undefined,
           unit: 'UN',
           category: '', 
           similarityChecked: true,
@@ -933,6 +943,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             const item: OrderLineItem = {
                 sku: row.sku || 'N/A', // Could be FOTO_PENDENTE
                 description: row.customDesc,
+                originalDescription: row.originalDesc,
                 quantity: qtyNum,
                 isCustom: true
             };
@@ -945,6 +956,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             const item: OrderLineItem = {
                 sku: row.sku,
                 description: getMaterialDescription(row.sku),
+                originalDescription: row.originalDesc,
                 quantity: qtyNum,
                 isCustom: false
             };
@@ -967,6 +979,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           customCategory: '', 
           isCustom: !!item.isCustom,
           customDesc: item.isCustom ? item.description.replace('(Novo) ', '') : '',
+          originalDesc: item.originalDescription,
           similarityChecked: true,
           image: item.image,
           inputType: (item.image && item.sku === 'FOTO_PENDENTE') ? 'PHOTO' : 'TEXT'
@@ -1001,6 +1014,60 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       setExpandedRowIndex(firstPhotoIndex >= 0 ? firstPhotoIndex : 0);
       
       window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleConfirmAutoMatch = async (order: Order, itemIdx: number) => {
+      try {
+          setIsProcessing(true);
+          const updatedOrder = JSON.parse(JSON.stringify(order));
+          updatedOrder.items[itemIdx].unverifiedMatch = false;
+          
+          if (!updatedOrder.changeLog) updatedOrder.changeLog = [];
+          updatedOrder.changeLog.push({
+              date: new Date().toISOString(),
+              actor: currentUser?.username || 'Utilizador',
+              details: `Correspondência automática validada: ${updatedOrder.items[itemIdx].sku}`
+          });
+          
+          await StorageService.updateOrder(updatedOrder);
+          setMessage({ type: 'success', text: 'Correspondência confirmada com sucesso.' });
+          if (refreshData) refreshData();
+      } catch (e: any) {
+          setMessage({ type: 'error', text: e.message });
+      } finally {
+          setIsProcessing(false);
+      }
+  };
+
+  const handleRevertToOriginal = async () => {
+      if (!rejectMatchData) return;
+      try {
+          setIsProcessing(true);
+          const { order, itemIdx } = rejectMatchData;
+          const updatedOrder = JSON.parse(JSON.stringify(order));
+          const item = updatedOrder.items[itemIdx];
+          
+          item.unverifiedMatch = false;
+          item.isCustom = true;
+          item.sku = ''; 
+          item.description = item.originalDescription || item.description;
+          
+          if (!updatedOrder.changeLog) updatedOrder.changeLog = [];
+          updatedOrder.changeLog.push({
+              date: new Date().toISOString(),
+              actor: currentUser?.username || 'Utilizador',
+              details: `Correspondência automática rejeitada. Revertido para original: ${item.description}`
+          });
+          
+          await StorageService.updateOrder(updatedOrder);
+          setRejectMatchModalOpen(false);
+          setRejectMatchData(null);
+          if (refreshData) refreshData();
+      } catch (e: any) {
+          setMessage({ type: 'error', text: e.message });
+      } finally {
+          setIsProcessing(false);
+      }
   };
 
   // TRIGGER APPROVAL AND EMAIL TO LOGISTICS
@@ -1543,6 +1610,58 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           </div>
       )}
 
+      {/* REJECT MODAL */}
+      {rejectMatchModalOpen && rejectMatchData && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Rejeitar Correspondência</h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+                          A correspondência automática para "<span className="font-bold">{rejectMatchData.order.items[rejectMatchData.itemIdx].originalDescription}</span>" não está correta. O que deseja fazer?
+                      </p>
+                      
+                      <div className="space-y-3">
+                          <button 
+                              onClick={() => {
+                                  setRejectMatchModalOpen(false);
+                                  handleEditStart(rejectMatchData.order);
+                              }}
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
+                          >
+                              <Search className="w-5 h-5 text-brand-600 dark:text-brand-400 mt-0.5" />
+                              <div>
+                                  <div className="font-bold text-slate-900 dark:text-white">Procurar Outro Código</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">Irá abrir o pedido em modo de edição e ajudar a encontrar o código correto.</div>
+                              </div>
+                          </button>
+                          
+                          <button 
+                              onClick={handleRevertToOriginal}
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
+                          >
+                              <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
+                              <div>
+                                  <div className="font-bold text-slate-900 dark:text-white">Reverter para Original (S/ Cód)</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">Irá manter o material como "Novo" e com a descrição original.</div>
+                              </div>
+                          </button>
+                      </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+                      <button 
+                          onClick={() => {
+                              setRejectMatchModalOpen(false);
+                              setRejectMatchData(null);
+                          }}
+                          className="px-4 py-2 font-bold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                      >
+                          Cancelar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Similarity Search Modal Omitted for brevity (same as previous) */}
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -2080,6 +2199,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     newRows[idx] = {
                                                                         ...newRows[idx],
                                                                         isCustom: false,
+                                                                        sku: newRows[idx].originalDesc || newRows[idx].customDesc,
                                                                         customDesc: '',
                                                                         category: '',
                                                                         similarityChecked: false
@@ -2495,7 +2615,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                             <td className="p-3 font-mono text-xs whitespace-nowrap">{item.sku}</td>
                                                                             <td className="p-3 min-w-[200px] flex items-center gap-2">
                                                                                 {item.description}
+                                                                                {item.originalDescription && item.originalDescription !== item.description && (
+                                                                                    <div className="group relative flex items-center">
+                                                                                        <Info className="w-3.5 h-3.5 text-blue-500 hover:text-blue-700 cursor-pointer" />
+                                                                                        <div className="absolute left-1/2 -top-2 transform -translate-y-full -translate-x-1/2 w-max max-w-xs bg-slate-800 text-white text-xs rounded shadow-lg p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50">
+                                                                                            <span className="block font-bold mb-1 text-slate-300">Sugerido Originalmente:</span>
+                                                                                            {item.originalDescription}
+                                                                                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
                                                                                 {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
+                                                                                {item.unverifiedMatch && (
+                                                                                    <div className="flex items-center gap-1 ml-2">
+                                                                                        <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1 py-0.5 rounded whitespace-nowrap">Por validar</span>
+                                                                                        <button onClick={(e) => { e.stopPropagation(); handleConfirmAutoMatch(order, idx); }} className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold px-2 py-0.5 rounded hover:bg-green-200 dark:hover:bg-green-900/50">Confirmar</button>
+                                                                                        <button onClick={(e) => { e.stopPropagation(); setRejectMatchData({order, itemIdx: idx}); setRejectMatchModalOpen(true); }} className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold px-2 py-0.5 rounded hover:bg-red-200 dark:hover:bg-red-900/50">Rejeitar/Mudar</button>
+                                                                                    </div>
+                                                                                )}
                                                                                 {item.image && (
                                                                                     <button 
                                                                                         onClick={() => setViewImage(item.image!)}

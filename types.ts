@@ -92,6 +92,8 @@ export interface OrderLineItem {
   backorderCreated?: boolean;
   fulfilledInOrderId?: string;
   image?: string; // Base64 string for photo requisitions
+  originalDescription?: string; // Original description provided by user
+  unverifiedMatch?: boolean; // True if automatically matched by algorithm but pending user confirmation
 }
 
 export interface PickedItem {
