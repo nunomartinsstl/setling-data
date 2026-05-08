@@ -56,27 +56,32 @@ const normalizeText = (text: string): string => {
 const calculateRelevance = (target: string, query: string): number => {
     const t = normalizeText(target);
     const q = normalizeText(query);
-    
-    // Exact match
     if (t === q) return 100;
-    
-    const qWords = q.split(/\s+/).filter(w => w.length > 2);
-    const tWords = t.split(/\s+/).filter(w => w.length > 2);
+
+    const tokenize = (str: string) => str.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+    const qWords = tokenize(q);
+    const tWords = tokenize(t);
     
     if (qWords.length === 0) return 0;
 
     let score = 0;
-    let matches = 0;
 
     qWords.forEach(qw => {
-        if (t.includes(qw)) {
-            matches++;
-            score += 10; // Base score for inclusion
-            if (tWords.includes(qw)) score += 5; // Bonus for exact word match
+        if (tWords.includes(qw)) {
+            score += 20; // Exact word match
+        } else if (t.includes(qw)) {
+            score += 10; // Partial word match (e.g. 400 inside 400mm)
         }
     });
 
-    return matches > 0 ? score : 0;
+    const maxPoss = qWords.length * 20;
+    if (maxPoss === 0) return 0;
+    
+    // Penalize if target has way too many extra words, to prioritize exact matches
+    const extraWords = Math.max(0, tWords.length - qWords.length);
+    const coveragePenalty = Math.max(0.7, 1 - (extraWords * 0.05));
+
+    return (score / maxPoss) * 100 * coveragePenalty;
 };
 
 // Image Compression Helper
@@ -898,7 +903,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       
       if (similarityTargetIdx === -1) {
           // Redirect to RevertToOriginal which handles making it a new string again inline
-          handleRevertToOriginal();
+          if (rejectMatchData) handleRevertToOriginal(rejectMatchData);
           setSimilarityModalOpen(false);
           return;
       }
@@ -1079,16 +1084,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       }
   };
 
-  const handleRevertToOriginal = async () => {
-      if (!rejectMatchData) return;
+  const handleRevertToOriginal = async (targetData?: {order: Order, itemIdx: number}) => {
+      const target = targetData || rejectMatchData;
+      if (!target) return;
       try {
           setIsProcessing(true);
-          const { order, itemIdx } = rejectMatchData;
+          const { order, itemIdx } = target;
           const updatedOrder = JSON.parse(JSON.stringify(order));
           const item = updatedOrder.items[itemIdx];
           
           item.unverifiedMatch = false;
           item.isCustom = true;
+          item.autoMatchRejected = true;
           item.sku = ''; 
           item.description = item.originalDescription || item.description;
           

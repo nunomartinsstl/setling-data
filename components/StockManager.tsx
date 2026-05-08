@@ -2,8 +2,36 @@ import React, { useState, useRef } from 'react';
 import { StockItem, UserRole, MasterMaterial, Order } from '../types';
 import { StorageService } from '../services/storageService';
 import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info, FilePlus, RefreshCw, X, AlertCircle, Search, Clock } from 'lucide-react';
+import { getAuth } from 'firebase/auth';
 
 declare const XLSX: any;
+
+const normalizeText = (text: string): string => {
+    return text.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+};
+
+const calculateRelevance = (target: string, query: string): number => {
+    const t = normalizeText(target);
+    const q = normalizeText(query);
+    if (t === q) return 100;
+
+    const tokenize = (str: string) => str.replace(/[^a-z0-9]/g, ' ').split(/\s+/).filter(w => w.length > 1);
+    const qWords = tokenize(q);
+    const tWords = tokenize(t);
+    
+    if (qWords.length === 0) return 0;
+    let score = 0;
+    qWords.forEach(qw => {
+        if (tWords.includes(qw)) score += 20;
+        else if (t.includes(qw)) score += 10;
+    });
+
+    const maxPoss = qWords.length * 20;
+    if (maxPoss === 0) return 0;
+    const extraWords = Math.max(0, tWords.length - qWords.length);
+    const coveragePenalty = Math.max(0.7, 1 - (extraWords * 0.05));
+    return (score / maxPoss) * 100 * coveragePenalty;
+};
 
 interface StockManagerProps {
   stock: StockItem[];
@@ -17,6 +45,15 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
   const [activeTab, setActiveTab] = useState<'STOCK' | 'MASTER' | 'PENDING'>('STOCK');
   const [loadingState, setLoadingState] = useState<'' | 'READING' | 'UPLOADING' | 'PROCESSING'>('');
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
+  // Reject Match State for PENDING
+  const [rejectMatchModalOpen, setRejectMatchModalOpen] = useState(false);
+  const [rejectMatchData, setRejectMatchData] = useState<{order: Order, itemIdx: number} | null>(null);
+
+  // Similarity Search State for PENDING
+  const [similarityModalOpen, setSimilarityModalOpen] = useState(false);
+  const [similarityResults, setSimilarityResults] = useState<any[]>([]);
+  const [similarityTarget, setSimilarityTarget] = useState<{order: Order, itemIdx: number} | null>(null);
   
   // Merge/Replace Modal State
   const [showMergeModal, setShowMergeModal] = useState(false);
@@ -201,6 +238,95 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
     });
     return items;
   }, [orders]);
+
+  const handleConfirmAutoMatch = async (order: Order, itemIdx: number) => {
+      try {
+          const auth = getAuth();
+          const currentUserUsername = auth.currentUser?.displayName || auth.currentUser?.email || 'Utilizador';
+
+          const updatedOrder = JSON.parse(JSON.stringify(order));
+          updatedOrder.items[itemIdx].unverifiedMatch = false;
+          
+          if (!updatedOrder.changeLog) updatedOrder.changeLog = [];
+          updatedOrder.changeLog.push({
+              date: new Date().toISOString(),
+              actor: currentUserUsername,
+              details: `Correspondência automática validada via Stock: ${updatedOrder.items[itemIdx].sku}`
+          });
+          
+          await StorageService.updateOrder(updatedOrder);
+          setMessage({ type: 'success', text: 'Correspondência confirmada com sucesso.' });
+          if (refreshData) refreshData();
+      } catch (e: any) {
+          setMessage({ type: 'error', text: e.message });
+      }
+  };
+
+  const handleRevertToOriginal = async (targetData?: {order: Order, itemIdx: number}) => {
+      const target = targetData || rejectMatchData;
+      if (!target) return;
+      try {
+          const auth = getAuth();
+          const currentUserUsername = auth.currentUser?.displayName || auth.currentUser?.email || 'Utilizador';
+
+          const { order, itemIdx } = target;
+          const updatedOrder = JSON.parse(JSON.stringify(order));
+          const item = updatedOrder.items[itemIdx];
+          
+          item.unverifiedMatch = false;
+          item.isCustom = true;
+          item.autoMatchRejected = true;
+          item.sku = ''; 
+          item.description = item.originalDescription || item.description;
+          
+          if (!updatedOrder.changeLog) updatedOrder.changeLog = [];
+          updatedOrder.changeLog.push({
+              date: new Date().toISOString(),
+              actor: currentUserUsername,
+              details: `Correspondência automática rejeitada via Stock. Revertido para original: ${item.description}`
+          });
+          
+          await StorageService.updateOrder(updatedOrder);
+          setRejectMatchModalOpen(false);
+          setRejectMatchData(null);
+          setMessage({ type: 'success', text: 'Material revertido para NOVO com sucesso.' });
+          if (refreshData) refreshData();
+      } catch (e: any) {
+          setMessage({ type: 'error', text: e.message });
+      }
+  };
+
+  const handleManualMatch = async (candidate: MasterMaterial) => {
+      if (!similarityTarget) return;
+      try {
+          const auth = getAuth();
+          const currentUserUsername = auth.currentUser?.displayName || auth.currentUser?.email || 'Utilizador';
+
+          const { order, itemIdx } = similarityTarget;
+          const updatedOrder = JSON.parse(JSON.stringify(order));
+          const item = updatedOrder.items[itemIdx];
+          
+          item.unverifiedMatch = false;
+          item.isCustom = false;
+          item.sku = candidate.sku;
+          item.description = candidate.description;
+          
+          if (!updatedOrder.changeLog) updatedOrder.changeLog = [];
+          updatedOrder.changeLog.push({
+              date: new Date().toISOString(),
+              actor: currentUserUsername,
+              details: `Correspondência corrigida manualmente via Stock para: ${candidate.sku} - ${candidate.description}`
+          });
+          
+          await StorageService.updateOrder(updatedOrder);
+          setSimilarityModalOpen(false);
+          setSimilarityTarget(null);
+          setMessage({ type: 'success', text: 'Material atualizado com o código selecionado.' });
+          if (refreshData) refreshData();
+      } catch (e: any) {
+          setMessage({ type: 'error', text: e.message });
+      }
+  };
 
   const executeMasterUpdate = async (mode: 'MERGE' | 'REPLACE') => {
       setLoadingState('UPLOADING');
@@ -452,7 +578,8 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                                     </td>
                                     <td className="p-3">
                                         <div className="flex gap-2">
-                                           <span className="text-xs font-bold text-slate-400">Valide os itens através dos Pedidos Abertos</span>
+                                           <button onClick={() => handleConfirmAutoMatch(val.order, val.itemIdx)} className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-400 font-bold px-3 py-1 text-xs rounded transition-colors">Confirmar</button>
+                                           <button onClick={() => { setRejectMatchData({order: val.order, itemIdx: val.itemIdx}); setRejectMatchModalOpen(true); }} className="bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 font-bold px-3 py-1 text-xs rounded transition-colors">Rejeitar/Mudar</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -549,6 +676,106 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                 {message.text}
             </div>
         )}
+
+      {/* Reject Modal */}
+      {rejectMatchModalOpen && rejectMatchData && (
+          <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                  <div className="p-6">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Rejeitar Correspondência</h3>
+                      <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
+                          A correspondência automática para "<span className="font-bold">{rejectMatchData.order.items[rejectMatchData.itemIdx].originalDescription}</span>" não está correta. O que deseja fazer?
+                      </p>
+                      
+                      <div className="space-y-3">
+                          <button 
+                              onClick={() => {
+                                  const item = rejectMatchData.order.items[rejectMatchData.itemIdx];
+                                  const query = item.originalDescription || item.description;
+                                  
+                                  const candidates = masterList
+                                      .map(m => ({ ...m, score: calculateRelevance(m.description, query) }))
+                                      .filter(m => m.score > 0)
+                                      .sort((a, b) => b.score - a.score)
+                                      .slice(0, 10); 
+                                      
+                                  setSimilarityResults(candidates);
+                                  setSimilarityTarget(rejectMatchData);
+                                  setRejectMatchModalOpen(false);
+                                  setRejectMatchData(null);
+                                  setSimilarityModalOpen(true);
+                              }}
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
+                          >
+                              <Search className="w-5 h-5 text-brand-600 dark:text-brand-400 mt-0.5" />
+                              <div>
+                                  <div className="font-bold text-slate-900 dark:text-white">Procurar Alternativas</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">Ver lista de opções similares.</div>
+                              </div>
+                          </button>
+                          
+                          <button 
+                              onClick={() => {
+                                  handleRevertToOriginal();
+                                  setSimilarityModalOpen(false);
+                              }}
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
+                          >
+                              <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
+                              <div>
+                                  <div className="font-bold text-slate-900 dark:text-white">Reverter para Original</div>
+                                  <div className="text-xs text-slate-500 dark:text-slate-400">Irá manter como "Novo" com a mesma descrição.</div>
+                              </div>
+                          </button>
+                      </div>
+                  </div>
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/50 flex justify-end">
+                      <button 
+                          onClick={() => {
+                              setRejectMatchModalOpen(false);
+                              setRejectMatchData(null);
+                          }}
+                          className="px-4 py-2 font-bold text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                      >
+                          Cancelar
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Similarity Modal */}
+      {similarityModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
+                  <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
+                      <h3 className="font-bold text-lg dark:text-white">Opções Sugeridas</h3>
+                      <button onClick={() => { setSimilarityModalOpen(false); setSimilarityTarget(null); }}><X className="w-6 h-6 text-slate-400" /></button>
+                  </div>
+                  <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
+                      {similarityResults.map((res: any, idx) => (
+                          <button key={idx} onClick={() => handleManualMatch(res)} className="w-full text-left p-3 border dark:border-slate-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2 flex justify-between items-center group">
+                              <div>
+                                  <div className="font-bold text-brand-600 dark:text-brand-400 group-hover:underline">{res.sku}</div>
+                                  <div className="text-sm text-slate-700 dark:text-slate-300">{res.description}</div>
+                              </div>
+                              {res.score !== undefined && (
+                                  <div className="flex-shrink-0 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                                      Score: {res.score > 100 ? 100 : Math.round(res.score)}%
+                                  </div>
+                              )}
+                          </button>
+                      ))}
+                      <button onClick={() => {
+                          const target = similarityTarget || undefined;
+                          setSimilarityTarget(null);
+                          setSimilarityModalOpen(false);
+                          handleRevertToOriginal(target);
+                      }} className="w-full py-3 bg-white dark:bg-slate-800 border text-slate-600 dark:text-slate-300 rounded mt-4">Nenhum destes, confirmar como NOVO</button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };

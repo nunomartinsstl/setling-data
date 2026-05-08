@@ -94,6 +94,7 @@ export interface OrderLineItem {
   image?: string; // Base64 string for photo requisitions
   originalDescription?: string; // Original description provided by user
   unverifiedMatch?: boolean; // True if automatically matched by algorithm but pending user confirmation
+  autoMatchRejected?: boolean; // True if user explicitly rejected the auto match
 }
 
 export interface PickedItem {

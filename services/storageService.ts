@@ -1222,7 +1222,8 @@ export const StorageService = {
               for (const item of order.items) {
                   // Check if item is "Provisional" (N/A SKU or isCustom with no SKU)
                   // Also check if it is "FOTO_PENDENTE" - we can't resolve photos by description usually, but if they typed a description...
-                  if ((item.isCustom || item.sku === 'N/A' || !item.sku) && item.sku !== 'FOTO_PENDENTE') {
+                  // Do not rematch if user explicitly rejected the algorithm's matching previously
+                  if ((item.isCustom || item.sku === 'N/A' || !item.sku) && item.sku !== 'FOTO_PENDENTE' && !item.autoMatchRejected) {
                       const d = norm(item.description);
                       
                       const results = fuse.search(d);
