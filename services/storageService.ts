@@ -769,14 +769,17 @@ export const StorageService = {
       if (!db) return;
       const updates: any = {};
       orders.forEach(o => {
-          updates[`${KEYS.ORDERS}/${o.id}`] = o;
+          const cleanOrder = JSON.parse(JSON.stringify(o));
+          updates[`${KEYS.ORDERS}/${o.id}`] = cleanOrder;
       });
       await db.ref().update(updates);
   },
 
   updateOrder: async (order: Order) => {
       if (!db) return;
-      await db.ref(`${KEYS.ORDERS}/${order.id}`).set(order);
+      // Strip undefined values to prevent Firebase errors
+      const cleanOrder = JSON.parse(JSON.stringify(order));
+      await db.ref(`${KEYS.ORDERS}/${order.id}`).set(cleanOrder);
   },
 
   deleteOrder: async (orderId: string) => {
@@ -812,8 +815,9 @@ export const StorageService = {
           // Simple increment logic or timestamp based
           po.displayId = Math.floor(Date.now() / 1000); 
       }
-      await db.ref(`${KEYS.PURCHASE_ORDERS}/${po.id}`).set(po);
-      return po;
+      const cleanPO = JSON.parse(JSON.stringify(po));
+      await db.ref(`${KEYS.PURCHASE_ORDERS}/${po.id}`).set(cleanPO);
+      return cleanPO;
   },
 
   deletePurchaseOrder: async (id: string) => {

@@ -988,10 +988,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             const item: OrderLineItem = {
                 sku: row.sku || 'N/A', // Could be FOTO_PENDENTE
                 description: row.customDesc,
-                originalDescription: row.originalDesc,
                 quantity: qtyNum,
                 isCustom: true
             };
+            if (row.originalDesc) item.originalDescription = row.originalDesc;
             if (row.unit) item.unit = row.unit;
             if (finalCategory) item.category = finalCategory;
             if (row.image) item.image = row.image;
@@ -1001,10 +1001,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             const item: OrderLineItem = {
                 sku: row.sku,
                 description: getMaterialDescription(row.sku),
-                originalDescription: row.originalDesc,
                 quantity: qtyNum,
                 isCustom: false
             };
+            if (row.originalDesc) item.originalDescription = row.originalDesc;
             if (row.image) item.image = row.image;
             
             items.push(item);
@@ -1696,7 +1696,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                           </button>
                           
                           <button 
-                              onClick={handleRevertToOriginal}
+                              onClick={() => handleRevertToOriginal()}
                               className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
                           >
                               <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
