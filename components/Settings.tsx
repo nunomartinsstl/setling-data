@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
+import { toast } from './Toast';
 import { StorageService, DEFAULT_PERMISSIONS } from '../services/storageService';
 import { EmailRecipient, Company, UnitOption, Supplier, CategoryOption, ApprovalRule, UserRole, RolePermissions, SynonymGroup } from '../types';
 import { Save, Mail, Loader2, AlertCircle, Plus, Trash2, Building, ShieldCheck, Scale, Truck, FileSpreadsheet, Tag, Euro, Edit, X, Lock, Search } from 'lucide-react';
@@ -44,7 +45,7 @@ const Settings: React.FC = () => {
   const [supervisorRoles, setSupervisorRoles] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  
   const [isLoaded, setIsLoaded] = useState(false);
   const isInitialMount = useRef(true);
   
@@ -80,10 +81,9 @@ const Settings: React.FC = () => {
             supervisorRoles: supervisorRoles,
             autoDecrementStock: true 
         });
-        setMessage('Configurações salvas automaticamente.');
-        setTimeout(() => setMessage(''), 3000);
+        toast.success("Configurações salvas automaticamente.");
       } catch (err) {
-        setMessage('Erro ao salvar automaticamente.');
+        toast.error("Erro ao salvar automaticamente.");
       } finally {
         setLoading(false);
       }
@@ -1018,12 +1018,6 @@ const Settings: React.FC = () => {
                 <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
                     A guardar...
-                </div>
-            )}
-            {!loading && message && (
-                <div className={`shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm font-medium border ${message.includes('Erro') ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-800' : 'bg-green-50 text-green-600 border-green-200 dark:bg-green-900/20 dark:border-green-800'}`}>
-                    <AlertCircle className="w-4 h-4" />
-                    {message}
                 </div>
             )}
         </div>

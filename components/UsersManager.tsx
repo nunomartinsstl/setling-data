@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { toast } from './Toast';
 import { User, UserRole, Company, Invite } from '../types';
 import { StorageService } from '../services/storageService';
 import { Users, Shield, User as UserIcon, Mail, Plus, Loader2, CheckCircle, AlertCircle, Trash2, Edit, Building, AlertTriangle, ChevronDown, UserCheck, UserPlus, ChevronRight, Network, ZoomIn, ZoomOut, Maximize } from 'lucide-react';
@@ -108,7 +109,7 @@ const UsersManager: React.FC = () => {
     const [inviteRole, setInviteRole] = useState<string>(UserRole.WAREHOUSE);
     const [inviteUsernamePreview, setInviteUsernamePreview] = useState('');
     const [isInviting, setIsInviting] = useState(false);
-    const [message, setMessage] = useState<{type: 'success'|'error', text: string} | null>(null);
+    
 
     // Editing State (Map of UID -> Loading State)
     const [processingUsers, setProcessingUsers] = useState<Record<string, boolean>>({});
@@ -224,7 +225,7 @@ const UsersManager: React.FC = () => {
     const handleCreateInvite = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsInviting(true);
-        setMessage(null);
+        
         try {
             if(!inviteEmail) throw new Error("Email obrigatório");
             if(!inviteFirstName) throw new Error("Nome obrigatório");
@@ -246,17 +247,14 @@ const UsersManager: React.FC = () => {
             // Find the username from the newly updated state (or just use the inputs)
             const username = `${inviteFirstName.toLowerCase()}-${inviteLastName.toLowerCase()}`;
             
-            setMessage({ 
-                type: 'success', 
-                text: `Acesso gerado! UTILIZADOR: ${username} | CÓDIGO: ${code}. Envie estes dados para o colaborador.` 
-            });
+            toast.success(`Acesso gerado! UTILIZADOR: ${username} | CÓDIGO: ${code}. Envie estes dados para o colaborador.`);
             setInviteEmail('');
             setInviteFirstName('');
             setInviteLastName('');
             setInviteCompanyId('');
             setInviteSupervisorId('');
         } catch(err: any) {
-            setMessage({ type: 'error', text: err.message });
+            toast.error(err.message);
         } finally {
             setIsInviting(false);
         }
@@ -472,12 +470,7 @@ const UsersManager: React.FC = () => {
                     </div>
                 </form>
 
-                {message && (
-                    <div className={`mt-4 p-3 rounded-md text-sm flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300'}`}>
-                        {message.type === 'success' ? <CheckCircle className="w-4 h-4"/> : <AlertCircle className="w-4 h-4"/>}
-                        {message.text}
-                    </div>
-                )}
+                
             </div>
 
             {/* Unified Users/Invites Section */}

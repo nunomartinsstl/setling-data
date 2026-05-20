@@ -17,6 +17,10 @@ import UserProfile from './components/UserProfile';
 import { StorageService, DEFAULT_CATEGORIES, DEFAULT_PERMISSIONS, EMPTY_PERMISSIONS } from './services/storageService';
 import { calculateShortages } from './src/utils/inventory';
 
+import { ToastContainer } from './components/Toast';
+
+import { AnimatePresence, motion } from "motion/react";
+
 const LOGO_AVAC = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
 const LOGO_HOTELARIA = "https://setlinghotelaria.pt/wp-content/uploads/2024/12/setling-hotelaria-logo-big.svg";
 const LOGO_GENERIC = "https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg";
@@ -389,21 +393,35 @@ const App: React.FC = () => {
   };
 
   return (
-    <Layout
-      user={user}
-      currentView={view}
-      onNavigate={setView}
-      onLogout={handleLogout}
-      isConnected={isConnected}
-      onRefresh={refreshData}
-      toggleTheme={toggleTheme}
-      isDarkMode={darkMode}
-      logoUrl={logoUrl}
-      permissions={currentPermissions}
-      shortageCount={shortageCount}
-    >
-      {renderContent()}
-    </Layout>
+    <>
+      <Layout
+        user={user}
+        currentView={view}
+        onNavigate={setView}
+        onLogout={handleLogout}
+        isConnected={isConnected}
+        onRefresh={refreshData}
+        toggleTheme={toggleTheme}
+        isDarkMode={darkMode}
+        logoUrl={logoUrl}
+        permissions={currentPermissions}
+        shortageCount={shortageCount}
+      >
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={view}
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.2 }}
+            className="h-full"
+          >
+            {renderContent()}
+          </motion.div>
+        </AnimatePresence>
+      </Layout>
+      <ToastContainer />
+    </>
   );
 };
 

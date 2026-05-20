@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { toast } from './Toast';
 import { StockItem, UserRole, MasterMaterial, Order } from '../types';
 import { StorageService } from '../services/storageService';
 import { Upload, Package, Loader2, AlertTriangle, FileSpreadsheet, Database, Check, Info, FilePlus, RefreshCw, X, AlertCircle, Search, Clock } from 'lucide-react';
@@ -44,7 +45,7 @@ interface StockManagerProps {
 const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, userRole, refreshData }) => {
   const [activeTab, setActiveTab] = useState<'STOCK' | 'MASTER' | 'PENDING'>('STOCK');
   const [loadingState, setLoadingState] = useState<'' | 'READING' | 'UPLOADING' | 'PROCESSING'>('');
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  
   
   // Reject Match State for PENDING
   const [rejectMatchModalOpen, setRejectMatchModalOpen] = useState(false);
@@ -77,7 +78,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
     }
 
     setLoadingState('READING');
-    setMessage(null);
+    
 
     const reader = new FileReader();
     
@@ -146,18 +147,18 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
             successMsg += ` ${createdCount} novos pedidos de reabertura foram gerados.`;
         }
         
-        setMessage({ type: 'success', text: successMsg });
+        toast.success(successMsg);
 
       } catch (err: any) {
         console.error("Upload Error:", err);
-        setMessage({ type: 'error', text: err.message || "Falha ao processar arquivo. Verifique o formato." });
+        toast.error(err.message || "Falha ao processar arquivo. Verifique o formato.");
       } finally {
         setLoadingState('');
       }
     };
 
     reader.onerror = () => {
-        setMessage({ type: 'error', text: "Erro de leitura do arquivo." });
+        toast.error("Erro de leitura do arquivo.");
         setLoadingState('');
     };
 
@@ -171,7 +172,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
     if (fileInputRef.current) fileInputRef.current.value = '';
 
     setLoadingState('READING');
-    setMessage(null);
+    
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -211,13 +212,13 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
 
       } catch (err: any) {
           console.error("Master Upload Error:", err);
-          setMessage({ type: 'error', text: err.message });
+          toast.error(err.message);
           setLoadingState('');
       }
     };
 
     reader.onerror = () => {
-        setMessage({ type: 'error', text: "Erro de leitura do arquivo." });
+        toast.error("Erro de leitura do arquivo.");
         setLoadingState('');
     };
 
@@ -255,10 +256,10 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
           });
           
           await StorageService.updateOrder(updatedOrder);
-          setMessage({ type: 'success', text: 'Correspondência confirmada com sucesso.' });
+          toast.success('Correspondência confirmada com sucesso.');
           if (refreshData) refreshData();
       } catch (e: any) {
-          setMessage({ type: 'error', text: e.message });
+          toast.error(e.message);
       }
   };
 
@@ -289,10 +290,10 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
           await StorageService.updateOrder(updatedOrder);
           setRejectMatchModalOpen(false);
           setRejectMatchData(null);
-          setMessage({ type: 'success', text: 'Material revertido para NOVO com sucesso.' });
+          toast.success('Material revertido para NOVO com sucesso.');
           if (refreshData) refreshData();
       } catch (e: any) {
-          setMessage({ type: 'error', text: e.message });
+          toast.error(e.message);
       }
   };
 
@@ -321,10 +322,10 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
           await StorageService.updateOrder(updatedOrder);
           setSimilarityModalOpen(false);
           setSimilarityTarget(null);
-          setMessage({ type: 'success', text: 'Material atualizado com o código selecionado.' });
+          toast.success('Material atualizado com o código selecionado.');
           if (refreshData) refreshData();
       } catch (e: any) {
-          setMessage({ type: 'error', text: e.message });
+          toast.error(e.message);
       }
   };
 
@@ -358,10 +359,10 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
             ? `Lista substituída com sucesso. Total: ${finalData.length} itens.` 
             : `Lista atualizada. ${finalData.length - masterList.length} novos itens adicionados.`;
 
-          setMessage({ type: 'success', text: msg });
+          toast.success(msg);
 
       } catch(err: any) {
-          setMessage({ type: 'error', text: err.message });
+          toast.error(err.message);
       } finally {
           setLoadingState('');
           setShowMergeModal(false);
@@ -434,19 +435,19 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
         {isAdmin && (
             <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-1">
                 <button 
-                    onClick={() => { setActiveTab('STOCK'); setMessage(null); }}
+                    onClick={() => { setActiveTab('STOCK');  }}
                     className={`px-4 py-1 text-sm font-medium rounded-md transition-all ${activeTab === 'STOCK' ? 'bg-white dark:bg-slate-800 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                     Stock Atual
                 </button>
                 <button 
-                    onClick={() => { setActiveTab('PENDING'); setMessage(null); }}
+                    onClick={() => { setActiveTab('PENDING');  }}
                     className={`px-4 py-1 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'PENDING' ? 'bg-white dark:bg-slate-800 shadow text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                     Pendentes
                 </button>
                 <button 
-                    onClick={() => { setActiveTab('MASTER'); setMessage(null); }}
+                    onClick={() => { setActiveTab('MASTER');  }}
                     className={`px-4 py-1 text-sm font-medium rounded-md transition-all ${activeTab === 'MASTER' ? 'bg-white dark:bg-slate-800 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                     Todos os Materiais
@@ -670,12 +671,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
         </div>
       )}
 
-       {message && (
-            <div className={`p-4 rounded-lg text-sm flex items-center gap-2 shadow-sm ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'}`}>
-                {message.type === 'success' ? <Check className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4"/>}
-                {message.text}
-            </div>
-        )}
+       
 
       {/* Reject Modal */}
       {rejectMatchModalOpen && rejectMatchData && (

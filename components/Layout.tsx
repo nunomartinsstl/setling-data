@@ -136,13 +136,6 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-            <div className="mb-6 px-4 py-3 bg-slate-50 dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-700">
-              <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Logado como</p>
-              <p className="font-medium text-slate-800 dark:text-slate-200 truncate">{user.username}</p>
-              <span className={`text-[10px] uppercase px-1.5 py-0.5 rounded ${getRoleColor()}`}>
-                {getRoleLabel()}
-              </span>
-            </div>
 
             <nav className="space-y-1">
               {showDashboard && (
@@ -336,6 +329,13 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
           </button>
           <div className="flex items-center gap-2">
             <button 
+                onClick={() => onNavigate('PROFILE')}
+                className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all"
+                title={`Perfil: ${user.username}`}
+            >
+                <UserIcon className="w-5 h-5"/>
+            </button>
+            <button 
                 onClick={toggleTheme}
                 className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-all"
                 title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
@@ -357,6 +357,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
         {/* Desktop Header Actions (Non-Floating) */}
         <div className="hidden lg:flex w-full justify-end items-center px-8 pt-6 pb-2 gap-3 flex-shrink-0">
+             <button 
+                onClick={() => onNavigate('PROFILE')}
+                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400 group"
+                title={`Perfil: ${user.username}`}
+            >
+                <UserIcon className="w-4 h-4 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400"/>
+                <span className="hidden xl:inline-block max-w-[120px] truncate">{user.username}</span>
+            </button>
              <button 
                 onClick={toggleTheme}
                 className="flex items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"

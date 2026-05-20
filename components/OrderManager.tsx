@@ -5,6 +5,7 @@ import { PORTUGAL_ZIP_CODES } from '../constants/zipCodes';
 import { Order, OrderLineItem, StockItem, UserRole, MasterMaterial, ChangeLogEntry, UnitOption, Company, CategoryOption, PickedItem, User, SynonymGroup, ViewState } from '../types';
 import { StorageService } from '../services/storageService';
 import { ParserService } from '../services/parser';
+import { toast } from './Toast';
 import { Upload, FileText, Loader2, CheckCircle, Clock, Plus, Trash2, ArrowRightCircle, Calendar, User as UserIcon, ChevronDown, ChevronUp, AlertTriangle, Edit, History, Activity, AlertCircle, Search, Download, Check, X, HelpCircle, Scale, Tag, FileInput, Building, CornerDownRight, MapPin, Hash, Mail, Info, ShoppingBag, Send, Camera, Image as ImageIcon, PackageCheck, Bell, RefreshCw, Maximize2 } from 'lucide-react';
 
 declare const XLSX: any;
@@ -127,7 +128,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
   // ... (existing state)
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
   
   // Creation/Edit States
   const [creationStep, setCreationStep] = useState<'INITIAL' | 'DETAILS_PENDING'>('INITIAL');
@@ -795,14 +795,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
   const addManualRow = () => {
      if (!validateForm()) {
-         setMessage({ type: 'error', text: "Preencha e verifique o item atual antes de adicionar outro." });
+         toast.error("Preencha e verifique o item atual antes de adicionar outro.");
          return;
      }
 
      const nextIdx = manualRows.length;
      setManualRows([...manualRows, { sku: '', qty: '', unit: 'UN', category: '', customCategory: '', isCustom: false, customDesc: '', similarityChecked: false, inputType: 'TEXT' }]);
      setExpandedRowIndex(nextIdx);
-     setMessage(null);
+     
   };
 
   const handleCheckSimilarity = (idx: number) => {
@@ -860,7 +860,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
               setRejectMatchData(null);
               if (refreshData) refreshData();
           } catch(e:any) {
-              setMessage({ type: 'error', text: e.message });
+              toast.error(e.message);
           } finally {
               setIsProcessing(false);
           }
@@ -964,11 +964,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         // ...
         
         if (unchecked) {
-             setMessage({ type: 'error', text: "Verifique os itens novos." });
+             toast.error("Verifique os itens novos.");
         } else if (missingCat) {
-             setMessage({ type: 'error', text: "Selecione a categoria para itens novos." });
+             toast.error("Selecione a categoria para itens novos.");
         } else {
-             setMessage({ type: 'error', text: "Corrija os campos em vermelho." });
+             toast.error("Corrija os campos em vermelho.");
         }
         return;
     }
@@ -1075,10 +1075,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           });
           
           await StorageService.updateOrder(updatedOrder);
-          setMessage({ type: 'success', text: 'Correspondência confirmada com sucesso.' });
+          toast.success('Correspondência confirmada com sucesso.');
           if (refreshData) refreshData();
       } catch (e: any) {
-          setMessage({ type: 'error', text: e.message });
+          toast.error(e.message);
       } finally {
           setIsProcessing(false);
       }
@@ -1111,7 +1111,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           setRejectMatchData(null);
           if (refreshData) refreshData();
       } catch (e: any) {
-          setMessage({ type: 'error', text: e.message });
+          toast.error(e.message);
       } finally {
           setIsProcessing(false);
       }
@@ -1155,7 +1155,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           } else {
               // Standard perfect order
               await handleSendEmail(updatedOrder, 'LOGISTICS', true);
-              setMessage({ type: 'success', text: "Pedido aprovado e enviado para logística." });
+              toast.success("Pedido aprovado e enviado para logística.");
           }
 
       } catch(err: any) {
@@ -1325,12 +1325,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     // ... (Keep existing implementation)
     if (!dueDate) {
         setFormErrors(prev => ({ ...prev, date: true }));
-        setMessage({ type: 'error', text: "A data de levantamento é obrigatória." });
+        toast.error("A data de levantamento é obrigatória.");
         return;
     }
 
     if (!targetCompanyId) {
-        setMessage({ type: 'error', text: "Empresa não identificada. Se você é admin, selecione a empresa." });
+        toast.error("Empresa não identificada. Se você é admin, selecione a empresa.");
         return;
     }
 
@@ -1350,10 +1350,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
         if (!pattern1.test(pep) && !pattern2.test(pep) && !pattern3.test(pep)) {
             setFormErrors(prev => ({ ...prev, pep: true }));
-            setMessage({ 
-                type: 'error', 
-                text: `Formato do PEP inválido para ${company?.name}. Deve começar por ${prefix} e seguir o formato XXXX.000, XXXX.000/000 ou XXXX.000/000/0000.` 
-            });
+            toast.error(`Formato do PEP inválido para ${company?.name}. Deve começar por ${prefix} e seguir o formato XXXX.000, XXXX.000/000 ou XXXX.000/000/0000.`);
             return;
         }
     }
@@ -1388,7 +1385,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
             refreshData();
             resetForm();
-            setMessage({ type: 'success', text: "Pedido atualizado com sucesso." });
+            toast.success("Pedido atualizado com sucesso.");
 
         } else {
             // Determine Initial Status
@@ -1447,7 +1444,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             }
         }
     } catch (err: any) {
-        setMessage({ type: 'error', text: err.message });
+        toast.error(err.message);
     } finally {
         setIsProcessing(false);
     }
@@ -1908,14 +1905,6 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             </div>
         )}
       </div>
-
-      {message && (
-        <div className={`p-4 rounded-lg text-sm flex items-center gap-2 shadow-sm animate-fade-in ${message.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'}`}>
-            {message.type === 'success' ? <CheckCircle className="w-4 h-4 text-green-600" /> : <AlertTriangle className="w-4 h-4"/>}
-            {message.text}
-            <button onClick={() => setMessage(null)} className="ml-auto hover:text-slate-800 dark:hover:text-white"><X className="w-4 h-4"/></button>
-        </div>
-      )}
 
       {/* CREATION/EDIT AREA */}
       {showForm && (
@@ -2588,7 +2577,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                            )}
                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                                <div className="flex items-start gap-4">
-                                                   <div className={`p-3 rounded-full flex-shrink-0 mr-3 ${
+                                                   <div 
+                                                       onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           if (type === 'OPEN') {
+                                                                if (isCompleted) toast.info("Pedido Finalizado", 1500);
+                                                                else if (isPending) toast.info("A aguardar compra dos materiais em falta.", 1500);
+                                                                else if (isPendingApproval) toast.info("Aguardar aprovação do superior.", 1500);
+                                                                else if (isFullAlloc) toast.info("Pronto para separar.", 1500);
+                                                                else toast.info("Falta de stock neste momento.", 1500);
+                                                           } else {
+                                                                if (isOrderFullyFulfilled) toast.info("Pedido finalizado com sucesso.", 1500);
+                                                                else toast.info("Pedido finalizado parcialmente.", 1500);
+                                                           }
+                                                       }}
+                                                       className={`p-3 text-center rounded-full flex-shrink-0 mr-3 cursor-help hover:scale-110 active:scale-95 transition-all outline-none ${
                                                        type === 'OPEN' 
                                                        ? (isPending ? 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400' 
                                                           : isPendingApproval ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
@@ -2660,7 +2663,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
                                                    <div className="overflow-x-auto">
                                                         <table className="w-full text-sm text-left">
-                                                            <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
+                                                            <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300 hidden md:table-header-group">
                                                                 <tr>
                                                                     <th className="p-3 whitespace-nowrap">Material</th>
                                                                     <th className="p-3 whitespace-nowrap">Descrição</th>
@@ -2670,7 +2673,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     {(type === 'FINISHED' || isGhost) && <th className="p-3 whitespace-nowrap">Status</th>}
                                                                 </tr>
                                                             </thead>
-                                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 block md:table-row-group">
                                                                 {order.items.map((item, idx) => {
                                                                     const picked = (type === 'FINISHED' || isGhost) ? getTotalPickedQuantity(order, orders, item.sku) : 0;
                                                                     const isFullyPicked = picked >= item.quantity;
@@ -2678,9 +2681,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     const isAllocOK = allocated >= item.quantity;
 
                                                                     return (
-                                                                        <tr key={idx}>
-                                                                            <td className="p-3 font-mono text-xs whitespace-nowrap">{item.sku}</td>
-                                                                            <td className="p-3 min-w-[200px] flex items-center gap-2">
+                                                                        <tr key={idx} className="block md:table-row p-4 md:p-0">
+                                                                            <td className="p-2 md:p-3 font-mono text-xs md:whitespace-nowrap block md:table-cell">
+                                                                                <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Material:</span>
+                                                                                {item.sku}
+                                                                            </td>
+                                                                            <td className="p-2 md:p-3 flex md:table-cell flex-wrap items-center gap-2 block md:table-cell">
+                                                                                <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px] w-full mb-1">Descrição:</span>
                                                                                 {item.description}
                                                                                 {item.originalDescription && item.originalDescription !== item.description && (
                                                                                     <div className="group relative flex items-center">
@@ -2703,17 +2710,21 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 {item.image && (
                                                                                     <button 
                                                                                         onClick={() => setViewImage(item.image!)}
-                                                                                        className="text-slate-400 hover:text-brand-600"
+                                                                                        className="text-slate-400 hover:text-brand-600 md:ml-1"
                                                                                     >
                                                                                         <ImageIcon className="w-4 h-4" />
                                                                                     </button>
                                                                                 )}
                                                                             </td>
-                                                                            <td className="p-3 text-right font-bold whitespace-nowrap">{item.quantity}</td>
+                                                                            <td className="p-2 md:p-3 text-left md:text-right font-bold md:whitespace-nowrap block md:table-cell">
+                                                                                <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Qtd:</span>
+                                                                                {item.quantity}
+                                                                            </td>
                                                                             
                                                                             {/* FIFO Allocation Column for Open Orders */}
                                                                             {type === 'OPEN' && !isCompleted && (
-                                                                                <td className="p-3 text-right font-mono text-xs whitespace-nowrap">
+                                                                                <td className="p-2 md:p-3 text-left md:text-right font-mono text-xs md:whitespace-nowrap block md:table-cell">
+                                                                                    <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Stock:</span>
                                                                                     {item.isCustom ? (
                                                                                         <span className="text-slate-400">N/A</span>
                                                                                     ) : (
@@ -2726,9 +2737,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
                                                                             {(type === 'FINISHED' || isGhost) && (
                                                                                 <>
-                                                                                <td className="p-3 text-right font-bold whitespace-nowrap">{picked}</td>
-                                                                                <td className="p-3 whitespace-nowrap">
-                                                                                    {isFullyPicked ? <span className="text-green-600 dark:text-green-400 flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span> : (picked === 0 ? <span className="text-red-500 dark:text-red-400 flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span> : <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>)}
+                                                                                <td className="p-2 md:p-3 text-left md:text-right font-bold md:whitespace-nowrap block md:table-cell">
+                                                                                    <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Processado:</span>
+                                                                                    {picked}
+                                                                                </td>
+                                                                                <td className="p-2 md:p-3 md:whitespace-nowrap block md:table-cell">
+                                                                                    <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Status:</span>
+                                                                                    {isFullyPicked ? <span className="text-green-600 dark:text-green-400 inline-flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span> : (picked === 0 ? <span className="text-red-500 dark:text-red-400 inline-flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span> : <span className="text-amber-600 dark:text-amber-400 inline-flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>)}
                                                                                 </td>
                                                                                 </>
                                                                             )}

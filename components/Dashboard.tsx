@@ -74,11 +74,13 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {canCreateWarehouse && (
                     <button
-                    onClick={() => onNavigate('CREATE_ORDER')}
-                    className="w-full bg-brand-600 hover:bg-brand-700 text-white p-6 rounded-xl shadow-sm transition-all flex flex-col items-center justify-center gap-3 text-lg font-semibold border border-brand-700 h-full"
+                        onClick={() => onNavigate('CREATE_ORDER')}
+                        className="bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:scale-95 transition-all duration-300 flex flex-col items-center justify-center gap-3 text-lg font-semibold h-full"
                     >
-                    <PlusCircle className="w-8 h-8" />
-                    {userRole === UserRole.TECHNICAL ? 'Criar Requisição' : 'Criar Pedido'}
+                        <PlusCircle className="w-8 h-8" />
+                        <span className="text-center leading-tight">
+                            {userRole === UserRole.TECHNICAL ? 'Criar Requisição' : 'Criar Pedido'}
+                        </span>
                     </button>
                 )}
 
@@ -164,11 +166,11 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {canCreatePurchase && (
                         <button
-                        onClick={() => onNavigate('PURCHASE_ORDERS')}
-                        className="bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 border border-purple-200 dark:border-purple-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-purple-700 dark:text-purple-300 h-full"
+                            onClick={() => onNavigate('PURCHASE_ORDERS')}
+                            className="bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:scale-95 transition-all duration-300 flex flex-col items-center justify-center gap-3 text-lg font-semibold h-full"
                         >
-                        <ShoppingBag className="w-6 h-6" />
-                        <span className="font-semibold">Criar Pedido de Compra</span>
+                            <ShoppingBag className="w-8 h-8" />
+                            <span className="font-semibold text-center leading-tight">Criar Pedido<br/>de Compra</span>
                         </button>
                   )}
 
