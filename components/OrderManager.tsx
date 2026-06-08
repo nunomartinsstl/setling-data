@@ -1470,6 +1470,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       return Object.values(data);
   };
 
+
+  const getDirectPickedQuantity = (order: Order, sku: string): number => {
+     const list = toArray(order.pickedItems);
+     return list.filter((p: any) => (p.material || '').trim().toLowerCase() === sku.trim().toLowerCase())
+                .reduce((s: number, p: any) => s + (Number(p.pickedQty)||0), 0);
+  };
+
   const getTotalPickedQuantity = (order: Order, allOrders: Order[], sku: string): number => {
      let total = 0;
      // Helper function
@@ -1632,7 +1639,56 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
     </div>
   );
 
+
+  const handleExportExcel = () => {
+    let exportData: any[] = [];
+    groupedOrders.forEach(group => {
+      const allOrdersInGroup = [group.root, ...group.children];
+      const displayedOrders = type === 'FINISHED' 
+        ? allOrdersInGroup.filter(o => o.status === 'COMPLETED')
+        : allOrdersInGroup;
+      
+      displayedOrders.forEach(order => {
+        let pickActor = order.creator;
+        let pickDate = order.dateCreated;
+        
+        if (order.changeLog) {
+            const pickedLogs = order.changeLog.filter((log) => log.details.toLowerCase().includes('separado') || log.details.toLowerCase().includes('conclu') || log.details.toLowerCase().includes('submet'));
+            if (pickedLogs.length > 0) {
+               const lastLog = pickedLogs[pickedLogs.length - 1];
+               pickActor = lastLog.actor;
+               pickDate = lastLog.date;
+            }
+        }
+        
+        order.items.forEach((item) => {
+           exportData.push({
+               "Data Pedido": new Date(order.dateCreated).toLocaleString(),
+               "Data Processado": (type === 'FINISHED' || order.status === 'COMPLETED') ? new Date(pickDate).toLocaleString() : '',
+               "Nome do Pedido": order.title,
+               "Material (SKU)": item.sku || 'S/N',
+               "Descrição": item.description,
+               "Qtd Pedida": item.quantity,
+               "Qtd Processada": (type === 'FINISHED' || order.status === 'COMPLETED') ? getDirectPickedQuantity(order, item.sku) : 0,
+               "Responsável (Picking)": (type === 'FINISHED' || order.status === 'COMPLETED') ? pickActor : ''
+           });
+        });
+      });
+    });
+
+    if(exportData.length === 0) {
+        toast.info("Não existem dados para exportar.");
+        return;
+    }
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Pedidos");
+    const label = type === 'FINISHED' ? 'Finalizados' : 'Abertos';
+    XLSX.writeFile(wb, `Pedidos_${label}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
+
   const showForm = mode === 'CREATE' || editingOrderId !== null;
+
   const showList = mode === 'LIST' && editingOrderId === null;
 
   return (
@@ -1782,13 +1838,30 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             </h2>
             
             {mode === 'LIST' && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    {activeFiltersCount > 0 && (
+                         <button 
+                             onClick={() => setAdvancedFilters({ material: '', user: '', datePlacedStart: '', datePlacedEnd: '', dateDueStart: '', dateDueEnd: '', pep: '' })}
+                             className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors bg-red-50 border-red-200 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/40 outline-none"
+                             title="Limpar Filtros"
+                         >
+                             <X className="w-4 h-4" />
+                             <span className="hidden sm:inline font-medium">Limpar</span>
+                         </button>
+                    )}
+                    <button
+                        onClick={handleExportExcel}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors bg-green-50 border-green-200 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/40 outline-none"
+                    >
+                        <Download className="w-4 h-4" />
+                        <span className="hidden sm:inline font-medium">Exportar</span>
+                    </button>
                     <button
                         onClick={() => setShowAdvancedSearch(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"
+                        className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 outline-none"
                     >
                         <Search className="w-4 h-4" />
-                        <span>Pesquisa Avançada</span>
+                        <span className="font-medium">Pesquisa Avançada</span>
                         {activeFiltersCount > 0 && (
                             <span className="bg-brand-600 text-white text-xs px-2 py-0.5 rounded-full">
                                 {activeFiltersCount}
@@ -2532,7 +2605,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                const isPending = order.status === 'PENDING';
                                const isPendingApproval = order.status === 'PENDING_APPROVAL';
                                const isCompleted = order.status === 'COMPLETED';
-                               const hasBackorder = order.reopenCount && order.reopenCount > 0;
+                               const hasBackorder = (order.reopenCount || 0) > 0;
                                const isReopen = !!order.originalOrderId;
                                const isOrderFullyFulfilled = order.items.every(item => {
                                     const picked = getTotalPickedQuantity(order, orders, item.sku);
@@ -2661,12 +2734,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                    </div>
                                                )}
                                                <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
-                                                   <div className="overflow-x-auto">
-                                                        <table className="w-full text-sm text-left">
+                                                   <div className="">
+                                                        <table className="w-full text-sm text-left block md:table">
                                                             <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300 hidden md:table-header-group">
                                                                 <tr>
                                                                     <th className="p-3 whitespace-nowrap">Material</th>
-                                                                    <th className="p-3 whitespace-nowrap">Descrição</th>
+                                                                    <th className="p-3">Descrição</th>
                                                                     <th className="p-3 text-right whitespace-nowrap">Qtd</th>
                                                                     {type === 'OPEN' && !isCompleted && <th className="p-3 text-right whitespace-nowrap">Stock</th>}
                                                                     {(type === 'FINISHED' || isGhost) && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
@@ -2676,6 +2749,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 block md:table-row-group">
                                                                 {order.items.map((item, idx) => {
                                                                     const picked = (type === 'FINISHED' || isGhost) ? getTotalPickedQuantity(order, orders, item.sku) : 0;
+                                                                    const directPicked = (type === 'FINISHED' || isGhost) ? getDirectPickedQuantity(order, item.sku) : 0;
+                                                                    const pickedInChildren = picked - directPicked;
                                                                     const isFullyPicked = picked >= item.quantity;
                                                                     const allocated = getAllocatedQty(order.id, item.sku);
                                                                     const isAllocOK = allocated >= item.quantity;
@@ -2739,7 +2814,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 <>
                                                                                 <td className="p-2 md:p-3 text-left md:text-right font-bold md:whitespace-nowrap block md:table-cell">
                                                                                     <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Processado:</span>
-                                                                                    {picked}
+                                                                                    {directPicked}
+                                                                                    {pickedInChildren > 0 && (
+                                                                                        <div className="group relative inline-flex items-center ml-1">
+                                                                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-pointer" />
+                                                                                            <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 w-[160px] bg-slate-800 text-white text-[10px] rounded shadow-lg p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50 text-center font-normal whitespace-normal transition-opacity duration-200">
+                                                                                                Restantes {pickedInChildren} un. processadas numa reabertura.
+                                                                                                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    )}
                                                                                 </td>
                                                                                 <td className="p-2 md:p-3 md:whitespace-nowrap block md:table-cell">
                                                                                     <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Status:</span>
@@ -2755,18 +2839,24 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                    </div>
                                                </div>
                                                {order.changeLog && order.changeLog.length > 0 && (
-                                                   <div className="mb-4">
-                                                       <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
-                                                           <History className="w-3 h-3" /> Histórico:
-                                                       </p>
-                                                       <ul className="space-y-1 pl-4 list-disc">
-                                                           {order.changeLog.map((log, logIdx) => (
-                                                               <li key={logIdx} className="text-xs text-slate-500 dark:text-slate-400">
-                                                                   <span className="font-semibold">{new Date(log.date).toLocaleDateString()}</span> <span className="text-slate-400">|</span> {log.actor}: {log.details}
-                                                               </li>
-                                                           ))}
-                                                       </ul>
-                                                   </div>
+                                                   <details className="mb-4 group border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                                                       <summary className="text-xs font-bold text-slate-600 dark:text-slate-300 p-3 cursor-pointer flex items-center gap-2 select-none hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                                           <History className="w-3.5 h-3.5" /> Histórico de Alterações  <span className="ml-auto text-[10px] text-slate-400 font-normal">Clica para ver detalhes</span>
+                                                       </summary>
+                                                       <div className="p-3 pt-0 border-t border-slate-200 dark:border-slate-700 mt-2">
+                                                           <ul className="space-y-2 mt-2">
+                                                               {order.changeLog.map((log, logIdx) => (
+                                                                   <li key={logIdx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                                                                       <span className="font-semibold text-slate-700 dark:text-slate-300">{new Date(log.date).toLocaleString()}</span> 
+                                                                       <span className="mx-2 text-slate-300 dark:text-slate-600">|</span> 
+                                                                       <span className="font-medium text-brand-600 dark:text-brand-400">{log.actor}</span> 
+                                                                       <span className="mx-2 text-slate-300 dark:text-slate-600">-</span> 
+                                                                       {log.details}
+                                                                   </li>
+                                                               ))}
+                                                           </ul>
+                                                       </div>
+                                                   </details>
                                                )}
                                                
                                                {/* Action Buttons */}

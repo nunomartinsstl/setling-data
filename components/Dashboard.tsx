@@ -1,7 +1,22 @@
-
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Order, StockItem, UserRole, ViewState, RolePermissions } from '../types';
-import { ShoppingCart, CheckCircle, Activity, PlusCircle, ShoppingBag, ArrowDownCircle, AlertTriangle, Search, Clock, FileText, ArrowRightLeft, Package, Settings } from 'lucide-react';
+import { 
+  CheckCircle, 
+  Activity, 
+  PlusCircle, 
+  ShoppingBag, 
+  ArrowDownCircle, 
+  AlertTriangle, 
+  Search, 
+  Clock, 
+  FileText, 
+  ArrowRightLeft, 
+  Package, 
+  Settings, 
+  ChevronRight,
+  ChevronDown
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface DashboardProps {
   orders: Order[];
@@ -12,10 +27,85 @@ interface DashboardProps {
   shortageCount?: number;
 }
 
+const DashboardItem = ({ 
+    title, 
+    value, 
+    icon: Icon, 
+    colorClass, 
+    onClick,
+    pulseBadge = null,
+    children
+  }: any) => {
+    return (
+      <div 
+        onClick={onClick}
+        className="group relative flex items-center justify-between py-3 px-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800/50 last:border-0"
+      >
+        <div className="flex items-center gap-4">
+          <div className={`relative flex-shrink-0 ${colorClass}`}>
+            <Icon className="w-4 h-4" />
+            {pulseBadge !== null && pulseBadge > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 text-[8px] font-bold text-white items-center justify-center">{pulseBadge > 99 ? '99+' : pulseBadge}</span>
+                </span>
+            )}
+          </div>
+          <div>
+            <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{title}</h3>
+            {children && <div className="mt-1">{children}</div>}
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-3">
+            {value !== undefined && value !== null && (
+                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{value}</span>
+            )}
+            <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
+        </div>
+      </div>
+    )
+}
+
+const DashboardSection = ({ title, icon: Icon, defaultOpen = false, children }: any) => {
+    const [isOpen, setIsOpen] = useState(defaultOpen);
+
+    return (
+        <div className="mb-2">
+            <button 
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between py-4 px-2 outline-none select-none hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-800"
+            >
+                <div className="flex items-center gap-3">
+                    <Icon className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                    <h2 className="text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest">{title}</h2>
+                </div>
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                </motion.div>
+            </button>
+            <AnimatePresence initial={false}>
+                {isOpen && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                    >
+                        <div className="flex flex-col ml-3 pl-3 py-1 border-l border-slate-200 dark:border-slate-800">
+                             {children}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
 const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissions, onNavigate, shortageCount = 0 }) => {
   const stats = useMemo(() => {
     const openOrders = orders.filter(o => o.status === 'OPEN');
-    // Check for both underscore and space versions of the status
     const inProcessOrders = orders.filter(o => o.status === 'IN_PROCESS' || o.status === 'IN PROCESS');
     const pendingOrders = orders.filter(o => o.status === 'PENDING');
     const pendingApprovalOrders = orders.filter(o => o.status === 'PENDING_APPROVAL');
@@ -26,7 +116,6 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
       inProcessCount: inProcessOrders.length,
       pendingCount: pendingOrders.length,
       pendingApprovalCount: pendingApprovalOrders.length,
-      // The main "Open" number includes true OPEN, IN_PROCESS, PENDING and PENDING_APPROVAL
       totalOpenCount: openOrders.length + inProcessOrders.length + pendingOrders.length + pendingApprovalOrders.length,
       finishedCount: finishedOrders.length,
     };
@@ -36,170 +125,111 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
   const hasPending = stats.pendingCount > 0;
   const hasPendingApproval = stats.pendingApprovalCount > 0;
   
-  // Use permissions if available, otherwise fallback logic (though app should provide permissions)
   const canCreateWarehouse = permissions ? permissions.canCreateOrder : false;
   const canCreatePurchase = permissions ? permissions.canCreatePurchaseOrder : false;
   
-  // Quick Access buttons logic
   const showReceipts = permissions ? permissions.canViewReceipts : false;
   const showTransfers = permissions ? permissions.canViewTransfers : false;
   const showShortages = permissions ? permissions.canViewShortages : false;
   const showSearch = permissions ? permissions.canSearch : false;
 
-  const StatCard = ({ title, value, icon: Icon, color, onClick, children }: any) => (
-    <div 
-      onClick={onClick}
-      className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow hover:bg-slate-50 dark:hover:bg-slate-700 relative overflow-hidden h-full"
-    >
-      <div className="flex items-center space-x-4">
-        <div className={`p-4 rounded-full ${color}`}>
-            <Icon className="w-6 h-6 text-white" />
-        </div>
-        <div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">{title}</p>
-            <p className="text-3xl font-bold text-slate-800 dark:text-white">{value}</p>
-            {children}
-        </div>
-      </div>
-    </div>
-  );
-
   return (
-    <div className="space-y-8 animate-fade-in">
-      {/* Group 1: Pedidos ao Armazém */}
-      <div className="space-y-3">
-          <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-              <Package className="w-5 h-5" /> Pedidos ao Armazém
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {canCreateWarehouse && (
-                    <button
-                        onClick={() => onNavigate('CREATE_ORDER')}
-                        className="bg-brand-500 hover:bg-brand-600 active:bg-brand-700 text-white p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:scale-95 transition-all duration-300 flex flex-col items-center justify-center gap-3 text-lg font-semibold h-full"
-                    >
-                        <PlusCircle className="w-8 h-8" />
-                        <span className="text-center leading-tight">
-                            {userRole === UserRole.TECHNICAL ? 'Criar Requisição' : 'Criar Pedido'}
-                        </span>
-                    </button>
-                )}
+    <div className="w-full max-w-2xl mx-auto pt-2 pb-20 px-4 md:px-0 animate-fade-in">
+      
+      {/* SECTION: Pedidos ao Armazém */}
+      <DashboardSection title="Pedidos ao Armazém" icon={Package} defaultOpen={true}>
+            {canCreateWarehouse && (
+                <DashboardItem
+                    title={userRole === UserRole.TECHNICAL ? 'Criar Requisição' : 'Criar Pedido'}
+                    icon={PlusCircle}
+                    colorClass="text-brand-600 dark:text-brand-400"
+                    onClick={() => onNavigate('CREATE_ORDER')}
+                />
+            )}
 
-                {(permissions?.canViewOpenOrders || permissions?.canViewOwnOpenOrders) && (
-                    <StatCard 
-                        title="Pedidos Abertos" 
-                        value={stats.totalOpenCount} 
-                        icon={Clock} 
-                        color="bg-blue-500" 
-                        onClick={() => onNavigate('OPEN_ORDERS')}
-                    >
-                        <div className="flex flex-col gap-1 mt-1">
-                            {hasInProcess && (
-                                <div className="flex items-center gap-1 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 px-2 py-1 rounded-full w-fit">
-                                    <Activity className="w-3 h-3 animate-pulse" />
-                                    Em curso
-                                </div>
-                            )}
-                            {hasPending && (
-                                <div className="flex items-center gap-1 text-xs font-bold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-1 rounded-full w-fit">
-                                    <ShoppingBag className="w-3 h-3" />
-                                    Aguardando compra
-                                </div>
-                            )}
-                            {hasPendingApproval && (
-                                <div className="flex items-center gap-1 text-xs font-bold text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/30 px-2 py-1 rounded-full w-fit">
-                                    <FileText className="w-3 h-3" />
-                                    Por aprovar
-                                </div>
-                            )}
+            {(permissions?.canViewOpenOrders || permissions?.canViewOwnOpenOrders) && (
+                <DashboardItem
+                    title="Pedidos Abertos"
+                    value={stats.totalOpenCount}
+                    icon={Clock}
+                    colorClass="text-blue-500 dark:text-blue-400"
+                    onClick={() => onNavigate('OPEN_ORDERS')}
+                >
+                    {(hasInProcess || hasPending || hasPendingApproval) && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {hasInProcess && <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 dark:bg-amber-900/30 px-1 py-0.5">Em curso</span>}
+                            {hasPending && <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5">Aguardando</span>}
+                            {hasPendingApproval && <span className="text-[9px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-1 py-0.5">Por aprovar</span>}
                         </div>
-                    </StatCard>
-                )}
+                    )}
+                </DashboardItem>
+            )}
 
-                {(permissions?.canViewFinishedOrders || permissions?.canViewOwnFinishedOrders) && (
-                    <StatCard 
-                        title="Pedidos Finalizados" 
-                        value={stats.finishedCount} 
-                        icon={CheckCircle} 
-                        color="bg-green-500" 
-                        onClick={() => onNavigate('FINISHED_ORDERS')}
+            {(permissions?.canViewFinishedOrders || permissions?.canViewOwnFinishedOrders) && (
+                <DashboardItem
+                    title="Pedidos Finalizados"
+                    value={stats.finishedCount}
+                    icon={CheckCircle}
+                    colorClass="text-emerald-500 dark:text-emerald-400"
+                    onClick={() => onNavigate('FINISHED_ORDERS')}
+                />
+            )}
+      </DashboardSection>
+
+      {/* SECTION: Movimentos de Stock */}
+      {(showReceipts || showTransfers) && (
+          <DashboardSection title="Movimentos de Stock" icon={Activity}>
+                {showReceipts && (
+                    <DashboardItem
+                        title="Entradas"
+                        icon={ArrowDownCircle}
+                        colorClass="text-cyan-500 dark:text-cyan-400"
+                        onClick={() => onNavigate('RECEIPTS')}
                     />
                 )}
-          </div>
-      </div>
-      
-      {/* Group 2: Movimentos de Stock */}
-      {(showReceipts || showTransfers) && (
-          <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <Activity className="w-5 h-5" /> Movimentos de Stock
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {showReceipts && (
-                      <button 
-                        onClick={() => onNavigate('RECEIPTS')}
-                        className="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 border border-blue-200 dark:border-blue-800 p-6 rounded-xl flex items-center justify-center gap-3 transition-colors text-blue-700 dark:text-blue-300 h-full"
-                      >
-                          <ArrowDownCircle className="w-8 h-8" />
-                          <span className="font-semibold text-lg">Entradas</span>
-                      </button>
-                  )}
-                  
-                  {showTransfers && (
-                      <button 
+                
+                {showTransfers && (
+                    <DashboardItem
+                        title="Transferências"
+                        icon={ArrowRightLeft}
+                        colorClass="text-amber-500 dark:text-amber-400"
                         onClick={() => onNavigate('TRANSFERS')}
-                        className="bg-orange-50 dark:bg-orange-900/20 hover:bg-orange-100 dark:hover:bg-orange-900/30 border border-orange-200 dark:border-orange-800 p-6 rounded-xl flex items-center justify-center gap-3 transition-colors text-orange-700 dark:text-orange-300 h-full"
-                      >
-                          <ArrowRightLeft className="w-8 h-8" />
-                          <span className="font-semibold text-lg">Transferências</span>
-                      </button>
-                  )}
-              </div>
-          </div>
+                    />
+                )}
+          </DashboardSection>
       )}
 
-      {/* Group 3: Outros */}
+      {/* SECTION: Outras Operações */}
       {(canCreatePurchase || showShortages || showSearch) && (
-          <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                  <Settings className="w-5 h-5" /> Outras Operações
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {canCreatePurchase && (
-                        <button
-                            onClick={() => onNavigate('PURCHASE_ORDERS')}
-                            className="bg-purple-500 hover:bg-purple-600 active:bg-purple-700 text-white p-6 rounded-xl shadow-md hover:shadow-lg hover:-translate-y-1 active:scale-95 transition-all duration-300 flex flex-col items-center justify-center gap-3 text-lg font-semibold h-full"
-                        >
-                            <ShoppingBag className="w-8 h-8" />
-                            <span className="font-semibold text-center leading-tight">Criar Pedido<br/>de Compra</span>
-                        </button>
-                  )}
+          <DashboardSection title="Outras Operações" icon={Settings}>
+                {canCreatePurchase && (
+                    <DashboardItem
+                        title="Criar Pedido de Compra"
+                        icon={ShoppingBag}
+                        colorClass="text-purple-500 dark:text-purple-400"
+                        onClick={() => onNavigate('PURCHASE_ORDERS')}
+                    />
+                )}
 
-                  {showShortages && (
-                      <button 
+                {showShortages && (
+                    <DashboardItem
+                        title="Material em Falta"
+                        icon={AlertTriangle}
+                        colorClass="text-red-500 dark:text-red-400"
                         onClick={() => onNavigate('SHORTAGES')}
-                        className="bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 border border-red-200 dark:border-red-800 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-red-700 dark:text-red-300 h-full relative"
-                      >
-                          {shortageCount > 0 && (
-                            <span className="absolute top-3 right-3 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-sm animate-pulse">
-                              {shortageCount}
-                            </span>
-                          )}
-                          <AlertTriangle className="w-6 h-6" />
-                          <span className="font-semibold">Material em Falta</span>
-                      </button>
-                  )}
+                        pulseBadge={shortageCount}
+                    />
+                )}
 
-                  {showSearch && (
-                      <button 
+                {showSearch && (
+                    <DashboardItem
+                        title="Pesquisa Avançada"
+                        icon={Search}
+                        colorClass="text-slate-500 dark:text-slate-400"
                         onClick={() => onNavigate('QUERY')}
-                        className="bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-600 p-4 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors text-slate-700 dark:text-slate-300 h-full"
-                      >
-                          <Search className="w-6 h-6" />
-                          <span className="font-semibold">Pesquisa</span>
-                      </button>
-                  )}
-              </div>
-          </div>
+                    />
+                )}
+          </DashboardSection>
       )}
     </div>
   );
