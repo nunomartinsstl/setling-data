@@ -39,29 +39,29 @@ const DashboardItem = ({
     return (
       <div 
         onClick={onClick}
-        className="group relative flex items-center justify-between py-3 px-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800/50 last:border-0"
+        className="group relative flex items-center justify-between py-3 px-4 md:py-4 md:px-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors border-b border-slate-100 dark:border-slate-800/50 last:border-0"
       >
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 md:gap-5">
           <div className={`relative flex-shrink-0 ${colorClass}`}>
-            <Icon className="w-4 h-4" />
+            <Icon className="w-4 h-4 md:w-5 md:h-5" />
             {pulseBadge !== null && pulseBadge > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3">
+                <span className="absolute -top-1.5 -right-1.5 flex h-3 w-3 md:h-4 md:w-4">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500 text-[8px] font-bold text-white items-center justify-center">{pulseBadge > 99 ? '99+' : pulseBadge}</span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 md:h-4 md:w-4 bg-red-500 text-[8px] md:text-[10px] font-bold text-white items-center justify-center">{pulseBadge > 99 ? '99+' : pulseBadge}</span>
                 </span>
             )}
           </div>
           <div>
-            <h3 className="text-sm font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{title}</h3>
+            <h3 className="text-sm md:text-base font-medium text-slate-700 dark:text-slate-200 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">{title}</h3>
             {children && <div className="mt-1">{children}</div>}
           </div>
         </div>
         
         <div className="flex items-center gap-3">
             {value !== undefined && value !== null && (
-                <span className="text-sm font-bold text-slate-800 dark:text-slate-100">{value}</span>
+                <span className="text-sm md:text-base font-bold text-slate-800 dark:text-slate-100">{value}</span>
             )}
-            <ChevronRight className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
+            <ChevronRight className="w-3.5 h-3.5 md:w-4 md:h-4 text-slate-300 group-hover:text-slate-500 dark:group-hover:text-slate-400 transition-colors" />
         </div>
       </div>
     )
@@ -74,14 +74,14 @@ const DashboardSection = ({ title, icon: Icon, defaultOpen = false, children }: 
         <div className="mb-2">
             <button 
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between py-4 px-2 outline-none select-none hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-800"
+                className="w-full flex items-center justify-between py-4 px-2 md:px-4 outline-none select-none hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-800"
             >
-                <div className="flex items-center gap-3">
-                    <Icon className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    <h2 className="text-xs font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest">{title}</h2>
+                <div className="flex items-center gap-3 md:gap-4">
+                    <Icon className="w-4 h-4 md:w-5 md:h-5 text-slate-400 dark:text-slate-500" />
+                    <h2 className="text-xs md:text-sm font-bold text-slate-800 dark:text-slate-300 uppercase tracking-widest">{title}</h2>
                 </div>
                 <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                    <ChevronDown className="w-4 h-4 md:w-5 md:h-5 text-slate-400" />
                 </motion.div>
             </button>
             <AnimatePresence initial={false}>
@@ -134,7 +134,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
   const showSearch = permissions ? permissions.canSearch : false;
 
   return (
-    <div className="w-full max-w-2xl mx-auto pt-2 pb-20 px-4 md:px-0 animate-fade-in">
+    <div className="w-full max-w-4xl mx-auto pt-2 md:pt-6 pb-20 px-4 md:px-0 animate-fade-in gap-4 md:gap-6 flex flex-col">
       
       {/* SECTION: Pedidos ao Armazém */}
       <DashboardSection title="Pedidos ao Armazém" icon={Package} defaultOpen={true}>
@@ -156,10 +156,10 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
                     onClick={() => onNavigate('OPEN_ORDERS')}
                 >
                     {(hasInProcess || hasPending || hasPendingApproval) && (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                            {hasInProcess && <span className="text-[9px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 dark:bg-amber-900/30 px-1 py-0.5">Em curso</span>}
-                            {hasPending && <span className="text-[9px] font-bold text-purple-600 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5">Aguardando</span>}
-                            {hasPendingApproval && <span className="text-[9px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-1 py-0.5">Por aprovar</span>}
+                        <div className="flex flex-wrap gap-1 mt-1 md:mt-2">
+                            {hasInProcess && <span className="text-[9px] md:text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 dark:bg-amber-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-sm">Em curso</span>}
+                            {hasPending && <span className="text-[9px] md:text-[10px] font-bold text-purple-600 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-sm">Aguardando</span>}
+                            {hasPendingApproval && <span className="text-[9px] md:text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-sm">Por aprovar</span>}
                         </div>
                     )}
                 </DashboardItem>
