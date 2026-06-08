@@ -15,7 +15,7 @@ const UserProfile: React.FC<UserProfileProps> = ({ user, companies, allUsers }) 
   const subordinates = allUsers.filter(u => u.supervisorId === user.uid);
 
   return (
-    <div className="max-w-2xl mx-auto mt-8 p-6 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+    <div className="max-w-2xl mx-auto mt-8 p-6 bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700">
       <div className="flex items-center gap-4 mb-8">
         <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-brand-600 dark:text-brand-400">
           <UserIcon className="w-8 h-8" />

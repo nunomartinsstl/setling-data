@@ -30,7 +30,7 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
             </div>
 
             {shortages.length === 0 ? (
-                <div className="bg-white dark:bg-slate-800 p-12 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 text-center">
+                <div className="bg-transparent p-12 rounded-none shadow-none border border-slate-200 dark:border-slate-700 text-center">
                     <Package className="w-16 h-16 text-green-200 dark:text-green-900 mx-auto mb-4" />
                     <h3 className="text-xl font-bold text-slate-700 dark:text-slate-300">Tudo OK!</h3>
                     <p className="text-slate-500 dark:text-slate-400">Não há ruturas de stock para os pedidos atuais.</p>
@@ -47,7 +47,7 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                             : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 border border-orange-200 dark:border-orange-800';
                         
                         return (
-                            <div key={item.sku} className={`bg-white dark:bg-slate-800 rounded-lg shadow-sm border ${borderClass} overflow-hidden`}>
+                            <div key={item.sku} className={`bg-transparent rounded-none shadow-none border ${borderClass} overflow-hidden`}>
                                 <div 
                                     className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors"
                                     onClick={() => setExpandedSku(isExpanded ? null : item.sku)}
@@ -57,13 +57,13 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                                             <span className="font-mono font-bold text-lg text-slate-800 dark:text-white">{item.sku}</span>
                                             
                                             <div className="flex flex-wrap gap-2">
-                                                <span className="text-xs font-bold px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600" title="Stock Físico Atual">
+                                                <span className="text-xs font-bold px-2 py-1 rounded-none bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600" title="Stock Físico Atual">
                                                     Stock: {item.physicalStock}
                                                 </span>
-                                                <span className="text-xs font-bold px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800" title="Total Necessário nos Pedidos">
+                                                <span className="text-xs font-bold px-2 py-1 rounded-none bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-100 dark:border-blue-800" title="Total Necessário nos Pedidos">
                                                     Qtd. Pedida: {item.totalRequired}
                                                 </span>
-                                                <span className={`text-xs font-bold px-2 py-1 rounded ${badgeClass} flex items-center gap-1`}>
+                                                <span className={`text-xs font-bold px-2 py-1 rounded-none ${badgeClass} flex items-center gap-1`}>
                                                     {isMissing ? (
                                                         <>
                                                             <AlertCircle className="w-3 h-3" /> Falta: {item.missing}
@@ -87,7 +87,7 @@ const ShortagesReport: React.FC<ShortagesReportProps> = ({ orders, stock, onNavi
                                         <h4 className="text-xs font-bold uppercase text-slate-500 mb-3">Pedidos a aguardar este material:</h4>
                                         <div className="space-y-2">
                                             {item.orders.map((order) => (
-                                                <div key={order.id} className="flex justify-between items-center bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 text-sm">
+                                                <div key={order.id} className="flex justify-between items-center bg-transparent p-3 rounded-none border border-slate-200 dark:border-slate-700 text-sm">
                                                     <div>
                                                         <div className="font-bold text-slate-700 dark:text-slate-200">{order.title}</div>
                                                         <div className="text-xs text-slate-500">{order.creator} • {new Date(order.dateCreated).toLocaleDateString()}</div>

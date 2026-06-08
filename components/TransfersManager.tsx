@@ -68,7 +68,7 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
         </div>
 
         {/* Search Bar */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div className="bg-transparent p-4 rounded-none border border-slate-200 dark:border-slate-700 shadow-none">
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                 <input
@@ -76,7 +76,7 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Pesquisar por material, localização ou utilizador..."
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0 rounded-none focus:ring-2 focus:ring-orange-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
             </div>
         </div>
@@ -84,7 +84,7 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
         {/* List of Transfers (Card Layout) */}
         <div className="space-y-4">
             {filteredTransfers.length === 0 ? (
-                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                <div className="text-center p-12 bg-transparent rounded-none border border-slate-200 dark:border-slate-700 shadow-none">
                     <div className="bg-slate-100 dark:bg-slate-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                         <ArrowRightLeft className="w-8 h-8 text-slate-400" />
                     </div>
@@ -95,7 +95,7 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
                 filteredTransfers.map((t) => (
                     <div 
                         key={t.id} 
-                        className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow p-4 flex flex-col gap-4"
+                        className="bg-transparent rounded-none border border-slate-200 dark:border-slate-700 shadow-none hover:shadow-none transition-shadow-none p-4 flex flex-col gap-4"
                     >
                         {/* Top Row: Header Info */}
                         <div className="flex justify-between items-start">
@@ -125,7 +125,7 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
                             </div>
                             <button
                                 onClick={() => handleExportExcel(t)}
-                                className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg border border-transparent hover:border-green-200 dark:hover:border-green-800 transition-all"
+                                className="flex-shrink-0 p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-none border border-transparent hover:border-green-200 dark:hover:border-green-800 transition-all"
                                 title="Exportar Excel"
                             >
                                 <FileSpreadsheet className="w-5 h-5" />
@@ -133,18 +133,18 @@ const TransfersManager: React.FC<TransfersManagerProps> = ({ transfers, masterLi
                         </div>
 
                         {/* Bottom Row: Movement Details */}
-                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-lg p-3 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
+                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-none p-3 border border-slate-100 dark:border-slate-700 flex items-center justify-between">
                             <div className="flex items-center gap-2 md:gap-8 flex-1 min-w-0">
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Origem</span>
-                                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 text-sm truncate">
+                                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200 bg-transparent px-2 py-1 rounded-none border border-slate-200 dark:border-slate-600 text-sm truncate">
                                         {t.originBin}
                                     </span>
                                 </div>
                                 <ArrowRight className="w-4 h-4 text-slate-300 dark:text-slate-600 flex-shrink-0" />
                                 <div className="flex flex-col min-w-0">
                                     <span className="text-[10px] uppercase font-bold text-slate-400 mb-0.5">Destino</span>
-                                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 text-sm truncate">
+                                    <span className="font-mono font-medium text-slate-700 dark:text-slate-200 bg-transparent px-2 py-1 rounded-none border border-slate-200 dark:border-slate-600 text-sm truncate">
                                         {t.destBin}
                                     </span>
                                 </div>

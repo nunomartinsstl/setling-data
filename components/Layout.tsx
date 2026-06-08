@@ -22,10 +22,10 @@ const NavItem = ({ view, icon: Icon, label, isActive, onClick, isChild = false, 
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all duration-200 group ${
+      className={`w-full flex items-center justify-between px-4 py-2 rounded-none transition-all duration-200 group ${
         isActive 
-          ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-700 dark:text-brand-400 font-semibold shadow-sm' 
-          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+          ? 'bg-brand-50/50 dark:bg-brand-900/10 text-brand-700 dark:text-brand-400 font-semibold border-l-2 border-brand-500' 
+          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-2 border-transparent hover:text-slate-900 dark:hover:text-slate-200'
       } ${isChild ? 'text-sm' : ''}`}
     >
       <div className="flex items-center space-x-3">
@@ -116,7 +116,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
       {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out flex flex-col
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-transparent border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out flex flex-col
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Header - Fixed */}
@@ -153,10 +153,10 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
                   <div className="space-y-1">
                       <button
                         onClick={() => setIsWarehouseGroupOpen(!isWarehouseGroupOpen)}
-                        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-colors group ${
+                        className={`w-full flex items-center justify-between px-4 py-2 rounded-none transition-colors group ${
                             isWarehouseActive && !isWarehouseGroupOpen 
                                 ? 'bg-brand-50/50 dark:bg-slate-800 text-brand-700 dark:text-brand-400 font-medium' 
-                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200'
+                                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-2 border-transparent hover:text-slate-900 dark:hover:text-slate-200'
                         }`}
                       >
                         <div className="flex items-center space-x-3">
@@ -290,7 +290,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
         </div>
 
         {/* Footer - Fixed */}
-        <div className="p-4 border-t border-slate-100 dark:border-slate-700 space-y-2 flex-shrink-0 bg-white dark:bg-slate-800">
+        <div className="p-4 border-t border-slate-100 dark:border-slate-700 space-y-2 flex-shrink-0 bg-transparent">
             <NavItem 
               view="PROFILE" 
               icon={UserIcon} 
@@ -301,7 +301,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
             <button
               onClick={onLogout}
-              className="w-full flex items-center space-x-3 px-4 py-2 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              className="w-full flex items-center space-x-3 px-4 py-2 text-slate-500 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-none transition-colors"
             >
               <LogOut className="w-5 h-5" />
               <span>Sair</span>
@@ -316,7 +316,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden w-full relative">
         {/* ... Header and desktop nav (unchanged) ... */}
-        <header className="lg:hidden h-16 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 flex-shrink-0">
+        <header className="lg:hidden h-16 bg-transparent border-b border-slate-200 dark:border-slate-700 flex items-center px-4 justify-between transition-colors duration-200 flex-shrink-0">
           <button 
             onClick={() => { onNavigate('DASHBOARD'); }}
             className="focus:outline-none"
@@ -359,7 +359,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
         <div className="hidden lg:flex w-full justify-end items-center px-8 pt-6 pb-2 gap-3 flex-shrink-0">
              <button 
                 onClick={() => onNavigate('PROFILE')}
-                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400 group"
+                className="flex items-center gap-2 px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-700 shadow-none rounded-none text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400 group"
                 title={`Perfil: ${user.username}`}
             >
                 <UserIcon className="w-4 h-4 text-slate-400 group-hover:text-brand-600 dark:group-hover:text-brand-400"/>
@@ -367,14 +367,14 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
             </button>
              <button 
                 onClick={toggleTheme}
-                className="flex items-center justify-center p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
+                className="flex items-center justify-center p-2 bg-transparent border border-slate-200 dark:border-slate-700 shadow-none rounded-none text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
                 title={isDarkMode ? "Modo Claro" : "Modo Escuro"}
             >
                 {isDarkMode ? <Sun className="w-4 h-4"/> : <Moon className="w-4 h-4"/>}
             </button>
              <button 
                 onClick={handleRefresh}
-                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
+                className="flex items-center gap-2 px-3 py-2 bg-transparent border border-slate-200 dark:border-slate-700 shadow-none rounded-none text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-all hover:text-brand-600 dark:hover:text-brand-400"
             >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                 Atualizar

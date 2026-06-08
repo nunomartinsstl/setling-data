@@ -426,7 +426,7 @@ const Settings: React.FC = () => {
       </h2>
 
       {/* PERMISSIONS MATRIX */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Lock className="w-5 h-5 text-brand-600"/> Matriz de Permissões
         </h3>
@@ -442,7 +442,7 @@ const Settings: React.FC = () => {
                     value={newRoleName}
                     onChange={(e) => setNewRoleName(e.target.value)}
                     placeholder="Nome da Função (Ex: Supervisor)"
-                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white uppercase"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white uppercase"
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRole())}
                 />
             </div>
@@ -454,13 +454,13 @@ const Settings: React.FC = () => {
                     onChange={(e) => setNewRoleHierarchy(e.target.value)}
                     min="1"
                     max="99"
-                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 />
             </div>
             <button 
                 type="button"
                 onClick={addRole}
-                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium h-[38px]"
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-none hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium h-[38px]"
             >
                 Adicionar
             </button>
@@ -515,7 +515,7 @@ const Settings: React.FC = () => {
                                         setRoleHierarchy(prev => ({ ...prev, [role]: val }));
                                     }}
                                     min="1"
-                                    className="w-16 p-1 text-center border border-slate-300 dark:border-slate-600 rounded bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
+                                    className="w-16 p-1 text-center border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-xs focus:ring-2 focus:ring-brand-500 outline-none"
                                 />
                             </td>
                         ))}
@@ -529,7 +529,7 @@ const Settings: React.FC = () => {
                                         type="checkbox"
                                         checked={permissions[role]?.[key] || false}
                                         onChange={() => togglePermission(role, key)}
-                                        className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-gray-300 cursor-pointer"
+                                        className="w-4 h-4 text-brand-600 rounded-none focus:ring-brand-500 border-gray-300 cursor-pointer"
                                     />
                                 </td>
                             ))}
@@ -541,7 +541,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* SUPERVISOR ROLES */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <ShieldCheck className="w-5 h-5 text-blue-600"/> Chefias / Supervisores
         </h3>
@@ -550,7 +550,7 @@ const Settings: React.FC = () => {
         </p>
         <div className="flex flex-wrap gap-3">
             {Object.keys(permissions).map(role => (
-                <label key={role} className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <label key={role} className="flex items-center gap-2 cursor-pointer bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-none border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                     <input 
                         type="checkbox"
                         checked={supervisorRoles.includes(role)}
@@ -561,7 +561,7 @@ const Settings: React.FC = () => {
                                 setSupervisorRoles(supervisorRoles.filter(r => r !== role));
                             }
                         }}
-                        className="w-4 h-4 text-brand-600 rounded border-slate-300 focus:ring-brand-500"
+                        className="w-4 h-4 text-brand-600 rounded-none border-slate-300 focus:ring-brand-500"
                     />
                     <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{getRoleLabel(role)}</span>
                 </label>
@@ -570,7 +570,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* ADMIN CODE */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-800 dark:text-purple-400">
             <ShieldCheck className="w-5 h-5 text-purple-600 dark:text-purple-500"/> Segurança Admin
         </h3>
@@ -584,13 +584,13 @@ const Settings: React.FC = () => {
                 value={adminAccessCode}
                 onChange={(e) => setAdminAccessCode(e.target.value)}
                 placeholder="Ex: SenhaForte123 (Deixe em branco para usar o padrão)"
-                className="w-full p-2 border border-purple-200 dark:border-purple-800 rounded-md bg-purple-50 dark:bg-purple-900/20 text-purple-900 dark:text-purple-200 focus:ring-2 focus:ring-purple-500 outline-none font-mono"
+                className="w-full p-2 border border-purple-200 dark:border-purple-800 rounded-none bg-purple-50 dark:bg-purple-900/20 text-purple-900 dark:text-purple-200 focus:ring-2 focus:ring-purple-500 outline-none font-mono"
             />
         </div>
       </div>
 
       {/* APPROVAL RULES */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Euro className="w-5 h-5 text-green-600"/> Regras de Aprovação (Pedidos de Compra)
         </h3>
@@ -604,7 +604,7 @@ const Settings: React.FC = () => {
                 <select 
                     value={newRuleOperator}
                     onChange={(e) => setNewRuleOperator(e.target.value as 'LTE' | 'GTE')}
-                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm"
                 >
                     <option value="LTE">Até (Max)</option>
                     <option value="GTE">Maior/Igual (Min)</option>
@@ -618,7 +618,7 @@ const Settings: React.FC = () => {
                     value={newRuleAmount}
                     onChange={(e) => setNewRuleAmount(e.target.value)}
                     placeholder="0"
-                    className="w-full pl-6 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                    className="w-full pl-6 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 />
             </div>
             <div className="flex-1 w-full">
@@ -626,7 +626,7 @@ const Settings: React.FC = () => {
                 <select 
                     value={newRuleRole}
                     onChange={(e) => setNewRuleRole(e.target.value)}
-                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 >
                     <option value="">Selecione...</option>
                     <option value="NO_APPROVAL">Sem aprovação</option>
@@ -640,7 +640,7 @@ const Settings: React.FC = () => {
                     <button 
                         type="button"
                         onClick={resetRuleForm}
-                        className="bg-slate-200 text-slate-600 px-3 py-2 rounded-md hover:bg-slate-300 text-sm font-medium"
+                        className="bg-slate-200 text-slate-600 px-3 py-2 rounded-none hover:bg-slate-300 text-sm font-medium"
                         title="Cancelar Edição"
                     >
                         <X className="w-4 h-4"/>
@@ -649,7 +649,7 @@ const Settings: React.FC = () => {
                 <button 
                     type="button"
                     onClick={saveApprovalRule}
-                    className={`text-white px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2 ${editingRuleIndex !== null ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}`}
+                    className={`text-white px-4 py-2 rounded-none text-sm font-medium flex items-center gap-2 ${editingRuleIndex !== null ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'}`}
                 >
                     {editingRuleIndex !== null ? <Save className="w-4 h-4"/> : <Plus className="w-4 h-4"/>}
                     {editingRuleIndex !== null ? 'Atualizar' : 'Adicionar'}
@@ -657,7 +657,7 @@ const Settings: React.FC = () => {
             </div>
         </div>
 
-        <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+        <div className="border border-slate-200 dark:border-slate-700 rounded-none overflow-hidden">
             <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300">
                     <tr>
@@ -695,7 +695,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* CATEGORY SETTINGS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Tag className="w-5 h-5 text-slate-500"/> Categorias de Material
         </h3>
@@ -710,7 +710,7 @@ const Settings: React.FC = () => {
                 onChange={(e) => setNewCatCode(e.target.value)}
                 placeholder="Cód (Ex: TUB)"
                 maxLength={3}
-                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
+                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
             />
             <input 
                 type="text"
@@ -718,19 +718,19 @@ const Settings: React.FC = () => {
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="Nome da Categoria (Ex: TUBAGEM)"
                 maxLength={30}
-                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCategory())}
             />
             <button 
                 type="button"
                 onClick={addCategory}
-                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-none hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
             >
                 Adicionar
             </button>
         </div>
 
-        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-none">
             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                 <thead className="bg-slate-50 dark:bg-slate-900 font-semibold sticky top-0">
                     <tr>
@@ -765,7 +765,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* UNIT OF MEASURE SETTINGS */}
-       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+       <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Scale className="w-5 h-5 text-slate-500"/> Unidades de Medida
         </h3>
@@ -780,7 +780,7 @@ const Settings: React.FC = () => {
                 onChange={(e) => setNewUnitAbbr(e.target.value)}
                 placeholder="Abrev (Ex: MT)"
                 maxLength={5}
-                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
+                className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
             />
             <input 
                 type="text"
@@ -788,19 +788,19 @@ const Settings: React.FC = () => {
                 onChange={(e) => setNewUnitDesc(e.target.value)}
                 placeholder="Descrição Curta (Ex: Metro)"
                 maxLength={30}
-                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addUnit())}
             />
             <button 
                 type="button"
                 onClick={addUnit}
-                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-none hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
             >
                 Adicionar
             </button>
         </div>
 
-        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+        <div className="max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-none">
             <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                 <thead className="bg-slate-50 dark:bg-slate-900 font-semibold sticky top-0">
                     <tr>
@@ -835,7 +835,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* SUPPLIER SETTINGS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Truck className="w-5 h-5 text-slate-500"/> Fornecedores (Pedidos Autónomos)
         </h3>
@@ -844,7 +844,7 @@ const Settings: React.FC = () => {
             <br/><span className="text-xs italic">Colunas: Fornecedor, Nome, Dias pagamento, Morada</span>
         </p>
 
-        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-4 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer relative mb-4">
+        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-none p-4 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer relative mb-4">
             <input 
                 type="file" 
                 accept=".xlsx, .xls"
@@ -859,7 +859,7 @@ const Settings: React.FC = () => {
         </div>
 
         {suppliers.length > 0 && (
-            <div className="text-sm text-slate-600 dark:text-slate-400 bg-green-50 dark:bg-green-900/20 p-2 rounded border border-green-200 dark:border-green-800 flex items-center gap-2">
+            <div className="text-sm text-slate-600 dark:text-slate-400 bg-green-50 dark:bg-green-900/20 p-2 rounded-none border border-green-200 dark:border-green-800 flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-green-500"></div>
                 {suppliers.length} fornecedores carregados.
             </div>
@@ -867,7 +867,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* EMAIL SETTINGS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Mail className="w-5 h-5 text-slate-500"/> Notificações de Stock (Armazém)
         </h3>
@@ -881,7 +881,7 @@ const Settings: React.FC = () => {
                         <select
                         value={recipient.type}
                         onChange={(e) => updateRecipient(idx, 'type', e.target.value)}
-                        className="p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
+                        className="p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-50 dark:bg-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
                         >
                             <option value="TO">Para</option>
                             <option value="CC">CC</option>
@@ -891,13 +891,13 @@ const Settings: React.FC = () => {
                         value={recipient.email}
                         onChange={(e) => updateRecipient(idx, 'email', e.target.value)}
                         placeholder="exemplo@empresa.com"
-                        className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                        className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                         required
                         />
                         <button 
                         type="button" 
                         onClick={() => removeRecipient(idx)}
-                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                        className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-none"
                         >
                             <Trash2 className="w-4 h-4" />
                         </button>
@@ -915,7 +915,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* COMPANY SETTINGS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Building className="w-5 h-5 text-slate-500"/> Gestão de Empresas
         </h3>
@@ -929,13 +929,13 @@ const Settings: React.FC = () => {
                 value={newCompany}
                 onChange={(e) => setNewCompany(e.target.value)}
                 placeholder="Nome da nova empresa..."
-                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCompany())}
             />
             <button 
                 type="button"
                 onClick={addCompany}
-                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-none hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
             >
                 Adicionar
             </button>
@@ -946,7 +946,7 @@ const Settings: React.FC = () => {
                 <p className="text-sm text-slate-400 italic">Nenhuma empresa registada.</p>
             ) : (
                 companies.map((company) => (
-                    <div key={company.id} className="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-700">
+                    <div key={company.id} className="flex justify-between items-center p-2 bg-slate-50 dark:bg-slate-900 rounded-none border border-slate-100 dark:border-slate-700">
                         <span className="text-sm font-medium text-slate-700 dark:text-slate-300">{company.name}</span>
                         <button 
                             onClick={() => removeCompany(company.id)}
@@ -961,7 +961,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* SYNONYMS SETTINGS */}
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-white">
             <Search className="w-5 h-5 text-slate-500"/> Sinónimos de Pesquisa
         </h3>
@@ -975,13 +975,13 @@ const Settings: React.FC = () => {
                 value={newSynonymsInput}
                 onChange={(e) => setNewSynonymsInput(e.target.value)}
                 placeholder="Palavras separadas por vírgula (ex: Curva, Joelho, Cotovelo)"
-                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
+                className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSynonymGroup())}
             />
             <button 
                 type="button"
                 onClick={addSynonymGroup}
-                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
+                className="bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-4 py-2 rounded-none hover:bg-slate-200 dark:hover:bg-slate-600 text-sm font-medium"
             >
                 Adicionar
             </button>
@@ -992,10 +992,10 @@ const Settings: React.FC = () => {
                 <p className="text-sm text-slate-400 italic">Nenhum grupo de sinónimos definido.</p>
             ) : (
                 synonyms.map((group) => (
-                    <div key={group.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900 rounded border border-slate-100 dark:border-slate-700">
+                    <div key={group.id} className="flex justify-between items-center p-3 bg-slate-50 dark:bg-slate-900 rounded-none border border-slate-100 dark:border-slate-700">
                         <div className="flex flex-wrap gap-2">
                             {group.words.map((word, idx) => (
-                                <span key={idx} className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 px-2 py-1 rounded text-xs font-medium text-slate-600 dark:text-slate-300">
+                                <span key={idx} className="bg-transparent border border-slate-200 dark:border-slate-600 px-2 py-1 rounded-none text-xs font-medium text-slate-600 dark:text-slate-300">
                                     {word}
                                 </span>
                             ))}
@@ -1015,7 +1015,7 @@ const Settings: React.FC = () => {
       {/* AUTO-SAVE INDICATOR */}
       <div className="fixed bottom-6 right-6 z-50">
             {loading && (
-                <div className="bg-white dark:bg-slate-800 shadow-lg rounded-full px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                <div className="bg-transparent shadow-none rounded-full px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-600" />
                     A guardar...
                 </div>

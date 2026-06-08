@@ -169,7 +169,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                         <img 
                             src={selectedImages[currentImageIndex]} 
                             alt={`Documento de Entrada ${currentImageIndex + 1}`} 
-                            className="object-contain max-w-full max-h-[80vh] rounded-lg bg-white"
+                            className="object-contain max-w-full max-h-[80vh] rounded-none bg-white"
                         />
                         
                         {selectedImages.length > 1 && (
@@ -192,7 +192,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                         <a 
                             href={selectedImages[currentImageIndex]} 
                             download={`comprovativo_entrada_${Date.now()}.jpg`}
-                            className="bg-white text-black px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-gray-100"
+                            className="bg-white text-black px-3 py-1.5 rounded-none text-sm uppercase tracking-wider font-semibold font-bold flex items-center gap-2 hover:bg-gray-100"
                         >
                             <Download className="w-4 h-4"/> Baixar Imagem
                         </a>
@@ -216,7 +216,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
         </div>
 
         {/* Search Bar */}
-        <div className="bg-white dark:bg-slate-800 p-4 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div className="bg-transparent p-4 rounded-none border border-slate-200 dark:border-slate-700 shadow-none">
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 w-5 h-5 text-slate-400" />
                 <input
@@ -224,7 +224,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Pesquisar por encomenda (PO) ou material..."
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                    className="w-full pl-10 pr-4 py-2 border border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0 rounded-none focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                 />
             </div>
         </div>
@@ -232,7 +232,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
         {/* List of Receipts */}
         <div className="space-y-4">
             {groupedReceipts.length === 0 ? (
-                <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div className="text-center p-12 bg-transparent rounded-none border border-slate-200 dark:border-slate-700">
                     <p className="text-slate-400">Nenhuma entrada encontrada.</p>
                 </div>
             ) : (
@@ -260,7 +260,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                     });
 
                     return (
-                        <div key={groupKey} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden transition-all">
+                        <div key={groupKey} className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden transition-all">
                             {/* Header / Summary Row */}
                             <div 
                                 onClick={() => toggleExpand(groupKey)}
@@ -268,7 +268,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                             >
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded text-blue-600 dark:text-blue-400">
+                                        <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-none text-blue-600 dark:text-blue-400">
                                             <Package className="w-5 h-5" />
                                         </div>
                                         <div>
@@ -379,7 +379,7 @@ const ReceiptsManager: React.FC<ReceiptsManagerProps> = ({ receipts, masterList,
                                                                     {getDescription(item.material)}
                                                                 </td>
                                                                 <td className="px-6 py-3 text-right">
-                                                                    <span className="font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-700 px-2 py-1 rounded border border-slate-200 dark:border-slate-600 shadow-sm">
+                                                                    <span className="font-bold text-slate-800 dark:text-white bg-white dark:bg-slate-700 px-2 py-1 rounded-none border border-slate-200 dark:border-slate-600 shadow-none">
                                                                         {item.qty || 0}
                                                                     </span>
                                                                 </td>

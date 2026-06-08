@@ -232,14 +232,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
   };
 
   // Helper for input validation classes
-  const inputClass = (value: string) => `w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm transition-colors dark:bg-slate-900 dark:text-white ${touched && !value ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 focus:ring-brand-500 dark:border-slate-600'}`;
+  const inputClass = (value: string) => `w-full px-3 py-2 border rounded-none focus:ring-2 outline-none text-sm transition-colors dark:bg-slate-900 dark:text-white ${touched && !value ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 focus:ring-brand-500 dark:border-slate-600'}`;
   const labelClass = (value: string) => `block text-xs font-semibold mb-1 ${touched && !value ? 'text-red-500' : 'text-slate-600 dark:text-slate-400'}`;
 
   // RENDER SUCCESS SCREEN
   if (createdUser) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-100 dark:bg-slate-950 p-4 transition-colors duration-200">
-            <div className="bg-white dark:bg-slate-800 p-8 rounded-lg shadow-xl w-full max-w-md border border-slate-200 dark:border-slate-700 text-center animate-fade-in">
+            <div className="bg-transparent p-8 rounded-none shadow-none w-full max-w-md border border-slate-200 dark:border-slate-700 text-center animate-fade-in">
                 <div className="flex justify-center mb-6">
                     <div className="bg-green-100 dark:bg-green-900/30 p-4 rounded-full">
                         <CheckCircle className="w-12 h-12 text-green-600 dark:text-green-400" />
@@ -248,7 +248,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                 <h2 className="text-2xl font-bold text-slate-800 dark:text-white mb-2">Conta Criada!</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Registo realizado com sucesso.</p>
                 
-                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-4 mb-6">
+                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-none p-4 mb-6">
                     <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold mb-1">Seu Utilizador/Email de Acesso</p>
                     <p className="text-xl font-mono font-bold text-brand-600 dark:text-brand-400 tracking-wide">{createdUser.username}</p>
                     <p className="text-xs text-slate-400 mt-2">Pode usar o seu utilizador ou o email ({createdUser.email}) para entrar.</p>
@@ -256,7 +256,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
 
                 <button
                     onClick={() => onLogin(createdUser)}
-                    className="w-full bg-brand-600 text-white py-3 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                    className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white py-3 rounded-none hover:bg-brand-700 transition-colors font-medium shadow-none flex items-center justify-center gap-2"
                 >
                     <LogIn className="w-4 h-4" /> Aceder à Plataforma
                 </button>
@@ -271,14 +271,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
       <div className="absolute top-4 right-4">
         <button 
             onClick={toggleTheme}
-            className="p-2 rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400 transition-all"
+            className="p-2 rounded-full bg-transparent shadow-none border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400 transition-all"
         >
             {isDarkMode ? <Sun className="w-5 h-5"/> : <Moon className="w-5 h-5"/>}
         </button>
       </div>
       
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white dark:bg-slate-800 py-8 px-4 shadow-xl rounded-lg sm:px-10 border border-slate-200 dark:border-slate-700 relative transition-all duration-200">
+        <div className="bg-transparent py-8 px-4 shadow-none rounded-none sm:px-10 border border-slate-200 dark:border-slate-700 relative transition-all duration-200">
             <div className="flex flex-col items-center justify-center mb-6">
                 <img 
                     src="https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg" 
@@ -309,7 +309,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     </div>
                     
                     {resetMessage && (
-                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm rounded-md border border-green-200 dark:border-green-800">
+                        <div className="p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 text-sm rounded-none border border-green-200 dark:border-green-800">
                             {resetMessage}
                         </div>
                     )}
@@ -318,14 +318,14 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                            className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white py-2 rounded-none hover:bg-brand-700 transition-colors font-medium shadow-none flex items-center justify-center gap-2"
                         >
                             {isLoading ? 'Enviando...' : 'Enviar Link'}
                         </button>
                         <button
                             type="button"
                             onClick={() => { setIsResettingPassword(false); setError(''); setResetMessage(''); }}
-                            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors font-medium"
+                            className="w-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 py-2 rounded-none hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors font-medium"
                         >
                             Voltar ao Login
                         </button>
@@ -334,18 +334,18 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
             ) : (
                 <>
                     {/* Toggle */}
-                    <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-lg mb-6 mt-4">
+                    <div className="flex bg-slate-100 dark:bg-slate-900 p-1 rounded-none mb-6 mt-4">
                         <button 
                             type="button"
                             onClick={() => { setIsRegistering(false); setError(''); setTouched(false); }}
-                            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${!isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                            className={`flex-1 py-2 text-sm font-medium rounded-none transition-all ${!isRegistering ? 'bg-transparent text-slate-800 dark:text-white shadow-none' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
                             Entrar
                         </button>
                         <button 
                             type="button"
                             onClick={() => { setIsRegistering(true); setError(''); setTouched(false); }}
-                            className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${isRegistering ? 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white shadow-sm' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                            className={`flex-1 py-2 text-sm font-medium rounded-none transition-all ${isRegistering ? 'bg-transparent text-slate-800 dark:text-white shadow-none' : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                         >
                             Completar Registo
                         </button>
@@ -354,7 +354,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     {isRegistering ? (
                         <form onSubmit={handleRegister} className="space-y-4 animate-fade-in">
                             {inviteUsername && (
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-md border border-blue-200 dark:border-blue-800 mb-2">
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-none border border-blue-200 dark:border-blue-800 mb-2">
                                     <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold uppercase mb-1">Utilizador Atribuído</p>
                                     <p className="text-lg font-mono font-bold text-blue-800 dark:text-blue-200">{inviteUsername}</p>
                                     <p className="text-[10px] text-blue-500 mt-1">Este será o seu nome de utilizador para entrar na plataforma.</p>
@@ -382,7 +382,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                             type="text"
                             value={adminCode}
                             onChange={(e) => setAdminCode(e.target.value)}
-                            className={`w-full px-3 py-2 border rounded-md focus:ring-2 outline-none text-sm dark:bg-slate-900 dark:text-white ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 bg-white dark:bg-slate-900 focus:ring-brand-500 dark:border-slate-700'}`}
+                            className={`w-full px-3 py-2 border rounded-none focus:ring-2 outline-none text-sm dark:bg-slate-900 dark:text-white ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 bg-white dark:bg-slate-900 focus:ring-brand-500 dark:border-slate-700'}`}
                             placeholder="Insira o código de 6 dígitos"
                         />
                     </div>
@@ -442,7 +442,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2 mt-2"
+                        className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white py-2 rounded-none hover:bg-brand-700 transition-colors font-medium shadow-none flex items-center justify-center gap-2 mt-2"
                     >
                         {isLoading ? 'Completando...' : <><UserPlus className="w-4 h-4" /> Completar Registo</>}
                     </button>
@@ -496,7 +496,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="w-full bg-brand-600 text-white py-2 rounded-md hover:bg-brand-700 transition-colors font-medium shadow-sm flex items-center justify-center gap-2"
+                        className="w-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white py-2 rounded-none hover:bg-brand-700 transition-colors font-medium shadow-none flex items-center justify-center gap-2"
                     >
                         {isLoading ? 'Entrando...' : <><LogIn className="w-4 h-4" /> Entrar</>}
                     </button>
@@ -506,7 +506,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
             )}
 
             {error && (
-                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded-md border border-red-200 dark:border-red-800 flex items-start gap-2 animate-pulse">
+                <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-sm rounded-none border border-red-200 dark:border-red-800 flex items-start gap-2 animate-pulse">
                     <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     <div className="flex-1">
                         <p>{error}</p>

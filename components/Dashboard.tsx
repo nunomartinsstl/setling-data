@@ -157,9 +157,9 @@ const Dashboard: React.FC<DashboardProps> = ({ orders, stock, userRole, permissi
                 >
                     {(hasInProcess || hasPending || hasPendingApproval) && (
                         <div className="flex flex-wrap gap-1 mt-1 md:mt-2">
-                            {hasInProcess && <span className="text-[9px] md:text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 dark:bg-amber-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-sm">Em curso</span>}
-                            {hasPending && <span className="text-[9px] md:text-[10px] font-bold text-purple-600 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-sm">Aguardando</span>}
-                            {hasPendingApproval && <span className="text-[9px] md:text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-sm">Por aprovar</span>}
+                            {hasInProcess && <span className="text-[9px] md:text-[10px] font-bold text-amber-600 uppercase tracking-widest bg-amber-50 dark:bg-amber-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-none">Em curso</span>}
+                            {hasPending && <span className="text-[9px] md:text-[10px] font-bold text-purple-600 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-none">Aguardando</span>}
+                            {hasPendingApproval && <span className="text-[9px] md:text-[10px] font-bold text-orange-600 uppercase tracking-widest bg-orange-50 dark:bg-orange-900/30 px-1 py-0.5 md:px-1.5 md:py-1 rounded-none">Por aprovar</span>}
                         </div>
                     )}
                 </DashboardItem>

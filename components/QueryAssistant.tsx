@@ -50,7 +50,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
+      <div className="bg-transparent p-6 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
         <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-4 flex items-center gap-2">
           <Search className="w-6 h-6 text-brand-600" />
           Busca Geral
@@ -61,21 +61,21 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Digite Material, descrição, utilizador ou localização (ex: 14-0-1-1)..."
-            className="w-full pl-12 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none text-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400"
+            className="w-full pl-12 pr-4 py-3 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder-slate-400"
           />
           <Search className="absolute left-4 top-3.5 w-6 h-6 text-slate-400" />
         </div>
       </div>
 
       {query && !hasResults && (
-        <div className="text-center p-8 text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className="text-center p-8 text-slate-500 dark:text-slate-400 bg-transparent rounded-none border border-slate-200 dark:border-slate-700">
           Nenhum resultado encontrado para "{query}".
         </div>
       )}
 
       {/* STOCK RESULTS */}
       {filteredStock.length > 0 && (
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+        <div className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
           <div className="bg-amber-50 dark:bg-amber-900/20 p-4 border-b border-amber-100 dark:border-amber-800 flex items-center gap-2">
             <Package className="w-5 h-5 text-amber-600 dark:text-amber-400" />
             <h3 className="font-bold text-amber-800 dark:text-amber-300">Stock ({filteredStock.length})</h3>
@@ -98,7 +98,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
                         <td className="p-3 font-mono text-xs">
                             {/* Highlight the match if querying by bin */}
                             {query && item.batch && item.batch.toLowerCase().includes(query.toLowerCase()) ? (
-                                <span className="bg-yellow-200 dark:bg-yellow-900 text-slate-900 dark:text-white px-1 rounded">{item.batch}</span>
+                                <span className="bg-yellow-200 dark:bg-yellow-900 text-slate-900 dark:text-white px-1 rounded-none">{item.batch}</span>
                             ) : (
                                 item.batch
                             )}
@@ -124,7 +124,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
              const isInProcess = order.status === 'IN_PROCESS' || order.status === 'IN PROCESS';
 
              return (
-               <div key={order.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+               <div key={order.id} className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
                  <div 
                     className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700"
                     onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
@@ -165,7 +165,7 @@ const QueryAssistant: React.FC<QueryAssistantProps> = ({ orders, stock }) => {
 
                  {isExpanded && (
                     <div className="bg-slate-50 dark:bg-slate-900/50 p-4 border-t border-slate-200 dark:border-slate-700">
-                        <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded-lg overflow-hidden shadow-sm">
+                        <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded-none overflow-hidden shadow-none">
                             <thead className="bg-slate-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200">
                                 <tr>
                                     <th className="p-3">Material</th>

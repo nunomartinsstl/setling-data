@@ -696,20 +696,20 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
       {/* Modal */}
       {similarityModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
+              <div className="bg-transparent rounded-none shadow-none w-full max-w-md p-6 border border-slate-200 dark:border-slate-700 max-h-[90vh] overflow-y-auto">
                   <h3 className="font-bold text-lg mb-4 text-slate-800 dark:text-white">Verificar Material</h3>
                   
                   {similarityStep === 'LIST' && (
                       <div className="space-y-2">
                           <p className="text-sm text-slate-500 mb-2">Sugestões encontradas:</p>
                           {similarityResults.map((res, idx) => (
-                              <button key={idx} onClick={() => { setSelectedCandidate(res); setSimilarityStep('CONFIRM_MATCH'); }} className="w-full text-left p-3 border rounded hover:bg-slate-50 dark:hover:bg-slate-700 dark:border-slate-600">
+                              <button key={idx} onClick={() => { setSelectedCandidate(res); setSimilarityStep('CONFIRM_MATCH'); }} className="w-full text-left p-3 border rounded-none hover:bg-slate-50 dark:hover:bg-slate-700 dark:border-slate-600">
                                   <div className="font-bold text-sm text-brand-600">{res.sku}</div>
                                   <div className="text-sm text-slate-700 dark:text-slate-300">{res.description}</div>
                               </button>
                           ))}
                           {similarityResults.length === 0 && <div className="text-center p-4 text-slate-400">Sem sugestões.</div>}
-                          <button onClick={() => setSimilarityStep('CONFIRM_NEW')} className="w-full mt-4 p-3 bg-amber-50 text-amber-700 border border-amber-200 rounded font-bold">Material Novo / Não Listado</button>
+                          <button onClick={() => setSimilarityStep('CONFIRM_NEW')} className="w-full mt-4 p-3 bg-amber-50 text-amber-700 border border-amber-200 rounded-none font-bold">Material Novo / Não Listado</button>
                           <button onClick={() => setSimilarityModalOpen(false)} className="w-full mt-2 p-2 text-slate-500">Cancelar</button>
                       </div>
                   )}
@@ -717,13 +717,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                   {similarityStep === 'CONFIRM_MATCH' && selectedCandidate && (
                       <div className="text-center space-y-4">
                           <p>Confirmar este material?</p>
-                          <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded">
+                          <div className="bg-slate-100 dark:bg-slate-700 p-4 rounded-none">
                               <div className="font-bold">{selectedCandidate.sku}</div>
                               <div>{selectedCandidate.description}</div>
                           </div>
                           <div className="flex gap-2">
-                              <button onClick={() => setSimilarityStep('LIST')} className="flex-1 p-2 border rounded">Voltar</button>
-                              <button onClick={handleConfirmMatch} className="flex-1 p-2 bg-green-600 text-white rounded">Confirmar</button>
+                              <button onClick={() => setSimilarityStep('LIST')} className="flex-1 p-2 border rounded-none">Voltar</button>
+                              <button onClick={handleConfirmMatch} className="flex-1 p-2 bg-green-600 text-white rounded-none">Confirmar</button>
                           </div>
                       </div>
                   )}
@@ -732,8 +732,8 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       <div className="text-center space-y-4">
                           <p>Confirmar criação de novo material?</p>
                           <div className="flex gap-2">
-                              <button onClick={() => setSimilarityStep('LIST')} className="flex-1 p-2 border rounded">Voltar</button>
-                              <button onClick={handleConfirmNew} className="flex-1 p-2 bg-amber-600 text-white rounded">Criar Novo</button>
+                              <button onClick={() => setSimilarityStep('LIST')} className="flex-1 p-2 border rounded-none">Voltar</button>
+                              <button onClick={handleConfirmNew} className="flex-1 p-2 bg-amber-600 text-white rounded-none">Criar Novo</button>
                           </div>
                       </div>
                   )}
@@ -746,10 +746,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
           <div className="space-y-6">
               <div className="flex justify-between items-center">
                   <h2 className="text-2xl font-bold text-slate-800 dark:text-white">Pedidos de Compra</h2>
-                  <button onClick={handleNew} className="bg-purple-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"><Plus className="w-4 h-4"/> Novo</button>
+                  <button onClick={handleNew} className="bg-purple-600 text-white px-3 py-1.5 rounded-none text-sm uppercase tracking-wider font-semibold flex items-center gap-2"><Plus className="w-4 h-4"/> Novo</button>
               </div>
               
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              <div className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                         <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold">
@@ -787,14 +787,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             </td>
                                             <td className="p-4 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                 <div className="flex justify-end gap-2">
-                                                    <button onClick={() => handlePrintOrder(po)} className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 dark:bg-blue-900/30 rounded" title="Imprimir PDF"><FileText className="w-4 h-4"/></button>
+                                                    <button onClick={() => handlePrintOrder(po)} className="text-blue-600 hover:text-blue-800 p-1 bg-blue-50 dark:bg-blue-900/30 rounded-none" title="Imprimir PDF"><FileText className="w-4 h-4"/></button>
                                                     
                                                     {/* Edit only if not approved/rejected, or if admin */}
                                                     {['DRAFT', 'SENT', 'PENDING_APPROVAL'].includes(po.status) && (
-                                                        <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded" title="Editar"><Edit className="w-4 h-4"/></button>
+                                                        <button onClick={() => handleEdit(po)} className="text-purple-600 hover:text-purple-800 p-1 bg-purple-50 dark:bg-purple-900/30 rounded-none" title="Editar"><Edit className="w-4 h-4"/></button>
                                                     )}
                                                     
-                                                    <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 dark:bg-red-900/30 rounded" title="Excluir"><Trash2 className="w-4 h-4"/></button>
+                                                    <button onClick={() => handleDelete(po.id)} className="text-red-600 hover:text-red-800 p-1 bg-red-50 dark:bg-red-900/30 rounded-none" title="Excluir"><Trash2 className="w-4 h-4"/></button>
                                                 </div>
                                             </td>
                                         </tr>
@@ -825,7 +825,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                                     )}
                                                         </div>
                                                         <div className="overflow-x-auto mb-4">
-                                                            <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-700">
+                                                            <table className="w-full text-sm text-left bg-white dark:bg-slate-900 rounded-none border border-slate-200 dark:border-slate-700">
                                                                 <thead className="text-xs text-slate-500 uppercase bg-slate-100 dark:bg-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
                                                                     <tr>
                                                                         <th className="px-4 py-2">Ref</th>
@@ -854,13 +854,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                             <div className="flex gap-3 justify-end pt-2 border-t border-slate-200 dark:border-slate-700">
                                                                 <button 
                                                                     onClick={() => handleApprovalAction(po, 'REJECT')}
-                                                                    className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded font-bold text-sm flex items-center gap-1"
+                                                                    className="px-4 py-2 bg-red-100 text-red-700 hover:bg-red-200 rounded-none font-bold text-sm flex items-center gap-1"
                                                                 >
                                                                     <XCircle className="w-4 h-4"/> Rejeitar
                                                                 </button>
                                                                 <button 
                                                                     onClick={() => handleApprovalAction(po, 'APPROVE')}
-                                                                    className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded font-bold text-sm flex items-center gap-1"
+                                                                    className="px-4 py-2 bg-green-600 text-white hover:bg-green-700 rounded-none font-bold text-sm flex items-center gap-1"
                                                                 >
                                                                     <ShieldCheck className="w-4 h-4"/> Aprovar Pedido
                                                                 </button>
@@ -888,14 +888,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
 
               {/* ADMIN COMPANY SELECTOR */}
               {isAdmin && (
-                  <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-xl border border-purple-100 dark:border-purple-800 shadow-sm">
+                  <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-4 rounded-none border border-purple-100 dark:border-purple-800 shadow-none">
                       <label className="block text-xs font-bold uppercase mb-1 flex items-center gap-1 text-purple-800 dark:text-purple-300">
                           <Building className="w-3 h-3" /> Selecionar Empresa (Admin) *
                       </label>
                       <select 
                           value={targetCompanyId}
                           onChange={(e) => setTargetCompanyId(e.target.value)}
-                          className={`w-full p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${!targetCompanyId ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-purple-200 dark:border-purple-700'}`}
+                          className={`w-full py-2 bg-transparent border-0 border-b text-sm outline-none rounded-none focus:ring-0 dark:bg-slate-900 dark:text-white ${!targetCompanyId ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-purple-200 dark:border-purple-700'}`}
                       >
                           <option value="">Selecione a empresa...</option>
                           {companies.map(c => (
@@ -905,7 +905,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                   </div>
               )}
 
-              <div className="bg-white dark:bg-slate-800 p-6 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="bg-transparent p-6 rounded-none border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Supplier */}
                   <div className="relative">
                       <label className={`block text-xs font-bold uppercase mb-1 ${!selectedSupplier ? 'text-red-500' : 'text-slate-500'}`}>Fornecedor *</label>
@@ -916,10 +916,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                 value={supplierSearch} 
                                 onChange={e => setSupplierSearch(e.target.value)} 
                                 placeholder="Procurar fornecedor..."
-                                className="w-full p-2 border border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded dark:text-white"
+                                className="w-full p-2 border border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded-none dark:text-white"
                             />
                             {supplierSearch && (
-                                <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border mt-1 max-h-40 overflow-y-auto shadow-lg">
+                                <div className="absolute z-10 w-full bg-transparent border mt-1 max-h-40 overflow-y-auto shadow-none">
                                     {filteredSuppliers.map(s => (
                                         <div key={s.code} onClick={() => handleSupplierSelect(s)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
                                             <div className="font-bold">{s.name}</div>
@@ -930,7 +930,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                             )}
                           </>
                       ) : (
-                          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded flex justify-between items-center">
+                          <div className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-none flex justify-between items-center">
                               <div>
                                   <div className="font-bold text-purple-900 dark:text-purple-300">{selectedSupplier.name}</div>
                                   <div className="text-xs text-purple-600 dark:text-purple-400">{selectedSupplier.address}</div>
@@ -949,7 +949,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                         type="text" 
                         value={pep} 
                         onChange={handlePepChange}
-                        className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${!pep.trim() || !validatePep() ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                        className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${!pep.trim() || !validatePep() ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                         placeholder="1700.000/000/0000"
                       />
                       <p className="text-[10px] text-slate-400 mt-1 pl-1">
@@ -971,26 +971,26 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       const hasRowError = isDescMissing || isUnverified || isQtyInvalid || isPriceInvalid;
 
                       return (
-                          <div key={idx} className={`bg-white dark:bg-slate-800 border transition-all rounded-lg overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'} ${(hasRowError) && !isExpanded ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : ''}`}>
+                          <div key={idx} className={`bg-transparent border transition-all rounded-none overflow-hidden ${isExpanded ? 'border-purple-300 dark:border-purple-700 ring-1 ring-purple-100 dark:ring-purple-900' : 'border-slate-200 dark:border-slate-700'} ${(hasRowError) && !isExpanded ? 'border-red-300 bg-red-50 dark:bg-red-900/10' : ''}`}>
                               {/* Header Row */}
                               <div 
                                 onClick={() => setExpandedRow(isExpanded ? -1 : idx)}
                                 className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                               >
                                 <div className="flex items-center gap-3 overflow-hidden">
-                                    <span className="font-bold text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded whitespace-nowrap">Item {idx + 1}</span>
+                                    <span className="font-bold text-xs bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-none whitespace-nowrap">Item {idx + 1}</span>
                                     {!isExpanded && (
                                         <div className="text-sm truncate flex items-center gap-2 text-slate-600 dark:text-slate-300">
                                             <span className={`font-bold ${isQtyInvalid ? 'text-red-500' : ''}`}>{row.quantity}x</span>
                                             <span className={`truncate ${isDescMissing ? 'text-red-500 italic' : ''}`}>{row.description || '(Sem descrição)'}</span>
-                                            {row.isCustom && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded">Novo</span>}
+                                            {row.isCustom && <span className="text-[10px] bg-blue-100 text-blue-800 px-1 rounded-none">Novo</span>}
                                             {hasRowError && <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />}
                                         </div>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0">
                                     {isExpanded ? <ChevronUp className="w-4 h-4 text-purple-500"/> : <ChevronDown className="w-4 h-4 text-slate-400"/>}
-                                    <button onClick={(e) => { e.stopPropagation(); removeRow(idx); }} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded">
+                                    <button onClick={(e) => { e.stopPropagation(); removeRow(idx); }} className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-none">
                                         <Trash2 className="w-4 h-4"/>
                                     </button>
                                 </div>
@@ -1006,10 +1006,10 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                 type="text" 
                                                 value={row.description} 
                                                 onChange={e => updateRow(idx, 'description', e.target.value)}
-                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${isDescMissing || isUnverified ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600'}`}
+                                                className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${isDescMissing || isUnverified ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                                             />
                                             {row.showSuggestions && matches.length > 0 && (
-                                                <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border shadow-lg mt-1 rounded">
+                                                <div className="absolute z-10 w-full bg-transparent border shadow-none mt-1 rounded-none">
                                                     {matches.map(m => (
                                                         <div key={m.sku} onClick={() => handleMaterialSelect(idx, m)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 cursor-pointer">
                                                             <div className="font-bold text-xs">{m.sku}</div>
@@ -1023,12 +1023,12 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                 {!row.similarityChecked ? (
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] text-red-600 font-bold flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Verificação Pendente</span>
-                                                        <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded font-bold flex items-center gap-1 hover:bg-amber-600 shadow-sm">
+                                                        <button onClick={() => handleCheckSimilarity(idx)} className="text-xs bg-amber-500 text-white px-3 py-1.5 rounded-none font-bold flex items-center gap-1 hover:bg-amber-600 shadow-none">
                                                             <Search className="w-3 h-3"/> Verificar
                                                         </button>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded font-bold flex items-center gap-1"><Check className="w-3 h-3"/> OK</span>
+                                                    <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-none font-bold flex items-center gap-1"><Check className="w-3 h-3"/> OK</span>
                                                 )}
                                             </div>
                                         </div>
@@ -1039,13 +1039,13 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                 type="number" 
                                                 value={row.quantity} 
                                                 onChange={e => updateRow(idx, 'quantity', e.target.value)} 
-                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${isQtyInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                                                className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${isQtyInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                                             />
                                         </div>
 
                                         <div className="md:col-span-2">
                                             <label className="block text-[10px] font-bold uppercase text-slate-400">Unid</label>
-                                            <select value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value)} className="w-full p-2 border rounded dark:bg-slate-900 dark:text-white dark:border-slate-600">
+                                            <select value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value)} className="w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white dark:border-slate-600">
                                                 {unitOptions.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
                                             </select>
                                         </div>
@@ -1056,7 +1056,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                                 type="number" 
                                                 value={row.unitPrice} 
                                                 onChange={e => updateRow(idx, 'unitPrice', e.target.value)} 
-                                                className={`w-full p-2 border rounded dark:bg-slate-900 dark:text-white ${isPriceInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600'}`}
+                                                className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${isPriceInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                                             />
                                         </div>
                                     </div>
@@ -1065,11 +1065,11 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                           </div>
                       );
                   })}
-                  <button onClick={addRow} className="w-full p-3 border-2 border-dashed rounded-lg text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">Adicionar Linha</button>
+                  <button onClick={addRow} className="w-full p-3 border-2 border-dashed rounded-none text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">Adicionar Linha</button>
               </div>
 
               {/* Footer */}
-              <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 shadow-lg lg:pl-64 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700 p-4 shadow-none lg:pl-64 flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="flex gap-6">
                       <div>
                           <div className="text-xs uppercase text-slate-500">Subtotal</div>
@@ -1113,7 +1113,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                   
                   <div className="flex items-center gap-4 w-full md:w-auto">
                       {!isFormValid && (
-                          <div className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-lg border border-red-200 dark:border-red-800">
+                          <div className="text-xs text-red-600 dark:text-red-400 font-bold flex items-center gap-1 bg-red-50 dark:bg-red-900/20 px-3 py-1.5 rounded-none text-sm uppercase tracking-wider font-semibold border border-red-200 dark:border-red-800">
                               <AlertCircle className="w-4 h-4" />
                               Preencha os campos obrigatórios
                           </div>
@@ -1123,7 +1123,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                           <button 
                             onClick={handleSave} 
                             disabled={!isFormValid}
-                            className={`px-6 py-2 rounded flex items-center justify-center gap-2 font-bold transition-colors shadow-sm w-full md:w-auto ${!isFormValid ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
+                            className={`px-6 py-2 rounded-none flex items-center justify-center gap-2 font-bold transition-colors shadow-none w-full md:w-auto ${!isFormValid ? 'bg-slate-300 text-slate-500 cursor-not-allowed dark:bg-slate-700 dark:text-slate-400' : 'bg-purple-600 text-white hover:bg-purple-700'}`}
                           >
                               {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
                               Salvar Pedido

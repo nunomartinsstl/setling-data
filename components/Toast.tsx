@@ -27,7 +27,7 @@ export const ToastContainer = () => {
   return (
     <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2 p-4 pointer-events-none w-full max-w-sm">
         {toasts.map(t => (
-            <div key={t.id} className={`pointer-events-auto flex items-start gap-3 px-4 py-4 rounded-xl shadow-lg border backdrop-blur-md animate-in slide-in-from-top-5 fade-in duration-300 ${
+            <div key={t.id} className={`pointer-events-auto flex items-start gap-3 px-4 py-4 rounded-none shadow-none border backdrop-blur-md animate-in slide-in-from-top-5 fade-in duration-300 ${
                 t.type === 'success' ? 'bg-emerald-50/90 border-emerald-200 text-emerald-800 dark:bg-emerald-900/60 dark:border-emerald-800 dark:text-emerald-300' : 
                 t.type === 'error' ? 'bg-red-50/90 border-red-200 text-red-800 dark:bg-red-900/60 dark:border-red-800 dark:text-red-300' : 
                 'bg-blue-50/90 border-blue-200 text-blue-800 dark:bg-blue-900/60 dark:border-blue-800 dark:text-blue-300'

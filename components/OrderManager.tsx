@@ -1536,7 +1536,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
   // ... (FinalizeOrderForm, etc.) ...
   const FinalizeOrderForm = () => (
-    <div className="space-y-4 animate-fade-in bg-slate-50 dark:bg-slate-900 p-6 rounded-lg border border-slate-200 dark:border-slate-700">
+    <div className="space-y-4 animate-fade-in bg-slate-50 dark:bg-slate-900 p-6 rounded-none border border-slate-200 dark:border-slate-700">
         <h4 className="font-semibold text-slate-800 dark:text-slate-200 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4">
             {editingOrderId ? 'Salvar Alterações' : 'Finalizar Pedido'}
         </h4>
@@ -1545,7 +1545,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Empresa {(!targetCompanyId) && <span className="text-red-500">*</span>}</label>
                 {targetCompanyId ? (
-                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 flex items-center gap-2">
                         <Building className="w-4 h-4"/>
                         {companies.find(c => c.id === targetCompanyId)?.name || "Empresa Desconhecida"}
                         {isAdmin && (
@@ -1559,7 +1559,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                             setTargetCompanyId(e.target.value);
                             if(formErrors.company) setFormErrors({...formErrors, company: false});
                         }}
-                        className={`w-full p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${formErrors.company ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                        className={`w-full py-2 bg-transparent border-0 border-b text-sm outline-none rounded-none focus:ring-0 dark:bg-slate-900 dark:text-white ${formErrors.company ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
                     >
                         <option value="">Selecione a empresa...</option>
                         {companies.map(c => (
@@ -1573,13 +1573,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Título do Pedido</label>
-                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                     {orderTitle}
                 </div>
             </div>
             <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Data Levantamento</label>
-                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                     {dueDate ? new Date(dueDate).toLocaleDateString() : 'N/A'}
                 </div>
             </div>
@@ -1589,7 +1589,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             {pep && (
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">PEP / Obra</label>
-                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                         {pep}
                     </div>
                 </div>
@@ -1597,7 +1597,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
             {(addressStreet || addressZip || addressCity) && (
                 <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Morada de Entrega</label>
-                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                    <div className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
                         {`${addressStreet}, ${addressZip} ${addressCity}`.trim()}
                     </div>
                 </div>
@@ -1606,14 +1606,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
         <div className="text-sm text-slate-600 dark:text-slate-400 mt-4">
             <p className="font-medium mb-2 text-slate-700 dark:text-slate-300">Resumo dos Itens:</p>
-            <ul className="list-disc list-inside space-y-1 bg-white dark:bg-slate-800 p-3 rounded border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto">
+            <ul className="list-disc list-inside space-y-1 bg-transparent p-3 rounded-none border border-slate-200 dark:border-slate-700 max-h-40 overflow-y-auto">
                 {pendingItems.map((item, idx) => (
                     <li key={idx} className="truncate flex items-center gap-2">
                         <span className="font-bold">{item.quantity}x</span> 
                         <span>{item.description}</span>
                         {item.image && <Camera className="w-3 h-3 text-slate-400" />}
                         {item.unit && item.isCustom && (
-                             <span className="text-xs bg-slate-100 dark:bg-slate-700 px-1 rounded">{item.unit}</span>
+                             <span className="text-xs bg-slate-100 dark:bg-slate-700 px-1 rounded-none">{item.unit}</span>
                         )}
                     </li>
                 ))}
@@ -1623,14 +1623,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         <div className="pt-4 flex justify-end gap-3">
              <button
                 onClick={() => setCreationStep('INITIAL')}
-                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-none transition-colors"
             >
                 Voltar
             </button>
             <button
                 onClick={submitOrder}
                 disabled={isProcessing}
-                className="bg-brand-600 text-white px-6 py-2.5 rounded-lg hover:bg-brand-700 flex items-center gap-2"
+                className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white px-6 py-2.5 rounded-none hover:bg-brand-700 flex items-center gap-2"
             >
                 {isProcessing ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                 {editingOrderId ? 'Salvar Edição' : (isTechnical ? 'Enviar Requisição' : 'Confirmar Pedido')}
@@ -1705,7 +1705,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setViewImage(null)}>
               <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center">
                   <button onClick={() => setViewImage(null)} className="absolute -top-12 right-0 text-white hover:text-gray-300 p-2"><X className="w-8 h-8" /></button>
-                  <img src={viewImage} alt="Detalhe Material" className="max-w-full max-h-[85vh] object-contain rounded bg-white" onClick={(e) => e.stopPropagation()} />
+                  <img src={viewImage} alt="Detalhe Material" className="max-w-full max-h-[85vh] object-contain rounded-none bg-white" onClick={(e) => e.stopPropagation()} />
               </div>
           </div>
       )}
@@ -1713,7 +1713,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       {/* REJECT MODAL */}
       {rejectMatchModalOpen && rejectMatchData && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="bg-transparent rounded-none shadow-none w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-6">
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Rejeitar Correspondência</h3>
                       <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
@@ -1739,7 +1739,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                   setRejectMatchModalOpen(false);
                                   setSimilarityModalOpen(true);
                               }}
-                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-none hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
                           >
                               <Search className="w-5 h-5 text-brand-600 dark:text-brand-400 mt-0.5" />
                               <div>
@@ -1750,7 +1750,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                           
                           <button 
                               onClick={() => handleRevertToOriginal()}
-                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-none hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
                           >
                               <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                               <div>
@@ -1778,7 +1778,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       {/* Similarity Search Modal Omitted for brevity (same as previous) */}
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
+            <div className="bg-transparent rounded-none shadow-none w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
                 {similarityStep === 'LIST' && (
                     <>
                         <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
@@ -1787,32 +1787,32 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                         </div>
                         <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
                             {similarityResults.map((res: any, idx) => (
-                                <button key={idx} onClick={() => handleSelectCandidate(res)} className="w-full text-left p-3 border dark:border-slate-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2 flex justify-between items-center group">
+                                <button key={idx} onClick={() => handleSelectCandidate(res)} className="w-full text-left p-3 border dark:border-slate-700 rounded-none hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2 flex justify-between items-center group">
                                     <div>
                                         <div className="font-bold text-brand-600 dark:text-brand-400 group-hover:underline">{res.sku}</div>
                                         <div className="text-sm text-slate-700 dark:text-slate-300">{res.description}</div>
                                     </div>
                                     {res.score !== undefined && (
-                                        <div className="flex-shrink-0 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                                        <div className="flex-shrink-0 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded-none border border-slate-200 dark:border-slate-700">
                                             Score: {res.score > 100 ? 100 : Math.round(res.score)}%
                                         </div>
                                     )}
                                 </button>
                             ))}
-                            <button onClick={handleNotFound} className="w-full py-3 bg-white dark:bg-slate-800 border text-slate-600 dark:text-slate-300 rounded mt-4">Não consta na lista</button>
+                            <button onClick={handleNotFound} className="w-full py-3 bg-transparent border text-slate-600 dark:text-slate-300 rounded-none mt-4">Não consta na lista</button>
                         </div>
                     </>
                 )}
                 {similarityStep === 'CONFIRM_MATCH' && selectedCandidate && (
                     <div className="p-6 text-center">
                         <p className="dark:text-slate-300 mb-4">Confirmar material?</p>
-                        <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded mb-6 text-left">
+                        <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-none mb-6 text-left">
                             <p className="font-mono font-bold dark:text-white">{selectedCandidate.sku}</p>
                             <p className="text-sm dark:text-slate-300">{selectedCandidate.description}</p>
                         </div>
                         <div className="flex gap-3">
-                            <button onClick={() => setSimilarityStep('LIST')} className="flex-1 py-2 border rounded dark:text-slate-300">Voltar</button>
-                            <button onClick={handleConfirmMatch} className="flex-1 py-2 bg-green-600 text-white rounded">Sim</button>
+                            <button onClick={() => setSimilarityStep('LIST')} className="flex-1 py-2 border rounded-none dark:text-slate-300">Voltar</button>
+                            <button onClick={handleConfirmMatch} className="flex-1 py-2 bg-green-600 text-white rounded-none">Sim</button>
                         </div>
                     </div>
                 )}
@@ -1820,8 +1820,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                     <div className="p-6 text-center">
                         <p className="dark:text-slate-300 mb-6">Criar Novo Material?</p>
                         <div className="flex gap-3">
-                            <button onClick={() => setSimilarityStep('LIST')} className="flex-1 py-2 border rounded dark:text-slate-300">Voltar</button>
-                            <button onClick={handleConfirmNew} className="flex-1 py-2 bg-amber-600 text-white rounded">Sim</button>
+                            <button onClick={() => setSimilarityStep('LIST')} className="flex-1 py-2 border rounded-none dark:text-slate-300">Voltar</button>
+                            <button onClick={handleConfirmNew} className="flex-1 py-2 bg-amber-600 text-white rounded-none">Sim</button>
                         </div>
                     </div>
                 )}
@@ -1842,7 +1842,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                     {activeFiltersCount > 0 && (
                          <button 
                              onClick={() => setAdvancedFilters({ material: '', user: '', datePlacedStart: '', datePlacedEnd: '', dateDueStart: '', dateDueEnd: '', pep: '' })}
-                             className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors bg-red-50 border-red-200 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/40 outline-none"
+                             className="flex items-center gap-2 px-3 py-1.5 rounded-none text-sm uppercase tracking-wider font-semibold border transition-colors bg-red-50 border-red-200 text-red-600 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/40 outline-none"
                              title="Limpar Filtros"
                          >
                              <X className="w-4 h-4" />
@@ -1851,19 +1851,19 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                     )}
                     <button
                         onClick={handleExportExcel}
-                        className="flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors bg-green-50 border-green-200 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/40 outline-none"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-none text-sm uppercase tracking-wider font-semibold border transition-colors bg-green-50 border-green-200 text-green-600 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-900/40 outline-none"
                     >
                         <Download className="w-4 h-4" />
                         <span className="hidden sm:inline font-medium">Exportar</span>
                     </button>
                     <button
                         onClick={() => setShowAdvancedSearch(true)}
-                        className="flex items-center gap-2 px-4 py-2 rounded-lg border transition-colors bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 outline-none"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-none text-sm uppercase tracking-wider font-semibold border transition-colors bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 outline-none"
                     >
                         <Search className="w-4 h-4" />
                         <span className="font-medium">Pesquisa Avançada</span>
                         {activeFiltersCount > 0 && (
-                            <span className="bg-brand-600 text-white text-xs px-2 py-0.5 rounded-full">
+                            <span className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white text-xs px-2 py-0.5 rounded-full">
                                 {activeFiltersCount}
                             </span>
                         )}
@@ -1875,7 +1875,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
         {/* Advanced Search Modal */}
         {mode === 'LIST' && showAdvancedSearch && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAdvancedSearch(false)}>
-                <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-4xl p-6 border border-slate-200 dark:border-slate-700 animate-fade-in" onClick={e => e.stopPropagation()}>
+                <div className="bg-transparent rounded-none shadow-none w-full max-w-4xl p-6 border border-slate-200 dark:border-slate-700 animate-fade-in" onClick={e => e.stopPropagation()}>
                     <div className="flex justify-between items-center mb-6">
                         <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
                             <Search className="w-5 h-5 text-brand-600" /> Pesquisa Avançada
@@ -1893,7 +1893,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 value={advancedFilters.material}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, material: e.target.value})}
                                 placeholder="Ex: Parafuso, ACC..."
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
                             />
                         </div>
                         <div>
@@ -1903,7 +1903,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 value={advancedFilters.user}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, user: e.target.value})}
                                 placeholder="Nome do criador..."
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
                             />
                         </div>
                         <div>
@@ -1913,7 +1913,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 value={advancedFilters.pep}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, pep: e.target.value})}
                                 placeholder="Nº PEP..."
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white"
                             />
                         </div>
                         <div className="hidden lg:block"></div> {/* Spacer */}
@@ -1924,7 +1924,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 type="date" 
                                 value={advancedFilters.datePlacedStart}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, datePlacedStart: e.target.value})}
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
                             />
                         </div>
                         <div>
@@ -1933,7 +1933,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 type="date" 
                                 value={advancedFilters.datePlacedEnd}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, datePlacedEnd: e.target.value})}
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
                             />
                         </div>
                         <div>
@@ -1942,7 +1942,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 type="date" 
                                 value={advancedFilters.dateDueStart}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, dateDueStart: e.target.value})}
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
                             />
                         </div>
                         <div>
@@ -1951,7 +1951,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 type="date" 
                                 value={advancedFilters.dateDueEnd}
                                 onChange={(e) => setAdvancedFilters({...advancedFilters, dateDueEnd: e.target.value})}
-                                className="w-full p-2 border rounded text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
+                                className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
                             />
                         </div>
                     </div>
@@ -1969,7 +1969,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                         </button>
                         <button 
                             onClick={() => setShowAdvancedSearch(false)}
-                            className="px-6 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors shadow-sm"
+                            className="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white rounded-none hover:bg-brand-700 transition-colors shadow-none"
                         >
                             Ver Resultados
                         </button>
@@ -1981,7 +1981,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
       {/* CREATION/EDIT AREA */}
       {showForm && (
-        <div className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border ${editingOrderId ? 'border-amber-400 ring-2 ring-amber-100 dark:ring-amber-900' : 'border-brand-200 dark:border-slate-700'}`}>
+        <div className={`${editingOrderId ? 'border-l-4 border-amber-500 pl-4 mb-8' : 'pt-2 mb-8'}`}>
           {/* ... (Existing form content code same as before until the submit section) ... */}
           {/* Re-pasting standard form UI logic */}
           {editingOrderId && (
@@ -1999,7 +1999,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                 {/* ... (Standard Inputs) ... */}
                 <div className="space-y-3 animate-fade-in">
                     {isAdmin && (
-                        <div className="mb-4 bg-purple-50 dark:bg-purple-900/20 p-3 rounded-lg border border-purple-100 dark:border-purple-800">
+                        <div className="mb-4 mb-4 pb-2 border-b border-purple-200 dark:border-purple-800/50 text-purple-800">
                             <label className={`block text-xs font-bold uppercase mb-1 flex items-center gap-1 ${formErrors.company ? 'text-red-600' : 'text-purple-800 dark:text-purple-300'}`}>
                                 <Building className="w-3 h-3" /> Selecionar Empresa (Admin) {formErrors.company && '*'}
                             </label>
@@ -2009,7 +2009,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                     setTargetCompanyId(e.target.value);
                                     if(formErrors.company) setFormErrors({...formErrors, company: false});
                                 }}
-                                className={`w-full p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${formErrors.company ? 'border-red-500' : 'border-purple-200 dark:border-purple-700'}`}
+                                className={`w-full py-2 bg-transparent border-0 border-b text-sm outline-none rounded-none focus:ring-0 dark:bg-slate-900 dark:text-white ${formErrors.company ? 'border-red-500' : 'border-purple-200 dark:border-purple-700'}`}
                             >
                                 <option value="">Selecione a empresa...</option>
                                 {companies.map(c => (
@@ -2027,13 +2027,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                             <input 
                                 type="text"
                                 value={orderTitle}
-                                maxLength={19}
+                                maxLength={50}
                                 onChange={e => {
                                     setOrderTitle(e.target.value);
                                     if(formErrors.title) setFormErrors({...formErrors, title: false});
                                 }}
                                 placeholder="Nome da obra (máx 19 chars)"
-                                className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.title ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                className={`w-full p-3 py-2 px-0 bg-transparent border-0 border-b outline-none focus:ring-0 rounded-none transition-all dark:bg-slate-900 dark:text-white ${formErrors.title ? 'border-red-500 ring-1 ring-red-200 bg-red-50/50 dark:bg-red-900/10' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                             />
                             <div className="text-right text-[10px] text-slate-400 mt-1">
                                 {orderTitle.length}/19
@@ -2048,7 +2048,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                 value={dueDate}
                                 min={minDateValue.dateStr}
                                 onChange={handleDateChange}
-                                className={`w-full p-3 border rounded-md shadow-sm outline-none transition-all dark:bg-slate-900 dark:text-white dark:[color-scheme:dark] ${formErrors.date ? 'border-red-500 ring-1 ring-red-200 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                className={`w-full p-3 py-2 px-0 bg-transparent border-0 border-b outline-none focus:ring-0 rounded-none transition-all dark:bg-slate-900 dark:text-white dark:[color-scheme:dark] ${formErrors.date ? 'border-red-500 ring-1 ring-red-200 bg-red-50/50 dark:bg-red-900/10' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                             />
                             {minDateValue.daysAdded > 1 && (
                                 <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1 flex items-center gap-1">
@@ -2074,7 +2074,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                     }
                                 }}
                                 placeholder={getPepPlaceholder()}
-                                className={`w-full p-3 border rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 ${formErrors.pep ? 'border-red-500 bg-red-50 dark:bg-red-900/10' : 'border-slate-300 dark:border-slate-600'}`}
+                                className={`w-full p-3 py-2 px-0 bg-transparent border-0 border-b outline-none focus:ring-0 rounded-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 ${formErrors.pep ? 'border-red-500 bg-red-50/50 dark:bg-red-900/10' : 'border-slate-300 dark:border-slate-600'}`}
                             />
                             <p className="text-[10px] text-slate-400 mt-1 pl-1">
                                 Prefixo Fixo: {getTargetCompany()?.name.toLowerCase().includes('hotelaria') ? '2200' : '1700'}
@@ -2090,7 +2090,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                     value={addressStreet}
                                     onChange={e => setAddressStreet(e.target.value)}
                                     placeholder="Rua, Nº, Andar..."
-                                    className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                                    className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
                                 />
                             </div>
                             <div className="flex gap-3">
@@ -2104,7 +2104,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                         onChange={handleZipChange}
                                         placeholder="0000-000"
                                         maxLength={8}
-                                        className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 text-center tracking-widest"
+                                        className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 text-center tracking-widest"
                                     />
                                 </div>
                                 <div className="flex-1">
@@ -2116,7 +2116,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                         value={addressCity}
                                         onChange={e => setAddressCity(e.target.value)}
                                         placeholder="Cidade / Vila"
-                                        className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
+                                        className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
                                     />
                                 </div>
                             </div>
@@ -2140,11 +2140,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                             return (
                                 <div 
                                     key={idx} 
-                                    className={`rounded-lg border transition-all duration-200 relative ${
+                                    className={`rounded-none border transition-all duration-200 relative ${
                                         isExpanded ? 'z-10' : 'z-0'
                                     } ${
-                                        isError || isPendingPhoto || isInvalidSku || isUnchecked || isMissingCategory || isDuplicate ? (isPendingPhoto ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/10' : 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800') : 
-                                        isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-md ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                        isError || isPendingPhoto || isInvalidSku || isUnchecked || isMissingCategory || isDuplicate ? (isPendingPhoto ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/10' : 'border-red-300 bg-red-50/50 dark:bg-red-900/10 dark:border-red-800') : 
+                                        isExpanded ? 'border-brand-200 bg-slate-50 dark:bg-slate-800 shadow-none ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 bg-white dark:bg-slate-900 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                                     }`}
                                 >
                                     {/* Header */}
@@ -2183,14 +2183,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                         <div className="p-4 border-t border-slate-200 dark:border-slate-700 animate-fade-in">
                                             {/* Type Toggle - ALLOWED FOR TECHNICAL AND MANAGERS */}
                                             {(isTechnical || canEdit) && (
-                                                <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-1 mb-4 w-fit">
+                                                <div className="flex bg-slate-200 dark:bg-slate-700 rounded-none p-1 mb-4 w-fit">
                                                     <button
                                                         onClick={() => {
                                                             const newRows = [...manualRows];
                                                             newRows[idx].inputType = 'TEXT';
                                                             setManualRows(newRows);
                                                         }}
-                                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${row.inputType === 'TEXT' ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                                                        className={`px-3 py-1 text-xs font-medium rounded-none transition-all ${row.inputType === 'TEXT' ? 'bg-white dark:bg-slate-600 shadow-none text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                                                     >
                                                         Texto / Lista
                                                     </button>
@@ -2200,7 +2200,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             newRows[idx].inputType = 'PHOTO';
                                                             setManualRows(newRows);
                                                         }}
-                                                        className={`px-3 py-1 text-xs font-medium rounded-md transition-all flex items-center gap-1 ${row.inputType === 'PHOTO' ? 'bg-white dark:bg-slate-600 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                                                        className={`px-3 py-1 text-xs font-medium rounded-none transition-all flex items-center gap-1 ${row.inputType === 'PHOTO' ? 'bg-white dark:bg-slate-600 shadow-none text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                                                     >
                                                         <Camera className="w-3 h-3"/> Fotografia
                                                     </button>
@@ -2223,13 +2223,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             
                                                             setManualRows(newRows);
                                                         }}
-                                                        className="w-full py-3 bg-brand-600 text-white rounded-lg font-bold shadow-sm hover:bg-brand-700 flex items-center justify-center gap-2 mb-4 transition-colors"
+                                                        className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 border border-slate-900 dark:border-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white rounded-none font-bold shadow-none hover:bg-brand-700 flex items-center justify-center gap-2 mb-4 transition-colors"
                                                     >
                                                         <RefreshCw className="w-4 h-4" /> Converter em Código de Material
                                                     </button>
 
                                                     {row.image ? (
-                                                        <div className="relative w-full h-48 bg-slate-100 dark:bg-slate-900 rounded-lg border border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden group">
+                                                        <div className="relative w-full h-48 bg-slate-100 dark:bg-slate-900 rounded-none border border-slate-300 dark:border-slate-600 flex items-center justify-center overflow-hidden group">
                                                             <img src={row.image} alt="Upload" className="max-w-full max-h-full object-contain" />
                                                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                                                 <button 
@@ -2254,7 +2254,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             </div>
                                                         </div>
                                                     ) : (
-                                                        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative cursor-pointer">
+                                                        <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-none p-8 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors relative cursor-pointer">
                                                             <input 
                                                                 type="file" 
                                                                 accept="image/*" 
@@ -2285,10 +2285,10 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                 <img 
                                                                     src={row.image} 
                                                                     alt="Item" 
-                                                                    className="h-12 w-12 object-cover rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm" 
+                                                                    className="h-12 w-12 object-cover rounded-none border border-gray-200 dark:border-gray-700 shadow-none" 
                                                                 />
-                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-lg flex items-center justify-center">
-                                                                    <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-md" />
+                                                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors rounded-none flex items-center justify-center">
+                                                                    <Maximize2 className="w-4 h-4 text-white opacity-0 group-hover:opacity-100 drop-shadow-none" />
                                                                 </div>
                                                                 <button
                                                                     onClick={(e) => {
@@ -2297,7 +2297,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                         delete newRows[idx].image;
                                                                         setManualRows(newRows);
                                                                     }}
-                                                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:bg-red-600"
+                                                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-none hover:bg-red-600"
                                                                     title="Remover imagem"
                                                                 >
                                                                     <X className="w-3 h-3" />
@@ -2371,7 +2371,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                             setManualRows(newRows);
                                                                         }}
                                                                         placeholder="Descreva o material..."
-                                                                        className={`flex-1 min-w-0 p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${
+                                                                        className={`flex-1 min-w-0 p-3 border rounded-none text-sm outline-none dark:bg-slate-900 dark:text-white ${
                                                                             ((isError && !row.customDesc) || isDuplicate || isUnchecked)
                                                                             ? 'border-red-500 bg-white ring-1 ring-red-200' 
                                                                             : 'border-blue-300 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-700 focus:ring-2 focus:ring-blue-500'
@@ -2380,12 +2380,12 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     {!row.similarityChecked ? (
                                                                         <button 
                                                                             onClick={() => handleCheckSimilarity(idx)}
-                                                                            className={`flex-none px-4 py-3 ${isUnchecked ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-md font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 shadow-sm`}
+                                                                            className={`flex-none px-4 py-3 ${isUnchecked ? 'bg-red-600 hover:bg-red-700 animate-pulse' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-none font-bold text-sm whitespace-nowrap transition-colors flex items-center gap-2 shadow-none`}
                                                                         >
                                                                             <Search className="w-4 h-4" /> Verificar
                                                                         </button>
                                                                     ) : (
-                                                                        <div className="flex-none px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-md font-bold text-sm flex items-center gap-1 border border-green-200 dark:border-green-800">
+                                                                        <div className="flex-none px-3 py-2 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded-none font-bold text-sm flex items-center gap-1 border border-green-200 dark:border-green-800">
                                                                             <Check className="w-4 h-4" /> Verificado
                                                                         </div>
                                                                     )}
@@ -2401,7 +2401,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 newRows[idx].category = e.target.value;
                                                                                 setManualRows(newRows);
                                                                             }}
-                                                                            className={`w-full p-2.5 border rounded-md text-sm outline-none appearance-none dark:bg-slate-900 dark:text-white ${isMissingCategory ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600'}`}
+                                                                            className={`w-full p-2.5 border rounded-none text-sm outline-none appearance-none dark:bg-slate-900 dark:text-white ${isMissingCategory ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600'}`}
                                                                         >
                                                                             <option value="">Selecione uma categoria...</option>
                                                                             {categories.map(cat => (
@@ -2424,7 +2424,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 setManualRows(newRows);
                                                                             }}
                                                                             placeholder="Digite a categoria sugerida..."
-                                                                            className={`w-full mt-2 p-2 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isMissingCategory ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
+                                                                            className={`w-full mt-2 py-2 bg-transparent border-0 border-b text-sm outline-none rounded-none focus:ring-0 dark:bg-slate-900 dark:text-white ${isMissingCategory ? 'border-red-500' : 'border-slate-300 dark:border-slate-600'}`}
                                                                         />
                                                                     )}
                                                                 </div>
@@ -2443,11 +2443,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                             setManualRows(newRows);
                                                                         }}
                                                                         placeholder="Código ou nome do material..."
-                                                                        className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${(isError && !row.sku) || isInvalidSku ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                                                        className={`w-full p-3 border rounded-none text-sm outline-none dark:bg-slate-900 dark:text-white ${(isError && !row.sku) || isInvalidSku ? 'border-red-500 ring-1 ring-red-200' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                                                                     />
                                                                 </div>
                                                                 {row.sku && !isKnownSku(row.sku) && suggestions.length > 0 && (
-                                                                    <div className="absolute z-10 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg mt-1 max-h-60 overflow-y-auto">
+                                                                    <div className="absolute z-10 w-full bg-transparent border border-slate-200 dark:border-slate-700 rounded-none shadow-none mt-1 max-h-60 overflow-y-auto">
                                                                         {suggestions.map((opt) => (
                                                                             <div 
                                                                                 key={opt.sku}
@@ -2483,7 +2483,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             setManualRows(newRows);
                                                         }}
                                                         placeholder="0"
-                                                        className={`w-full p-3 border rounded-md text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && (!row.qty || Number(row.qty) <= 0) ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
+                                                        className={`w-full p-3 border rounded-none text-sm outline-none dark:bg-slate-900 dark:text-white ${isError && (!row.qty || Number(row.qty) <= 0) ? 'border-red-500' : 'border-slate-300 focus:ring-2 focus:ring-brand-500 dark:border-slate-600'}`}
                                                         min="0"
                                                     />
                                                 </div>
@@ -2499,7 +2499,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     newRows[idx].unit = e.target.value;
                                                                     setManualRows(newRows);
                                                                 }}
-                                                                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-md text-sm outline-none bg-white dark:bg-slate-900 dark:text-white appearance-none"
+                                                                className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none text-sm outline-none bg-white dark:bg-slate-900 dark:text-white appearance-none"
                                                             >
                                                                 {unitOptions.map(opt => (
                                                                     <option key={opt.value} value={opt.value}>{opt.value} - {opt.description}</option>
@@ -2555,19 +2555,19 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                     <div className="flex gap-3">
                         <button
                             onClick={addManualRow}
-                            className="flex-1 py-3 bg-brand-50 dark:bg-brand-900/20 border-2 border-dashed border-brand-200 dark:border-brand-800 rounded-lg text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors flex items-center justify-center gap-2"
+                            className="flex-1 py-3 bg-brand-50 dark:bg-brand-900/20 border-2 border-dashed border-brand-200 dark:border-brand-800 rounded-none text-brand-600 dark:text-brand-400 font-bold hover:bg-brand-100 dark:hover:bg-brand-900/30 transition-colors flex items-center justify-center gap-2"
                         >
                             <Plus className="w-5 h-5" /> Adicionar Outro Item
                         </button>
                     </div>
 
                     {/* Submit Button */}
-                    <div className="pt-4 flex justify-end">
+                    <div className="pt-4 flex justify-center">
                          <button
                             onClick={handleManualNext}
-                            className="bg-brand-600 text-white px-6 py-3 rounded-lg hover:bg-brand-700 font-medium flex items-center gap-2 shadow-sm"
+                            className="bg-blue-600 text-white border-4 border-blue-800 hover:bg-blue-700 font-bold uppercase tracking-widest px-8 py-3 rounded-none transition-colors shadow-none"
                         >
-                            <ArrowRightCircle className="w-5 h-5" /> Avançar para Finalização
+                            Confirmar
                         </button>
                     </div>
                 </div>
@@ -2580,7 +2580,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
       {showList && (
         <div className="space-y-6 animate-fade-in">
            {groupedOrders.length === 0 ? (
-               <div className="text-center p-12 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+               <div className="text-center p-12 bg-transparent rounded-none border border-slate-200 dark:border-slate-700 shadow-none">
                    <div className="bg-slate-100 dark:bg-slate-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                        <Search className="w-8 h-8 text-slate-400" />
                    </div>
@@ -2632,13 +2632,13 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                return (
                                    <div 
                                         key={order.id} 
-                                        className={`relative z-10 bg-white dark:bg-slate-800 rounded-xl shadow-sm border transition-all ${
+                                        className={`relative z-10 bg-transparent rounded-none shadow-none border transition-all ${
                                             isExpanded ? 'border-brand-200 dark:border-brand-900 ring-1 ring-brand-100 dark:ring-brand-900' : 'border-slate-200 dark:border-slate-700'
                                         } ${isGhost ? 'opacity-70 grayscale' : ''} ${isReopen ? 'border-l-4 border-l-purple-400 ml-4 md:ml-8' : ''}`}
                                    >
                                        {/* Connect line for visual hierarchy */}
                                        {isReopen && (
-                                            <div className="absolute -left-4 md:-left-8 top-0 bottom-0 w-4 md:w-8 border-l-2 border-b-2 border-slate-200 dark:border-slate-700 rounded-bl-xl h-1/2 -z-10" />
+                                            <div className="absolute -left-4 md:-left-8 top-0 bottom-0 w-4 md:w-8 border-l-2 border-b-2 border-slate-200 dark:border-slate-700 rounded-none-bl-xl h-1/2 -z-10" />
                                        )}
 
                                        {/* Order Card Header */}
@@ -2703,7 +2703,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                </div>
                                                <div className="flex items-center gap-3 ml-14 md:ml-0">
                                                    {hasPendingPhotos && (
-                                                       <span className="px-3 py-1 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 text-xs font-bold rounded-full flex items-center gap-1 border border-red-100 dark:border-red-800 animate-pulse">
+                                                       <span className="px-3 py-1 bg-red-50/50 dark:bg-red-900/10 text-red-700 dark:text-red-400 text-xs font-bold rounded-full flex items-center gap-1 border border-red-100 dark:border-red-800 animate-pulse">
                                                            <Camera className="w-3 h-3" /> Imagens por Corrigir
                                                        </span>
                                                    )}
@@ -2733,7 +2733,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                        {order.address && <div className="flex items-center gap-2"><span className="font-bold text-slate-700 dark:text-slate-300">Morada:</span><span>{order.address}</span></div>}
                                                    </div>
                                                )}
-                                               <div className="bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
+                                               <div className="bg-transparent rounded-none border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
                                                    <div className="">
                                                         <table className="w-full text-sm text-left block md:table">
                                                             <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300 hidden md:table-header-group">
@@ -2767,19 +2767,19 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                 {item.originalDescription && item.originalDescription !== item.description && (
                                                                                     <div className="group relative flex items-center">
                                                                                         <Info className="w-3.5 h-3.5 text-blue-500 hover:text-blue-700 cursor-pointer" />
-                                                                                        <div className="absolute left-1/2 -top-2 transform -translate-y-full -translate-x-1/2 w-max max-w-xs bg-slate-800 text-white text-xs rounded shadow-lg p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50">
+                                                                                        <div className="absolute left-1/2 -top-2 transform -translate-y-full -translate-x-1/2 w-max max-w-xs bg-slate-800 text-white text-xs rounded-none shadow-none p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50">
                                                                                             <span className="block font-bold mb-1 text-slate-300">Sugerido Originalmente:</span>
                                                                                             {item.originalDescription}
                                                                                             <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
                                                                                         </div>
                                                                                     </div>
                                                                                 )}
-                                                                                {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded">Novo</span>}
+                                                                                {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded-none">Novo</span>}
                                                                                 {item.unverifiedMatch && (
                                                                                     <div className="flex items-center gap-1 ml-2">
-                                                                                        <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1 py-0.5 rounded whitespace-nowrap">Por validar</span>
-                                                                                        <button onClick={(e) => { e.stopPropagation(); handleConfirmAutoMatch(order, idx); }} className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold px-2 py-0.5 rounded hover:bg-green-200 dark:hover:bg-green-900/50">Confirmar</button>
-                                                                                        <button onClick={(e) => { e.stopPropagation(); setRejectMatchData({order, itemIdx: idx}); setRejectMatchModalOpen(true); }} className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold px-2 py-0.5 rounded hover:bg-red-200 dark:hover:bg-red-900/50">Rejeitar/Mudar</button>
+                                                                                        <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1 py-0.5 rounded-none whitespace-nowrap">Por validar</span>
+                                                                                        <button onClick={(e) => { e.stopPropagation(); handleConfirmAutoMatch(order, idx); }} className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold px-2 py-0.5 rounded-none hover:bg-green-200 dark:hover:bg-green-900/50">Confirmar</button>
+                                                                                        <button onClick={(e) => { e.stopPropagation(); setRejectMatchData({order, itemIdx: idx}); setRejectMatchModalOpen(true); }} className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold px-2 py-0.5 rounded-none hover:bg-red-200 dark:hover:bg-red-900/50">Rejeitar/Mudar</button>
                                                                                     </div>
                                                                                 )}
                                                                                 {item.image && (
@@ -2818,7 +2818,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                                     {pickedInChildren > 0 && (
                                                                                         <div className="group relative inline-flex items-center ml-1">
                                                                                             <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-pointer" />
-                                                                                            <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 w-[160px] bg-slate-800 text-white text-[10px] rounded shadow-lg p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50 text-center font-normal whitespace-normal transition-opacity duration-200">
+                                                                                            <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 w-[160px] bg-slate-800 text-white text-[10px] rounded-none shadow-none p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50 text-center font-normal whitespace-normal transition-opacity duration-200">
                                                                                                 Restantes {pickedInChildren} un. processadas numa reabertura.
                                                                                                 <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
                                                                                             </div>
@@ -2839,14 +2839,14 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                    </div>
                                                </div>
                                                {order.changeLog && order.changeLog.length > 0 && (
-                                                   <details className="mb-4 group border border-slate-200 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                                                   <details className="mb-4 group border border-slate-200 dark:border-slate-700 rounded-none bg-slate-50 dark:bg-slate-800/50">
                                                        <summary className="text-xs font-bold text-slate-600 dark:text-slate-300 p-3 cursor-pointer flex items-center gap-2 select-none hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                                                            <History className="w-3.5 h-3.5" /> Histórico de Alterações  <span className="ml-auto text-[10px] text-slate-400 font-normal">Clica para ver detalhes</span>
                                                        </summary>
                                                        <div className="p-3 pt-0 border-t border-slate-200 dark:border-slate-700 mt-2">
                                                            <ul className="space-y-2 mt-2">
                                                                {order.changeLog.map((log, logIdx) => (
-                                                                   <li key={logIdx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2 rounded border border-slate-100 dark:border-slate-800">
+                                                                   <li key={logIdx} className="text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-900 p-2 rounded-none border border-slate-100 dark:border-slate-800">
                                                                        <span className="font-semibold text-slate-700 dark:text-slate-300">{new Date(log.date).toLocaleString()}</span> 
                                                                        <span className="mx-2 text-slate-300 dark:text-slate-600">|</span> 
                                                                        <span className="font-medium text-brand-600 dark:text-brand-400">{log.actor}</span> 
@@ -2865,7 +2865,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                     {isPendingApproval && orderCanApprove && (
                                                         <button
                                                             onClick={(e) => { e.stopPropagation(); handleApproveOrder(order); }}
-                                                            className={`flex items-center gap-1 px-4 py-2 text-xs font-bold text-white rounded-lg shadow-sm transition-colors ${hasPendingPhotos ? 'bg-slate-400 cursor-not-allowed opacity-50' : 'bg-green-600 hover:bg-green-700 animate-pulse'}`}
+                                                            className={`flex items-center gap-1 px-4 py-2 text-xs font-bold text-white rounded-none shadow-none transition-colors ${hasPendingPhotos ? 'bg-slate-400 cursor-not-allowed opacity-50' : 'bg-green-600 hover:bg-green-700 animate-pulse'}`}
                                                             disabled={hasPendingPhotos}
                                                             title={hasPendingPhotos ? "Identifique os materiais das fotos primeiro" : "Aprovar"}
                                                         >
@@ -2878,7 +2878,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                         <>
                                                             <button 
                                                                 onClick={(e) => { e.stopPropagation(); handleSendEmail(order, 'LOGISTICS'); }}
-                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-transparent border border-slate-300 dark:border-slate-600 rounded-none hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                                                                 title="Notificar Logística"
                                                             >
                                                                 <Mail className="w-3 h-3" /> Email Logística
@@ -2887,7 +2887,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                             {issues.hasIssues && (
                                                                 <button 
                                                                     onClick={(e) => { e.stopPropagation(); handleSendEmail(order, 'ALERT'); }}
-                                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                                                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50/50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-none hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                                                                     title="Enviar Alerta de Faltas"
                                                                 >
                                                                     <AlertTriangle className="w-3 h-3" /> Email Alerta
@@ -2898,7 +2898,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
                                                     <button 
                                                         onClick={(e) => { e.stopPropagation(); downloadExcel(order); }}
-                                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                                                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 bg-transparent border border-slate-300 dark:border-slate-600 rounded-none hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                                                     >
                                                         <Download className="w-3 h-3" /> Excel
                                                     </button>
@@ -2906,7 +2906,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                     {type === 'OPEN' && orderCanEdit && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleEditStart(order); }}
-                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-none hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                                                         >
                                                             <Edit className="w-3 h-3" /> {hasPendingPhotos ? 'Corrigir Imagem' : 'Editar'}
                                                         </button>
@@ -2915,7 +2915,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                     {(isAdmin || (orderCanApprove && isPendingApproval)) && (
                                                         <button 
                                                             onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }}
-                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                                                            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-700 dark:text-red-400 bg-red-50/50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-none hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                                                         >
                                                             <Trash2 className="w-3 h-3" /> Excluir
                                                         </button>

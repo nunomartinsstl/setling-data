@@ -384,7 +384,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
       {/* CHOICE MODAL */}
       {showMergeModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md p-6 border border-slate-200 dark:border-slate-700 animate-fade-in relative">
+              <div className="bg-transparent rounded-none shadow-none w-full max-w-md p-6 border border-slate-200 dark:border-slate-700 animate-fade-in relative">
                   <button 
                     onClick={() => setShowMergeModal(false)}
                     className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -400,7 +400,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                   <div className="space-y-3">
                       <button
                           onClick={() => executeMasterUpdate('MERGE')}
-                          className="w-full flex items-center p-4 rounded-lg border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 transition-all group"
+                          className="w-full flex items-center p-4 rounded-none border border-green-200 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-900/30 transition-all group"
                       >
                           <div className="bg-green-200 dark:bg-green-800 p-2 rounded-full mr-4 group-hover:scale-110 transition-transform">
                               <FilePlus className="w-6 h-6 text-green-700 dark:text-green-300" />
@@ -413,7 +413,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
 
                       <button
                           onClick={() => executeMasterUpdate('REPLACE')}
-                          className="w-full flex items-center p-4 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/30 transition-all group"
+                          className="w-full flex items-center p-4 rounded-none border border-amber-200 bg-amber-50 hover:bg-amber-100 dark:bg-amber-900/20 dark:border-amber-800 dark:hover:bg-amber-900/30 transition-all group"
                       >
                           <div className="bg-amber-200 dark:bg-amber-800 p-2 rounded-full mr-4 group-hover:scale-110 transition-transform">
                               <RefreshCw className="w-6 h-6 text-amber-700 dark:text-amber-300" />
@@ -433,22 +433,22 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
           <Package className="text-amber-500" /> Gestão de Stock
         </h2>
         {isAdmin && (
-            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-lg p-1">
+            <div className="flex bg-slate-200 dark:bg-slate-700 rounded-none p-1">
                 <button 
                     onClick={() => { setActiveTab('STOCK');  }}
-                    className={`px-4 py-1 text-sm font-medium rounded-md transition-all ${activeTab === 'STOCK' ? 'bg-white dark:bg-slate-800 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                    className={`px-4 py-1 text-sm font-medium rounded-none transition-all ${activeTab === 'STOCK' ? 'bg-transparent shadow-none text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                     Stock Atual
                 </button>
                 <button 
                     onClick={() => { setActiveTab('PENDING');  }}
-                    className={`px-4 py-1 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'PENDING' ? 'bg-white dark:bg-slate-800 shadow text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}
+                    className={`px-4 py-1 text-sm font-medium rounded-none transition-all flex items-center gap-2 ${activeTab === 'PENDING' ? 'bg-transparent shadow-none text-amber-600 dark:text-amber-400' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                     Pendentes
                 </button>
                 <button 
                     onClick={() => { setActiveTab('MASTER');  }}
-                    className={`px-4 py-1 text-sm font-medium rounded-md transition-all ${activeTab === 'MASTER' ? 'bg-white dark:bg-slate-800 shadow text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
+                    className={`px-4 py-1 text-sm font-medium rounded-none transition-all ${activeTab === 'MASTER' ? 'bg-transparent shadow-none text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'}`}
                 >
                     Todos os Materiais
                 </button>
@@ -458,29 +458,29 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
 
       {activeTab === 'STOCK' ? (
           <>
-            <div className={`bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border ${canEditStock ? 'border-amber-200 dark:border-amber-900/50' : 'border-slate-200 dark:border-slate-700'}`}>
+            <div className={`pt-2 mb-8`}>
                 <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-slate-800 dark:text-white">
                 <Upload className="w-5 h-5 text-slate-500 dark:text-slate-400" /> Atualizar Stock Físico
                 </h3>
                 
                 {!canEditStock ? (
-                <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-lg text-slate-500 dark:text-slate-400 text-sm">
+                <div className="p-4 bg-slate-50 dark:bg-slate-900 rounded-none text-slate-500 dark:text-slate-400 text-sm">
                     Apenas Logística ou Admins podem atualizar o stock.
                 </div>
                 ) : (
                 <div className="space-y-4 animate-fade-in">
-                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-md border border-amber-100 dark:border-amber-800">
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-none border border-amber-100 dark:border-amber-800">
                     <div className="flex items-start gap-2 text-amber-800 dark:text-amber-400 text-sm mb-2">
                         <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                         <p><strong>Atenção:</strong> O upload substitui o stock e <u>reabre pedidos automaticamente</u> se houver material disponível para itens pendentes.</p>
                     </div>
                     <p className="text-xs text-amber-700 dark:text-amber-500 ml-6">
-                        Colunas necessárias: <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded border border-amber-200 dark:border-amber-800">Material</code>, <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded border border-amber-200 dark:border-amber-800">Texto breve material</code>, <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded border border-amber-200 dark:border-amber-800">Utilização livre</code>, <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded border border-amber-200 dark:border-amber-800">Lote</code>
+                        Colunas necessárias: <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded-none border border-amber-200 dark:border-amber-800">Material</code>, <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded-none border border-amber-200 dark:border-amber-800">Texto breve material</code>, <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded-none border border-amber-200 dark:border-amber-800">Utilização livre</code>, <code className="bg-amber-100 dark:bg-amber-900/40 px-1 rounded-none border border-amber-200 dark:border-amber-800">Lote</code>
                     </p>
                     <p className="text-xs text-amber-600 dark:text-amber-500/80 mt-2 ml-6 italic">Outras colunas serão ignoradas automaticamente.</p>
                     </div>
                     
-                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg p-8 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer relative overflow-hidden group">
+                    <div className="border-2 border-dashed border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0 rounded-none p-8 text-center bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors cursor-pointer relative overflow-hidden group">
                         <input 
                             type="file" 
                             accept=".xlsx, .xls"
@@ -507,7 +507,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                 )}
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto w-full">
                     <table className="w-full text-left text-sm text-slate-600 dark:text-slate-300">
                         <thead className="bg-slate-50 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 font-semibold text-slate-700 dark:text-slate-200">
@@ -540,7 +540,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
           </>
       ) : activeTab === 'PENDING' ? (
         <div className="space-y-4 animate-fade-in">
-             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+             <div className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="bg-amber-50 dark:bg-amber-900/20 p-4 border-b border-amber-100 dark:border-amber-900/50 flex items-center gap-2 justify-between">
                     <div className="flex items-center gap-2">
                         <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
@@ -572,15 +572,15 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                                     </td>
                                     <td className="p-3 font-medium text-slate-800 dark:text-white max-w-xs">{val.item.originalDescription}</td>
                                     <td className="p-3">
-                                        <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-2 rounded border border-blue-100 dark:border-blue-900/50 inline-block w-full max-w-sm">
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-300 p-2 rounded-none border border-blue-100 dark:border-blue-900/50 inline-block w-full max-w-sm">
                                             <div className="font-mono text-xs font-bold">{val.item.sku}</div>
                                             <div className="truncate" title={val.item.description}>{val.item.description}</div>
                                         </div>
                                     </td>
                                     <td className="p-3">
                                         <div className="flex gap-2">
-                                           <button onClick={() => handleConfirmAutoMatch(val.order, val.itemIdx)} className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-400 font-bold px-3 py-1 text-xs rounded transition-colors">Confirmar</button>
-                                           <button onClick={() => { setRejectMatchData({order: val.order, itemIdx: val.itemIdx}); setRejectMatchModalOpen(true); }} className="bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 font-bold px-3 py-1 text-xs rounded transition-colors">Rejeitar/Mudar</button>
+                                           <button onClick={() => handleConfirmAutoMatch(val.order, val.itemIdx)} className="bg-green-100 hover:bg-green-200 text-green-700 dark:bg-green-900/30 dark:hover:bg-green-900/50 dark:text-green-400 font-bold px-3 py-1 text-xs rounded-none transition-colors">Confirmar</button>
+                                           <button onClick={() => { setRejectMatchData({order: val.order, itemIdx: val.itemIdx}); setRejectMatchModalOpen(true); }} className="bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-900/30 dark:hover:bg-red-900/50 dark:text-red-400 font-bold px-3 py-1 text-xs rounded-none transition-colors">Rejeitar/Mudar</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -593,7 +593,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
         </div>
       ) : (
         <div className="space-y-4 animate-fade-in">
-             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-purple-200 dark:border-purple-900/50">
+             <div className="bg-transparent p-6 rounded-none shadow-none border border-purple-200 dark:border-purple-900/50">
                 <h3 className="text-lg font-semibold mb-2 flex items-center gap-2 text-purple-900 dark:text-purple-300">
                     <Database className="w-5 h-5 text-purple-600 dark:text-purple-400" /> Importar Catálogo Geral (Admin)
                 </h3>
@@ -601,16 +601,16 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                     Este arquivo define os materiais que "existem" no sistema.
                     Usado para autocompletar nomes ao criar pedidos manuais.
                 </p>
-                 <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-md border border-purple-100 dark:border-purple-800 mb-4">
+                 <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-none border border-purple-100 dark:border-purple-800 mb-4">
                      <p className="text-xs text-purple-700 dark:text-purple-300">
-                        Colunas necessárias: <code className="bg-purple-100 dark:bg-purple-900/40 px-1 rounded border border-purple-200 dark:border-purple-800">Material</code>, <code className="bg-purple-100 dark:bg-purple-900/40 px-1 rounded border border-purple-200 dark:border-purple-800">Texto breve material</code>.
+                        Colunas necessárias: <code className="bg-purple-100 dark:bg-purple-900/40 px-1 rounded-none border border-purple-200 dark:border-purple-800">Material</code>, <code className="bg-purple-100 dark:bg-purple-900/40 px-1 rounded-none border border-purple-200 dark:border-purple-800">Texto breve material</code>.
                     </p>
                     <p className="text-xs text-purple-600 dark:text-purple-400 mt-1 italic flex items-center gap-1">
                         <Info className="w-3 h-3"/> Outras colunas no Excel serão ignoradas.
                     </p>
                  </div>
 
-                <div className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-lg p-8 text-center bg-slate-50 dark:bg-slate-900 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors cursor-pointer relative overflow-hidden group">
+                <div className="border-2 border-dashed border-purple-200 dark:border-purple-800 rounded-none p-8 text-center bg-slate-50 dark:bg-slate-900 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors cursor-pointer relative overflow-hidden group">
                      <input 
                             type="file" 
                             accept=".xlsx, .xls"
@@ -635,7 +635,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                 </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="bg-purple-50 dark:bg-purple-900/20 p-4 border-b border-purple-100 dark:border-purple-900/50 flex items-center gap-2 justify-between">
                     <div className="flex items-center gap-2">
                         <Database className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -676,7 +676,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
       {/* Reject Modal */}
       {rejectMatchModalOpen && rejectMatchData && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-[60]">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <div className="bg-transparent rounded-none shadow-none w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                   <div className="p-6">
                       <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Rejeitar Correspondência</h3>
                       <p className="text-sm text-slate-600 dark:text-slate-300 mb-6">
@@ -701,7 +701,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                                   setRejectMatchData(null);
                                   setSimilarityModalOpen(true);
                               }}
-                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-none hover:border-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 flex items-start gap-3"
                           >
                               <Search className="w-5 h-5 text-brand-600 dark:text-brand-400 mt-0.5" />
                               <div>
@@ -715,7 +715,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                                   handleRevertToOriginal();
                                   setSimilarityModalOpen(false);
                               }}
-                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
+                              className="w-full text-left p-4 border border-slate-200 dark:border-slate-700 rounded-none hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 flex items-start gap-3"
                           >
                               <RefreshCw className="w-5 h-5 text-orange-600 dark:text-orange-400 mt-0.5" />
                               <div>
@@ -743,20 +743,20 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
       {/* Similarity Modal */}
       {similarityModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
+              <div className="bg-transparent rounded-none shadow-none w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
                   <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
                       <h3 className="font-bold text-lg dark:text-white">Opções Sugeridas</h3>
                       <button onClick={() => { setSimilarityModalOpen(false); setSimilarityTarget(null); }}><X className="w-6 h-6 text-slate-400" /></button>
                   </div>
                   <div className="p-4 overflow-y-auto flex-1 dark:text-slate-300">
                       {similarityResults.map((res: any, idx) => (
-                          <button key={idx} onClick={() => handleManualMatch(res)} className="w-full text-left p-3 border dark:border-slate-700 rounded-lg hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2 flex justify-between items-center group">
+                          <button key={idx} onClick={() => handleManualMatch(res)} className="w-full text-left p-3 border dark:border-slate-700 rounded-none hover:bg-brand-50 dark:hover:bg-brand-900/20 mb-2 flex justify-between items-center group">
                               <div>
                                   <div className="font-bold text-brand-600 dark:text-brand-400 group-hover:underline">{res.sku}</div>
                                   <div className="text-sm text-slate-700 dark:text-slate-300">{res.description}</div>
                               </div>
                               {res.score !== undefined && (
-                                  <div className="flex-shrink-0 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                                  <div className="flex-shrink-0 text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded-none border border-slate-200 dark:border-slate-700">
                                       Score: {res.score > 100 ? 100 : Math.round(res.score)}%
                                   </div>
                               )}
@@ -767,7 +767,7 @@ const StockManager: React.FC<StockManagerProps> = ({ stock, masterList, orders, 
                           setSimilarityTarget(null);
                           setSimilarityModalOpen(false);
                           handleRevertToOriginal(target);
-                      }} className="w-full py-3 bg-white dark:bg-slate-800 border text-slate-600 dark:text-slate-300 rounded mt-4">Nenhum destes, confirmar como NOVO</button>
+                      }} className="w-full py-3 bg-transparent border text-slate-600 dark:text-slate-300 rounded-none mt-4">Nenhum destes, confirmar como NOVO</button>
                   </div>
               </div>
           </div>

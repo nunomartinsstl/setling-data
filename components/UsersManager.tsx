@@ -22,7 +22,7 @@ const OrganogramNode: React.FC<{
             {/* Node Box */}
             <div className="relative flex flex-col items-center">
                 <div className={`
-                    relative z-10 min-w-[200px] px-5 py-4 rounded-xl shadow-xl text-center
+                    relative z-10 min-w-[200px] px-5 py-4 rounded-none shadow-none text-center
                     ${user.role === UserRole.MANAGEMENT ? 'bg-purple-600' : 'bg-slate-700'}
                     text-white transform transition-all hover:scale-105 border-2 border-white/10
                 `}>
@@ -33,7 +33,7 @@ const OrganogramNode: React.FC<{
                         {user.firstName} {user.lastName}
                     </div>
                     {user.isInvite && (
-                        <div className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black px-2 py-0.5 rounded-full shadow-md border border-white">
+                        <div className="absolute -top-2 -right-2 bg-amber-400 text-black text-[8px] font-black px-2 py-0.5 rounded-full shadow-none border border-white">
                             PENDENTE
                         </div>
                     )}
@@ -367,7 +367,7 @@ const UsersManager: React.FC = () => {
             </h2>
 
             {/* Invite Section */}
-            <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-sm border border-purple-200 dark:border-purple-900/50">
+            <div className="bg-transparent p-6 rounded-none shadow-none border border-purple-200 dark:border-purple-900/50">
                 <h3 className="text-lg font-semibold mb-4 flex items-center gap-2 text-purple-900 dark:text-purple-300">
                     <UserPlus className="w-5 h-5 text-purple-600 dark:text-purple-400" /> Criar Novo Utilizador
                 </h3>
@@ -379,7 +379,7 @@ const UsersManager: React.FC = () => {
                                 type="email" 
                                 value={inviteEmail}
                                 onChange={(e) => setInviteEmail(e.target.value)}
-                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 placeholder="colaborador@empresa.com"
                             />
                         </div>
@@ -389,7 +389,7 @@ const UsersManager: React.FC = () => {
                                 type="text" 
                                 value={inviteFirstName}
                                 onChange={(e) => setInviteFirstName(e.target.value)}
-                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 placeholder="Primeiro Nome"
                             />
                         </div>
@@ -399,12 +399,12 @@ const UsersManager: React.FC = () => {
                                 type="text" 
                                 value={inviteLastName}
                                 onChange={(e) => setInviteLastName(e.target.value)}
-                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 placeholder="Último Nome"
                             />
                         </div>
                         {inviteUsernamePreview && (
-                            <div className="col-span-full bg-purple-50 dark:bg-purple-900/20 p-2 rounded border border-purple-100 dark:border-purple-800 flex items-center justify-between">
+                            <div className="col-span-full bg-purple-50 dark:bg-purple-900/20 p-2 rounded-none border border-purple-100 dark:border-purple-800 flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <UserCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                                     <span className="text-xs font-bold text-purple-700 dark:text-purple-300 uppercase tracking-wider">Utilizador Gerado:</span>
@@ -418,7 +418,7 @@ const UsersManager: React.FC = () => {
                              <select 
                                 value={inviteRole}
                                 onChange={(e) => setInviteRole(e.target.value)}
-                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                              >
                                  {availableRoles.map(role => (
                                      <option key={role} value={role}>
@@ -433,7 +433,7 @@ const UsersManager: React.FC = () => {
                                 <select 
                                     value={inviteCompanyId}
                                     onChange={(e) => setInviteCompanyId(e.target.value)}
-                                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                    className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                                 >
                                     <option value="">Selecione a Empresa...</option>
                                     {companies.map(c => (
@@ -447,7 +447,7 @@ const UsersManager: React.FC = () => {
                             <select 
                                 value={inviteSupervisorId}
                                 onChange={(e) => setInviteSupervisorId(e.target.value)}
-                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                             >
                                 <option value="">-- Sem Chefia --</option>
                                 {availableSupervisors.map(m => (
@@ -462,7 +462,7 @@ const UsersManager: React.FC = () => {
                         <button 
                             type="submit"
                             disabled={isInviting}
-                            className="bg-purple-600 text-white px-6 py-2.5 rounded-lg hover:bg-purple-700 transition-colors flex items-center gap-2 font-medium whitespace-nowrap"
+                            className="bg-purple-600 text-white px-6 py-2.5 rounded-none hover:bg-purple-700 transition-colors flex items-center gap-2 font-medium whitespace-nowrap"
                         >
                             {isInviting ? <Loader2 className="w-4 h-4 animate-spin"/> : <Plus className="w-4 h-4"/>}
                             Gerar Acesso
@@ -474,14 +474,14 @@ const UsersManager: React.FC = () => {
             </div>
 
             {/* Unified Users/Invites Section */}
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+            <div className="bg-transparent rounded-none shadow-none border border-slate-200 dark:border-slate-700 overflow-hidden">
                 <div className="p-4 border-b border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-900 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-lg">
+                    <div className="flex bg-slate-200/50 dark:bg-slate-800/50 p-1 rounded-none">
                         <button 
                             onClick={() => setViewMode('ACTIVE')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            className={`px-4 py-1.5 rounded-none text-xs font-bold transition-all ${
                                 viewMode === 'ACTIVE' 
-                                ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600 dark:text-purple-400' 
+                                ? 'bg-white dark:bg-slate-700 shadow-none text-purple-600 dark:text-purple-400' 
                                 : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                             }`}
                         >
@@ -489,9 +489,9 @@ const UsersManager: React.FC = () => {
                         </button>
                         <button 
                             onClick={() => setViewMode('PENDING')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${
+                            className={`px-4 py-1.5 rounded-none text-xs font-bold transition-all ${
                                 viewMode === 'PENDING' 
-                                ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600 dark:text-purple-400' 
+                                ? 'bg-white dark:bg-slate-700 shadow-none text-purple-600 dark:text-purple-400' 
                                 : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
                             }`}
                         >
@@ -503,7 +503,7 @@ const UsersManager: React.FC = () => {
                         <button 
                             onClick={handleResetAll}
                             disabled={isResetting}
-                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-md flex items-center gap-1 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800"
+                            className="text-xs text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 px-3 py-1.5 rounded-none flex items-center gap-1 transition-colors border border-transparent hover:border-red-200 dark:hover:border-red-800"
                         >
                             {isResetting ? <Loader2 className="w-3 h-3 animate-spin"/> : <AlertTriangle className="w-3 h-3"/>}
                             Resetar Todos
@@ -561,7 +561,7 @@ const UsersManager: React.FC = () => {
                                                                     value={user.companyId || ''}
                                                                     onChange={(e) => handleChangeCompany(user, e.target.value)}
                                                                     disabled={isProcessing}
-                                                                    className="w-full appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 py-1.5 pl-2 pr-6 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 rounded text-slate-600 dark:text-slate-300 text-xs truncate"
+                                                                    className="w-full appearance-none bg-transparent border border-slate-200 dark:border-slate-600 py-1.5 pl-2 pr-6 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 rounded-none text-slate-600 dark:text-slate-300 text-xs truncate"
                                                                 >
                                                                     <option value="" disabled>Selecione...</option>
                                                                     {companies.map(c => (
@@ -579,7 +579,7 @@ const UsersManager: React.FC = () => {
                                                             value={user.role}
                                                             onChange={(e) => handleChangeRole(user, e.target.value)}
                                                             disabled={isProcessing}
-                                                            className={`appearance-none text-xs font-bold px-2 py-1.5 rounded border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none w-full max-w-[120px] truncate ${
+                                                            className={`appearance-none text-xs font-bold px-2 py-1.5 rounded-none border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none w-full max-w-[120px] truncate ${
                                                                 user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
                                                                 user.role === UserRole.MANAGEMENT ? 'text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/30' :
                                                                 user.role === UserRole.TECHNICAL ? 'text-cyan-700 dark:text-cyan-300 bg-cyan-100 dark:bg-cyan-900/30' :
@@ -588,7 +588,7 @@ const UsersManager: React.FC = () => {
                                                             }`}
                                                         >
                                                             {availableRoles.map(role => (
-                                                                <option key={role} value={role} className="bg-white dark:bg-slate-800">
+                                                                <option key={role} value={role} className="bg-transparent">
                                                                     {getRoleLabel(role)}
                                                                 </option>
                                                             ))}
@@ -600,7 +600,7 @@ const UsersManager: React.FC = () => {
                                                                 value={user.supervisorId || ''}
                                                                 onChange={(e) => handleChangeSupervisor(user, e.target.value)}
                                                                 disabled={isProcessing}
-                                                                className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded bg-white dark:bg-slate-800 focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
+                                                                className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded-none bg-transparent focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
                                                                     !user.supervisorId 
                                                                     ? 'border-orange-300 text-orange-600 bg-orange-50 dark:bg-orange-900/10' 
                                                                     : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
@@ -624,7 +624,7 @@ const UsersManager: React.FC = () => {
                                                         ) : (
                                                             <button 
                                                                 onClick={() => handleDeleteUser(user)}
-                                                                className="text-red-400 hover:text-red-600 p-2 rounded-lg transition-colors"
+                                                                className="text-red-400 hover:text-red-600 p-2 rounded-none transition-colors"
                                                                 title="Remover Utilizador"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
@@ -664,7 +664,7 @@ const UsersManager: React.FC = () => {
                                                     </td>
                                                     <td className="p-4 font-mono text-xs">{invite.email}</td>
                                                     <td className="p-4">
-                                                        <span className="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                                        <span className="text-xs px-2 py-1 rounded-none bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
                                                             {getRoleLabel(invite.role)}
                                                         </span>
                                                     </td>
@@ -675,7 +675,7 @@ const UsersManager: React.FC = () => {
                                                         ) : (
                                                             <button 
                                                                 onClick={() => handleDeleteInvite(invite.id)}
-                                                                className="text-red-400 hover:text-red-600 p-2 rounded-lg transition-colors"
+                                                                className="text-red-400 hover:text-red-600 p-2 rounded-none transition-colors"
                                                                 title="Cancelar Acesso"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
@@ -693,7 +693,7 @@ const UsersManager: React.FC = () => {
                 )}
 
                 <div className="mt-12">
-                    <div className="bg-white dark:bg-slate-900 p-12 rounded-3xl border-2 border-slate-100 dark:border-slate-800 shadow-xl overflow-x-auto relative min-h-[500px] flex justify-center">
+                    <div className="bg-white dark:bg-slate-900 p-12 rounded-none-3xl border-2 border-slate-100 dark:border-slate-800 shadow-none overflow-x-auto relative min-h-[500px] flex justify-center">
                         {/* Decorative dots in corners */}
                         <div className="absolute top-4 left-4 grid grid-cols-4 gap-1 opacity-10">
                             {[...Array(16)].map((_, i) => <div key={i} className="w-1 h-1 rounded-full bg-purple-600" />)}
@@ -713,10 +713,10 @@ const UsersManager: React.FC = () => {
                                     const minRootLevel = treeData.length > 0 ? Math.min(...treeData.map(r => roleHierarchy[r.user.role] || 10)) : 1;
                                     return (
                                         <React.Fragment>
-                                            <div className="absolute top-4 right-4 z-20 flex gap-2 bg-white dark:bg-slate-800 p-2 rounded-lg shadow-md border border-slate-200 dark:border-slate-700">
-                                                <button onClick={() => zoomIn()} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300"><ZoomIn className="w-5 h-5"/></button>
-                                                <button onClick={() => zoomOut()} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300"><ZoomOut className="w-5 h-5"/></button>
-                                                <button onClick={() => resetTransform()} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-slate-600 dark:text-slate-300"><Maximize className="w-5 h-5"/></button>
+                                            <div className="absolute top-4 right-4 z-20 flex gap-2 bg-transparent p-2 rounded-none shadow-none border border-slate-200 dark:border-slate-700">
+                                                <button onClick={() => zoomIn()} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-none text-slate-600 dark:text-slate-300"><ZoomIn className="w-5 h-5"/></button>
+                                                <button onClick={() => zoomOut()} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-none text-slate-600 dark:text-slate-300"><ZoomOut className="w-5 h-5"/></button>
+                                                <button onClick={() => resetTransform()} className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-none text-slate-600 dark:text-slate-300"><Maximize className="w-5 h-5"/></button>
                                             </div>
                                             <TransformComponent wrapperClass="w-full h-full min-h-[500px]" contentClass="w-full h-full flex justify-center items-start pt-10 pb-20 px-10">
                                                 <div className="inline-flex gap-16 items-start">
