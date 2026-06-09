@@ -2628,6 +2628,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
 
                                // CHECK ISSUES FOR BUTTONS
                                const issues = getOrderIssues(order);
+                               const isOtherExpanded = expandedOrderId && expandedOrderId !== order.id;
 
                                return (
                                    <div 
@@ -2682,26 +2683,39 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                        ) : (isOrderFullyFulfilled ? <CheckCircle className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />)}
                                                    </div>
                                                    <div className="flex-1 min-w-0">
-                                                       <div className="flex items-center gap-2">
-                                                           <h3 className="font-bold text-base md:text-lg text-slate-800 dark:text-white truncate">{order.title}</h3>
+                                                       <div className={`flex ${isOtherExpanded ? 'items-center justify-between gap-4' : 'items-center gap-2'}`}>
+                                                           <div className="flex items-center gap-2 min-w-0">
+                                                               <h3 className={`font-bold text-slate-800 dark:text-white truncate ${isOtherExpanded ? 'text-sm md:text-base' : 'text-base md:text-lg'}`}>{order.title}</h3>
                                                            {hasBackorder && <span className="hidden md:inline-flex text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded-full font-bold">Reabertura ({order.reopenCount})</span>}
                                                        </div>
-                                                       <div className="flex items-center gap-2 text-xs md:text-sm text-slate-500 dark:text-slate-400 mt-0.5 md:mt-1 overflow-x-auto whitespace-nowrap">
-                                                           <span className="flex items-center gap-1 flex-shrink-0"><UserIcon className="w-3 h-3" /> {order.creator}</span>
-                                                           <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>
-                                                           <span className="flex items-center gap-1 flex-shrink-0"><Calendar className="w-3 h-3" /> {new Date(order.dateCreated).toLocaleDateString()}</span>
-                                                           {(order.dueDate) && (
-                                                               <>
-                                                                 <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>
-                                                                 <span className={`flex-shrink-0 ${new Date(order.dueDate) < new Date() && type === 'OPEN' ? 'text-red-500 font-semibold' : ''}`}>
-                                                                    {type === 'OPEN' ? 'Levantar: ' : ''}{new Date(order.dueDate).toLocaleDateString()}
-                                                                 </span>
-                                                               </>
-                                                           )}
+                                                           {isOtherExpanded && <div className="text-xs text-slate-400 whitespace-nowrap flex-shrink-0">{new Date(order.dateCreated).toLocaleDateString()}</div>}
                                                        </div>
+                                                       {!isOtherExpanded && (
+                                                            <div className={`flex ${expandedOrderId === null ? "flex-col items-start gap-1 mt-2" : "items-center gap-2 mt-0.5 md:mt-1 overflow-x-auto whitespace-nowrap"} text-xs md:text-sm text-slate-500 dark:text-slate-400`}>
+                                                                <span className="flex items-center gap-1 flex-shrink-0">
+                                                                    {expandedOrderId === null ? <span className="font-bold text-[10px] uppercase tracking-widest text-slate-400 w-20">Criado Por:</span> : <UserIcon className="w-3 h-3" />} 
+                                                                    {order.creator}
+                                                                </span>
+                                                                {expandedOrderId !== null && <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>}
+                                                                <span className="flex items-center gap-1 flex-shrink-0">
+                                                                    {expandedOrderId === null ? <span className="font-bold text-[10px] uppercase tracking-widest text-slate-400 w-20">Criado a:</span> : <Calendar className="w-3 h-3" />} 
+                                                                    {new Date(order.dateCreated).toLocaleDateString()}
+                                                                </span>
+                                                                {(order.dueDate) && (
+                                                                    <>
+                                                                      {expandedOrderId !== null && <span className="w-1 h-1 bg-slate-300 dark:bg-slate-600 rounded-full flex-shrink-0"></span>}
+                                                                      <span className={`flex items-center gap-1 flex-shrink-0 ${new Date(order.dueDate) < new Date() && type === 'OPEN' ? 'text-red-500 font-semibold' : ''}`}>
+                                                                        {expandedOrderId === null && <span className="font-bold text-[10px] uppercase tracking-widest text-slate-400 w-20">{type === 'OPEN' ? 'Levantar:' : 'Data Prev.:'}</span>}
+                                                                        {expandedOrderId !== null && type === 'OPEN' ? 'Levantar: ' : ''}{new Date(order.dueDate).toLocaleDateString()}
+                                                                      </span>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                       )}
                                                    </div>
                                                </div>
                                                <div className="flex items-center gap-3 ml-14 md:ml-0">
+                                                   {!isOtherExpanded && (<>
                                                    {hasPendingPhotos && (
                                                        <span className="px-3 py-1 bg-red-50/50 dark:bg-red-900/10 text-red-700 dark:text-red-400 text-xs font-bold rounded-full flex items-center gap-1 border border-red-100 dark:border-red-800 animate-pulse">
                                                            <Camera className="w-3 h-3" /> Imagens por Corrigir
@@ -2720,6 +2734,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                            <Activity className="w-3 h-3 animate-pulse" /> Em Separação
                                                        </span>
                                                    )}
+                                                   </>)}
                                                    {isExpanded ? <ChevronUp className="w-5 h-5 text-slate-400"/> : <ChevronDown className="w-5 h-5 text-slate-400"/>}
                                                </div>
                                            </div>
@@ -2733,20 +2748,8 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                        {order.address && <div className="flex items-center gap-2"><span className="font-bold text-slate-700 dark:text-slate-300">Morada:</span><span>{order.address}</span></div>}
                                                    </div>
                                                )}
-                                               <div className="bg-transparent rounded-none border border-slate-200 dark:border-slate-700 overflow-hidden mb-4">
-                                                   <div className="">
-                                                        <table className="w-full text-sm text-left block md:table">
-                                                            <thead className="bg-slate-100 dark:bg-slate-900 font-semibold text-slate-600 dark:text-slate-300 hidden md:table-header-group">
-                                                                <tr>
-                                                                    <th className="p-3 whitespace-nowrap">Material</th>
-                                                                    <th className="p-3">Descrição</th>
-                                                                    <th className="p-3 text-right whitespace-nowrap">Qtd</th>
-                                                                    {type === 'OPEN' && !isCompleted && <th className="p-3 text-right whitespace-nowrap">Stock</th>}
-                                                                    {(type === 'FINISHED' || isGhost) && <th className="p-3 text-right whitespace-nowrap">Processado</th>}
-                                                                    {(type === 'FINISHED' || isGhost) && <th className="p-3 whitespace-nowrap">Status</th>}
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300 block md:table-row-group">
+                                               <div className="border-t border-slate-200 dark:border-slate-700 mt-2 mb-4">
+                                                    <div className="flex flex-col">
                                                                 {order.items.map((item, idx) => {
                                                                     const picked = (type === 'FINISHED' || isGhost) ? getTotalPickedQuantity(order, orders, item.sku) : 0;
                                                                     const directPicked = (type === 'FINISHED' || isGhost) ? getDirectPickedQuantity(order, item.sku) : 0;
@@ -2756,88 +2759,96 @@ const OrderManager: React.FC<OrderManagerProps> = ({ orders, allActiveOrders, st
                                                                     const isAllocOK = allocated >= item.quantity;
 
                                                                     return (
-                                                                        <tr key={idx} className="block md:table-row p-4 md:p-0">
-                                                                            <td className="p-2 md:p-3 font-mono text-xs md:whitespace-nowrap block md:table-cell">
-                                                                                <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Material:</span>
-                                                                                {item.sku}
-                                                                            </td>
-                                                                            <td className="p-2 md:p-3 flex md:table-cell flex-wrap items-center gap-2 block md:table-cell">
-                                                                                <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px] w-full mb-1">Descrição:</span>
-                                                                                {item.description}
-                                                                                {item.originalDescription && item.originalDescription !== item.description && (
-                                                                                    <div className="group relative flex items-center">
-                                                                                        <Info className="w-3.5 h-3.5 text-blue-500 hover:text-blue-700 cursor-pointer" />
-                                                                                        <div className="absolute left-1/2 -top-2 transform -translate-y-full -translate-x-1/2 w-max max-w-xs bg-slate-800 text-white text-xs rounded-none shadow-none p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50">
-                                                                                            <span className="block font-bold mb-1 text-slate-300">Sugerido Originalmente:</span>
-                                                                                            {item.originalDescription}
-                                                                                            <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
-                                                                                        </div>
-                                                                                    </div>
-                                                                                )}
-                                                                                {item.isCustom && <span className="ml-2 text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 rounded-none">Novo</span>}
-                                                                                {item.unverifiedMatch && (
-                                                                                    <div className="flex items-center gap-1 ml-2">
-                                                                                        <span className="text-[10px] bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-1 py-0.5 rounded-none whitespace-nowrap">Por validar</span>
-                                                                                        <button onClick={(e) => { e.stopPropagation(); handleConfirmAutoMatch(order, idx); }} className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold px-2 py-0.5 rounded-none hover:bg-green-200 dark:hover:bg-green-900/50">Confirmar</button>
-                                                                                        <button onClick={(e) => { e.stopPropagation(); setRejectMatchData({order, itemIdx: idx}); setRejectMatchModalOpen(true); }} className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold px-2 py-0.5 rounded-none hover:bg-red-200 dark:hover:bg-red-900/50">Rejeitar/Mudar</button>
-                                                                                    </div>
-                                                                                )}
-                                                                                {item.image && (
-                                                                                    <button 
-                                                                                        onClick={() => setViewImage(item.image!)}
-                                                                                        className="text-slate-400 hover:text-brand-600 md:ml-1"
-                                                                                    >
-                                                                                        <ImageIcon className="w-4 h-4" />
-                                                                                    </button>
-                                                                                )}
-                                                                            </td>
-                                                                            <td className="p-2 md:p-3 text-left md:text-right font-bold md:whitespace-nowrap block md:table-cell">
-                                                                                <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Qtd:</span>
-                                                                                {item.quantity}
-                                                                            </td>
+                                                                        <div key={idx} className="relative p-3 border-b border-slate-200 dark:border-slate-700 flex flex-col md:flex-row gap-2 md:gap-4 md:items-center justify-between group hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                                                                             
-                                                                            {/* FIFO Allocation Column for Open Orders */}
-                                                                            {type === 'OPEN' && !isCompleted && (
-                                                                                <td className="p-2 md:p-3 text-left md:text-right font-mono text-xs md:whitespace-nowrap block md:table-cell">
-                                                                                    <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Stock:</span>
-                                                                                    {item.isCustom ? (
-                                                                                        <span className="text-slate-400">N/A</span>
-                                                                                    ) : (
-                                                                                        <span className={`${isAllocOK ? 'text-green-600 font-bold' : 'text-red-500 font-bold'}`}>
-                                                                                            {allocated} / {item.quantity}
-                                                                                        </span>
-                                                                                    )}
-                                                                                </td>
+                                                                            {(type === 'FINISHED' || isGhost) && (
+                                                                                <div 
+                                                                                    className="absolute top-3 right-3 cursor-pointer"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        if (isFullyPicked) toast.info("Completamente separado", 1500);
+                                                                                        else if (picked === 0) toast.info("Nenhuma unidade separada", 1500);
+                                                                                        else toast.info("Separado parcialmente", 1500);
+                                                                                    }}
+                                                                                >
+                                                                                    {isFullyPicked ? <span className="text-green-600 dark:text-green-400 inline-flex flex-col items-center gap-0.5 mt-2 md:mt-0 text-[10px] font-bold"><Check className="w-4 h-4"/> OK</span> : 
+                                                                                    (picked === 0 ? <span className="text-red-500 dark:text-red-400 inline-flex flex-col items-center gap-0.5 mt-2 md:mt-0 text-[10px] font-bold"><X className="w-4 h-4"/> <span className="hidden md:inline">FALTA</span></span> : 
+                                                                                    <span className="text-amber-600 dark:text-amber-400 inline-flex flex-col items-center gap-0.5 mt-2 md:mt-0 text-[10px] font-bold"><AlertTriangle className="w-4 h-4"/> PARCIAL</span>)}
+                                                                                </div>
                                                                             )}
 
-                                                                            {(type === 'FINISHED' || isGhost) && (
-                                                                                <>
-                                                                                <td className="p-2 md:p-3 text-left md:text-right font-bold md:whitespace-nowrap block md:table-cell">
-                                                                                    <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Processado:</span>
-                                                                                    {directPicked}
-                                                                                    {pickedInChildren > 0 && (
-                                                                                        <div className="group relative inline-flex items-center ml-1">
-                                                                                            <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-pointer" />
-                                                                                            <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 w-[160px] bg-slate-800 text-white text-[10px] rounded-none shadow-none p-2 opacity-0 group-hover:opacity-100 pointer-events-none z-50 text-center font-normal whitespace-normal transition-opacity duration-200">
-                                                                                                Restantes {pickedInChildren} un. processadas numa reabertura.
-                                                                                                <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-800"></div>
-                                                                                            </div>
+                                                                            <div className="flex-1 pr-12 md:pr-0 min-w-0">
+                                                                                <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                                                    <div className="font-mono text-sm font-bold text-slate-800 dark:text-slate-100 px-1 py-0.5 bg-slate-200 dark:bg-slate-700 rounded-sm inline-block">{item.sku}</div>
+                                                                                    {item.isCustom && <span className="text-[10px] bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-1 py-0.5 font-bold uppercase tracking-widest">Novo</span>}
+                                                                                    
+                                                                                    {item.unverifiedMatch && (
+                                                                                        <div className="flex items-center gap-1 z-10 w-full md:w-auto mt-1 md:mt-0">
+                                                                                            <span className="text-[10px] text-orange-600 uppercase tracking-widest font-bold px-1 hidden md:inline">Por validar:</span>
+                                                                                            <button onClick={(e) => { e.stopPropagation(); handleConfirmAutoMatch(order, idx); }} className="text-[10px] bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-bold px-3 py-1 hover:bg-green-200 dark:hover:bg-green-900/50 uppercase tracking-widest transition-colors rounded-sm flex-1 md:flex-none">Confirmar</button>
+                                                                                            <button onClick={(e) => { e.stopPropagation(); setRejectMatchData({order, itemIdx: idx}); setRejectMatchModalOpen(true); }} className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-bold px-3 py-1 hover:bg-red-200 dark:hover:bg-red-900/50 uppercase tracking-widest transition-colors rounded-sm flex-1 md:flex-none">Rejeitar</button>
                                                                                         </div>
                                                                                     )}
-                                                                                </td>
-                                                                                <td className="p-2 md:p-3 md:whitespace-nowrap block md:table-cell">
-                                                                                    <span className="md:hidden font-bold mr-2 text-slate-500 uppercase text-[10px]">Status:</span>
-                                                                                    {isFullyPicked ? <span className="text-green-600 dark:text-green-400 inline-flex items-center gap-1 text-xs font-bold"><Check className="w-3 h-3"/> OK</span> : (picked === 0 ? <span className="text-red-500 dark:text-red-400 inline-flex items-center gap-1 text-xs font-bold"><X className="w-3 h-3"/> Sem picking</span> : <span className="text-amber-600 dark:text-amber-400 inline-flex items-center gap-1 text-xs font-bold"><AlertTriangle className="w-3 h-3"/> Parcial</span>)}
-                                                                                </td>
-                                                                                </>
-                                                                            )}
-                                                                        </tr>
+                                                                                </div>
+                                                                                <div className="text-sm font-medium text-slate-600 dark:text-slate-300 leading-tight flex items-start gap-2">
+                                                                                     <span className="truncate flex-1" title={item.description}>{item.description}</span>
+                                                                                     {item.originalDescription && item.originalDescription !== item.description && (
+                                                                                         <div className="group/info relative flex items-center flex-shrink-0 cursor-help">
+                                                                                             <Info className="w-4 h-4 text-brand-500 hover:text-brand-600" />
+                                                                                             <div className="absolute left-1/2 -top-2 transform -translate-y-full -translate-x-1/2 w-max max-w-[200px] md:max-w-xs bg-slate-900 text-white text-xs p-3 opacity-0 group-hover/info:opacity-100 pointer-events-none z-50 shadow-xl whitespace-normal break-words text-center">
+                                                                                                 <span className="block font-bold mb-1 border-b border-slate-700 pb-1 text-[10px] uppercase tracking-widest text-slate-400">Origem:</span>
+                                                                                                 {item.originalDescription}
+                                                                                                 <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                                                                                             </div>
+                                                                                         </div>
+                                                                                     )}
+                                                                                     {item.image && (
+                                                                                         <button onClick={(e) => { e.stopPropagation(); setViewImage(item.image!); }} className="text-slate-400 hover:text-brand-600 flex-shrink-0 transition-colors">
+                                                                                             <ImageIcon className="w-4 h-4" />
+                                                                                         </button>
+                                                                                     )}
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <div className="flex items-center gap-6 md:gap-8 mt-2 md:mt-0 flex-shrink-0">
+                                                                                <div className="flex flex-col items-center">
+                                                                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Pedida</span>
+                                                                                    <span className="font-bold text-slate-800 dark:text-slate-100 text-sm md:text-base bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-0.5 rounded-sm shadow-sm">{item.quantity}</span>
+                                                                                </div>
+                                                                                
+                                                                                {(type === 'FINISHED' || isGhost) && (
+                                                                                    <div className="flex flex-col items-center">
+                                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Processada</span>
+                                                                                        <span className="font-bold text-slate-800 dark:text-slate-100 text-sm md:text-base flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-0.5 rounded-sm shadow-sm">
+                                                                                            {directPicked} 
+                                                                                            {pickedInChildren > 0 && (
+                                                                                                <div className="group/badge relative inline-flex items-center ml-1">
+                                                                                                    <AlertCircle className="w-3.5 h-3.5 text-amber-500 cursor-pointer" />
+                                                                                                    <div className="absolute left-1/2 bottom-full mb-2 transform -translate-x-1/2 w-[160px] bg-slate-900 text-white text-[10px] shadow-xl p-3 opacity-0 group-hover/badge:opacity-100 pointer-events-none z-50 text-center font-normal whitespace-normal transition-opacity duration-200 uppercase tracking-wide leading-tight">
+                                                                                                        + {pickedInChildren} processadas em reaberturas.
+                                                                                                        <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            )}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+
+                                                                                {type === 'OPEN' && !isCompleted && (
+                                                                                    <div className="flex flex-col items-center">
+                                                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-0.5">Stock</span>
+                                                                                        <span className={`font-bold text-sm md:text-base bg-white dark:bg-slate-900 border px-3 py-0.5 rounded-sm shadow-sm ${item.isCustom ? 'text-slate-400 border-slate-200 dark:border-slate-800' : (isAllocOK ? 'text-green-600 border-green-200 dark:border-green-900/50' : 'text-red-500 border-red-200 dark:border-red-900/50')}`}>
+                                                                                            {item.isCustom ? 'N/A' : `${allocated} / ${item.quantity}`}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+
+                                                                        </div>
                                                                     );
                                                                 })}
-                                                            </tbody>
-                                                        </table>
-                                                   </div>
-                                               </div>
+                                                    </div>
+                                                </div>
                                                {order.changeLog && order.changeLog.length > 0 && (
                                                    <details className="mb-4 group border border-slate-200 dark:border-slate-700 rounded-none bg-slate-50 dark:bg-slate-800/50">
                                                        <summary className="text-xs font-bold text-slate-600 dark:text-slate-300 p-3 cursor-pointer flex items-center gap-2 select-none hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
