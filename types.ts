@@ -116,7 +116,7 @@ export interface Order {
   pep?: string;
   address?: string;
   creator: string;
-  status: 'OPEN' | 'IN_PROCESS' | 'IN PROCESS' | 'COMPLETED' | 'PENDING' | 'PENDING_APPROVAL';
+  status: 'OPEN' | 'IN_PROCESS' | 'IN PROCESS' | 'COMPLETED' | 'PENDING' | 'PENDING_APPROVAL' | 'PENDING_PHOTOS';
   dateCreated: string;
   dueDate: string;
   items: OrderLineItem[];
