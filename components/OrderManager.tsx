@@ -2918,9 +2918,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                               </div>
                             ) : (
                               <div>
-                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
-                                  Código do Material
-                                </label>
+                                <div className="flex justify-between items-end mb-1">
+                                  <label className="block text-xs font-bold uppercase tracking-widest text-slate-500">
+                                    Código do Material
+                                  </label>
+                                  {row.sku && row.sku !== "FOTO_PENDENTE" && (
+                                    <span className={`text-xs font-bold uppercase ${stockQty && stockQty > 0 ? "text-brand-600 dark:text-brand-400" : "text-amber-500"}`}>
+                                      Stock Livre: {stockQty || 0}
+                                    </span>
+                                  )}
+                                </div>
                                 <div className="relative">
                                   <input
                                     type="text"
@@ -2934,7 +2941,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                                       )
                                     }
                                     className="w-full py-2 bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 outline-none transition-colors dark:text-white focus:border-brand-500 focus:ring-0 rounded-none uppercase"
-                                    placeholder="SKU OU COMPONENTE"
+                                    placeholder="MATERIAL OU DESCRIÇÃO"
                                   />
                                   <datalist id={`suggestions${idx}`}>
                                     {suggestions.map((s) => (
