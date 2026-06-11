@@ -388,7 +388,7 @@ const UsersManager: React.FC = () => {
                             <input 
                                 type="text" 
                                 value={inviteFirstName}
-                                onChange={(e) => setInviteFirstName(e.target.value)}
+                                onChange={(e) => setInviteFirstName(e.target.value.toUpperCase())}
                                 className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 placeholder="Primeiro Nome"
                             />
@@ -398,7 +398,7 @@ const UsersManager: React.FC = () => {
                             <input 
                                 type="text" 
                                 value={inviteLastName}
-                                onChange={(e) => setInviteLastName(e.target.value)}
+                                onChange={(e) => setInviteLastName(e.target.value.toUpperCase())}
                                 className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-purple-500 outline-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white"
                                 placeholder="Último Nome"
                             />
@@ -417,7 +417,7 @@ const UsersManager: React.FC = () => {
                              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Função Permitida</label>
                              <select 
                                 value={inviteRole}
-                                onChange={(e) => setInviteRole(e.target.value)}
+                                onChange={(e) => setInviteRole(e.target.value.toUpperCase())}
                                 className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                              >
                                  {availableRoles.map(role => (
@@ -432,7 +432,7 @@ const UsersManager: React.FC = () => {
                                 <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Empresa</label>
                                 <select 
                                     value={inviteCompanyId}
-                                    onChange={(e) => setInviteCompanyId(e.target.value)}
+                                    onChange={(e) => setInviteCompanyId(e.target.value.toUpperCase())}
                                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                                 >
                                     <option value="">Selecione a Empresa...</option>
@@ -446,7 +446,7 @@ const UsersManager: React.FC = () => {
                             <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Chefia / Supervisor (Opcional)</label>
                             <select 
                                 value={inviteSupervisorId}
-                                onChange={(e) => setInviteSupervisorId(e.target.value)}
+                                onChange={(e) => setInviteSupervisorId(e.target.value.toUpperCase())}
                                 className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
                             >
                                 <option value="">-- Sem Chefia --</option>
@@ -559,7 +559,7 @@ const UsersManager: React.FC = () => {
                                                             <div className="relative group w-full max-w-[150px]">
                                                                 <select
                                                                     value={user.companyId || ''}
-                                                                    onChange={(e) => handleChangeCompany(user, e.target.value)}
+                                                                    onChange={(e) => handleChangeCompany(user, e.target.value.toUpperCase())}
                                                                     disabled={isProcessing}
                                                                     className="w-full appearance-none bg-transparent border border-slate-200 dark:border-slate-600 py-1.5 pl-2 pr-6 cursor-pointer focus:outline-none focus:ring-1 focus:ring-brand-500 rounded-none text-slate-600 dark:text-slate-300 text-xs truncate"
                                                                 >
@@ -577,7 +577,7 @@ const UsersManager: React.FC = () => {
                                                     <td className="p-4">
                                                         <select
                                                             value={user.role}
-                                                            onChange={(e) => handleChangeRole(user, e.target.value)}
+                                                            onChange={(e) => handleChangeRole(user, e.target.value.toUpperCase())}
                                                             disabled={isProcessing}
                                                             className={`appearance-none text-xs font-bold px-2 py-1.5 rounded-none border-none focus:ring-1 focus:ring-purple-300 cursor-pointer outline-none w-full max-w-[120px] truncate ${
                                                                 user.role === UserRole.ADMIN ? 'text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/30' :
@@ -598,7 +598,7 @@ const UsersManager: React.FC = () => {
                                                         <div className="relative w-full max-w-[180px]">
                                                             <select
                                                                 value={user.supervisorId || ''}
-                                                                onChange={(e) => handleChangeSupervisor(user, e.target.value)}
+                                                                onChange={(e) => handleChangeSupervisor(user, e.target.value.toUpperCase())}
                                                                 disabled={isProcessing}
                                                                 className={`w-full text-xs py-1.5 pl-2 pr-6 border rounded-none bg-transparent focus:ring-1 focus:ring-purple-300 outline-none appearance-none truncate ${
                                                                     !user.supervisorId 

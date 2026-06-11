@@ -824,7 +824,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
   }, [orders]);
 
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
+    const val = e.target.value.toUpperCase();
     if (!val) {
       setDueDate("");
       return;
@@ -884,7 +884,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
   }, [pepPrefix]);
 
   const handlePepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value;
+    let val = e.target.value.toUpperCase();
     let digits = val.replace(/[^0-9]/g, "");
 
     // FORCE PREFIX Logic
@@ -1956,7 +1956,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
             <select
               value={targetCompanyId}
               onChange={(e) => {
-                setTargetCompanyId(e.target.value);
+                setTargetCompanyId(e.target.value.toUpperCase());
                 if (formErrors.company)
                   setFormErrors({ ...formErrors, company: false });
               }}
@@ -2460,7 +2460,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        material: e.target.value,
+                        material: e.target.value.toUpperCase(),
                       })
                     }
                     placeholder="Ex: Parafuso, ACC..."
@@ -2477,7 +2477,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        user: e.target.value,
+                        user: e.target.value.toUpperCase(),
                       })
                     }
                     placeholder="Nome do criador..."
@@ -2494,7 +2494,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        pep: e.target.value,
+                        pep: e.target.value.toUpperCase(),
                       })
                     }
                     placeholder="Nº PEP..."
@@ -2512,7 +2512,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        datePlacedStart: e.target.value,
+                        datePlacedStart: e.target.value.toUpperCase(),
                       })
                     }
                     className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
@@ -2528,7 +2528,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        datePlacedEnd: e.target.value,
+                        datePlacedEnd: e.target.value.toUpperCase(),
                       })
                     }
                     className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
@@ -2544,7 +2544,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        dateDueStart: e.target.value,
+                        dateDueStart: e.target.value.toUpperCase(),
                       })
                     }
                     className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
@@ -2560,7 +2560,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     onChange={(e) =>
                       setAdvancedFilters({
                         ...advancedFilters,
-                        dateDueEnd: e.target.value,
+                        dateDueEnd: e.target.value.toUpperCase(),
                       })
                     }
                     className="w-full p-2 border rounded-none text-sm dark:bg-slate-900 dark:border-slate-600 dark:text-white dark:[color-scheme:dark]"
@@ -2636,7 +2636,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                     <select
                       value={targetCompanyId}
                       onChange={(e) => {
-                        setTargetCompanyId(e.target.value);
+                        setTargetCompanyId(e.target.value.toUpperCase());
                         if (formErrors.company)
                           setFormErrors({ ...formErrors, company: false });
                       }}
@@ -2664,7 +2664,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                       value={orderTitle}
                       maxLength={50}
                       onChange={(e) => {
-                        setOrderTitle(e.target.value);
+                        setOrderTitle(e.target.value.toUpperCase());
                         if (formErrors.title)
                           setFormErrors({ ...formErrors, title: false });
                       }}
@@ -2740,7 +2740,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                       <input
                         type="text"
                         value={addressStreet}
-                        onChange={(e) => setAddressStreet(e.target.value)}
+                        onChange={(e) => setAddressStreet(e.target.value.toUpperCase())}
                         placeholder="Rua, Nº, Andar..."
                         className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
                       />
@@ -2766,7 +2766,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                         <input
                           type="text"
                           value={addressCity}
-                          onChange={(e) => setAddressCity(e.target.value)}
+                          onChange={(e) => setAddressCity(e.target.value.toUpperCase())}
                           placeholder="Cidade / Vila"
                           className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
                         />

@@ -231,7 +231,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
   };
 
   const handlePepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const formatted = formatPEP(e.target.value);
+      const formatted = formatPEP(e.target.value.toUpperCase());
       setPep(formatted);
   };
 
@@ -894,7 +894,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                       </label>
                       <select 
                           value={targetCompanyId}
-                          onChange={(e) => setTargetCompanyId(e.target.value)}
+                          onChange={(e) => setTargetCompanyId(e.target.value.toUpperCase())}
                           className={`w-full py-2 bg-transparent border-0 border-b text-sm outline-none rounded-none focus:ring-0 dark:bg-slate-900 dark:text-white ${!targetCompanyId ? 'border-red-400 bg-red-50 dark:bg-red-900/10' : 'border-purple-200 dark:border-purple-700'}`}
                       >
                           <option value="">Selecione a empresa...</option>
@@ -914,7 +914,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                             <input 
                                 type="text" 
                                 value={supplierSearch} 
-                                onChange={e => setSupplierSearch(e.target.value)} 
+                                onChange={e => setSupplierSearch(e.target.value.toUpperCase())} 
                                 placeholder="Procurar fornecedor..."
                                 className="w-full p-2 border border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800 rounded-none dark:text-white"
                             />
@@ -1005,7 +1005,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             <input 
                                                 type="text" 
                                                 value={row.description} 
-                                                onChange={e => updateRow(idx, 'description', e.target.value)}
+                                                onChange={e => updateRow(idx, 'description', e.target.value.toUpperCase())}
                                                 className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${isDescMissing || isUnverified ? 'border-red-400 ring-1 ring-red-200' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                                             />
                                             {row.showSuggestions && matches.length > 0 && (
@@ -1038,14 +1038,14 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             <input 
                                                 type="number" 
                                                 value={row.quantity} 
-                                                onChange={e => updateRow(idx, 'quantity', e.target.value)} 
+                                                onChange={e => updateRow(idx, 'quantity', e.target.value.toUpperCase())} 
                                                 className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${isQtyInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                                             />
                                         </div>
 
                                         <div className="md:col-span-2">
                                             <label className="block text-[10px] font-bold uppercase text-slate-400">Unid</label>
-                                            <select value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value)} className="w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white dark:border-slate-600">
+                                            <select value={row.unit} onChange={e => updateRow(idx, 'unit', e.target.value.toUpperCase())} className="w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white dark:border-slate-600">
                                                 {unitOptions.map(u => <option key={u.value} value={u.value}>{u.value}</option>)}
                                             </select>
                                         </div>
@@ -1055,7 +1055,7 @@ const PurchaseOrderManager: React.FC<PurchaseOrderManagerProps> = ({ masterList,
                                             <input 
                                                 type="number" 
                                                 value={row.unitPrice} 
-                                                onChange={e => updateRow(idx, 'unitPrice', e.target.value)} 
+                                                onChange={e => updateRow(idx, 'unitPrice', e.target.value.toUpperCase())} 
                                                 className={`w-full p-2 border rounded-none dark:bg-slate-900 dark:text-white ${isPriceInvalid ? 'border-red-400 bg-red-50 dark:bg-red-900/20' : 'border-slate-300 dark:border-slate-600 focus:border-brand-500 focus:ring-0'}`}
                                             />
                                         </div>

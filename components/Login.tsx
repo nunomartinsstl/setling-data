@@ -381,7 +381,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, toggleTheme, isDarkMode }) => {
                         <input
                             type="text"
                             value={adminCode}
-                            onChange={(e) => setAdminCode(e.target.value)}
+                            onChange={(e) => setAdminCode(e.target.value.toUpperCase())}
                             className={`w-full px-3 py-2 border rounded-none focus:ring-2 outline-none text-sm dark:bg-slate-900 dark:text-white ${touched && !adminCode ? 'border-red-400 bg-red-50 focus:ring-red-200 dark:bg-red-900/20' : 'border-slate-300 bg-white dark:bg-slate-900 focus:ring-brand-500 dark:border-slate-700'}`}
                             placeholder="Insira o código de 6 dígitos"
                         />

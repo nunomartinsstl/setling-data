@@ -440,7 +440,7 @@ const Settings: React.FC = () => {
                 <input 
                     type="text"
                     value={newRoleName}
-                    onChange={(e) => setNewRoleName(e.target.value)}
+                    onChange={(e) => setNewRoleName(e.target.value.toUpperCase())}
                     placeholder="Nome da Função (Ex: Supervisor)"
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white uppercase"
                     onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addRole())}
@@ -451,7 +451,7 @@ const Settings: React.FC = () => {
                 <input 
                     type="number"
                     value={newRoleHierarchy}
-                    onChange={(e) => setNewRoleHierarchy(e.target.value)}
+                    onChange={(e) => setNewRoleHierarchy(e.target.value.toUpperCase())}
                     min="1"
                     max="99"
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
@@ -511,7 +511,7 @@ const Settings: React.FC = () => {
                                     type="number"
                                     value={roleHierarchy[role] || 5}
                                     onChange={(e) => {
-                                        const val = parseInt(e.target.value);
+                                        const val = parseInt(e.target.value.toUpperCase());
                                         setRoleHierarchy(prev => ({ ...prev, [role]: val }));
                                     }}
                                     min="1"
@@ -582,7 +582,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text" 
                 value={adminAccessCode}
-                onChange={(e) => setAdminAccessCode(e.target.value)}
+                onChange={(e) => setAdminAccessCode(e.target.value.toUpperCase())}
                 placeholder="Ex: SenhaForte123 (Deixe em branco para usar o padrão)"
                 className="w-full p-2 border border-purple-200 dark:border-purple-800 rounded-none bg-purple-50 dark:bg-purple-900/20 text-purple-900 dark:text-purple-200 focus:ring-2 focus:ring-purple-500 outline-none font-mono"
             />
@@ -603,7 +603,7 @@ const Settings: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-500 mb-1">Condição</label>
                 <select 
                     value={newRuleOperator}
-                    onChange={(e) => setNewRuleOperator(e.target.value as 'LTE' | 'GTE')}
+                    onChange={(e) => setNewRuleOperator(e.target.value.toUpperCase() as 'LTE' | 'GTE')}
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-white dark:bg-slate-900 focus:ring-2 focus:ring-brand-500 outline-none text-sm"
                 >
                     <option value="LTE">Até (Max)</option>
@@ -616,7 +616,7 @@ const Settings: React.FC = () => {
                 <input 
                     type="number"
                     value={newRuleAmount}
-                    onChange={(e) => setNewRuleAmount(e.target.value)}
+                    onChange={(e) => setNewRuleAmount(e.target.value.toUpperCase())}
                     placeholder="0"
                     className="w-full pl-6 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 />
@@ -625,7 +625,7 @@ const Settings: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-500 mb-1">Função Aprovadora</label>
                 <select 
                     value={newRuleRole}
-                    onChange={(e) => setNewRuleRole(e.target.value)}
+                    onChange={(e) => setNewRuleRole(e.target.value.toUpperCase())}
                     className="w-full p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 >
                     <option value="">Selecione...</option>
@@ -707,7 +707,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text"
                 value={newCatCode}
-                onChange={(e) => setNewCatCode(e.target.value)}
+                onChange={(e) => setNewCatCode(e.target.value.toUpperCase())}
                 placeholder="Cód (Ex: TUB)"
                 maxLength={3}
                 className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
@@ -715,7 +715,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text"
                 value={newCatName}
-                onChange={(e) => setNewCatName(e.target.value)}
+                onChange={(e) => setNewCatName(e.target.value.toUpperCase())}
                 placeholder="Nome da Categoria (Ex: TUBAGEM)"
                 maxLength={30}
                 className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
@@ -777,7 +777,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text"
                 value={newUnitAbbr}
-                onChange={(e) => setNewUnitAbbr(e.target.value)}
+                onChange={(e) => setNewUnitAbbr(e.target.value.toUpperCase())}
                 placeholder="Abrev (Ex: MT)"
                 maxLength={5}
                 className="w-full md:w-32 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm uppercase dark:bg-slate-900 dark:text-white"
@@ -785,7 +785,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text"
                 value={newUnitDesc}
-                onChange={(e) => setNewUnitDesc(e.target.value)}
+                onChange={(e) => setNewUnitDesc(e.target.value.toUpperCase())}
                 placeholder="Descrição Curta (Ex: Metro)"
                 maxLength={30}
                 className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
@@ -880,7 +880,7 @@ const Settings: React.FC = () => {
                 <div key={idx} className="flex items-center gap-2">
                         <select
                         value={recipient.type}
-                        onChange={(e) => updateRecipient(idx, 'type', e.target.value)}
+                        onChange={(e) => updateRecipient(idx, 'type', e.target.value.toUpperCase())}
                         className="p-2 border border-slate-300 dark:border-slate-600 rounded-none bg-slate-50 dark:bg-slate-900 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-brand-500 dark:text-white"
                         >
                             <option value="TO">Para</option>
@@ -889,7 +889,7 @@ const Settings: React.FC = () => {
                         <input 
                         type="email"
                         value={recipient.email}
-                        onChange={(e) => updateRecipient(idx, 'email', e.target.value)}
+                        onChange={(e) => updateRecipient(idx, 'email', e.target.value.toUpperCase())}
                         placeholder="exemplo@empresa.com"
                         className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                         required
@@ -927,7 +927,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text"
                 value={newCompany}
-                onChange={(e) => setNewCompany(e.target.value)}
+                onChange={(e) => setNewCompany(e.target.value.toUpperCase())}
                 placeholder="Nome da nova empresa..."
                 className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCompany())}
@@ -973,7 +973,7 @@ const Settings: React.FC = () => {
             <input 
                 type="text"
                 value={newSynonymsInput}
-                onChange={(e) => setNewSynonymsInput(e.target.value)}
+                onChange={(e) => setNewSynonymsInput(e.target.value.toUpperCase())}
                 placeholder="Palavras separadas por vírgula (ex: Curva, Joelho, Cotovelo)"
                 className="flex-1 p-2 border border-slate-300 dark:border-slate-600 rounded-none focus:ring-2 focus:ring-brand-500 outline-none text-sm dark:bg-slate-900 dark:text-white"
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addSynonymGroup())}

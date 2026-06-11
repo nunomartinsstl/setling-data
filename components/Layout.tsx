@@ -116,7 +116,7 @@ const Layout: React.FC<LayoutProps> = ({ user, currentView, onNavigate, onLogout
 
       {/* Sidebar */}
       <aside className={`
-        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-transparent border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out flex flex-col
+        fixed lg:static inset-y-0 left-0 z-50 w-64 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 transform transition-transform duration-200 ease-in-out flex flex-col
         ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Header - Fixed */}
