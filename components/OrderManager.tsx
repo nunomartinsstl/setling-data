@@ -1076,6 +1076,16 @@ const OrderManager: React.FC<OrderManagerProps> = ({
     setManualRows(newRows);
   };
 
+  const updateManualRow = (idx: number, field: string, value: any) => {
+    const newRows = [...manualRows];
+    newRows[idx] = { ...newRows[idx], [field]: value };
+    // Intercept material format auto upper casting where appropriate when not image or boolean types
+    if (field === "sku" && typeof value === "string") {
+      newRows[idx].sku = value.toUpperCase();
+    }
+    setManualRows(newRows);
+  };
+
   const handleCheckSimilarity = (idx: number) => {
     const row = manualRows[idx];
     const query = row.isCustom ? row.customDesc : row.sku;
@@ -2270,7 +2280,7 @@ const OrderManager: React.FC<OrderManagerProps> = ({
       {/* Similarity Search Modal Omitted for brevity (same as previous) */}
       {similarityModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-transparent rounded-none shadow-none w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-900 rounded-none shadow-none w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden animate-fade-in border border-slate-200 dark:border-slate-700">
             {similarityStep === "LIST" && (
               <>
                 <div className="p-4 border-b dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
@@ -2740,7 +2750,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                       <input
                         type="text"
                         value={addressStreet}
-                        onChange={(e) => setAddressStreet(e.target.value.toUpperCase())}
+                        onChange={(e) =>
+                          setAddressStreet(e.target.value.toUpperCase())
+                        }
                         placeholder="Rua, Nº, Andar..."
                         className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
                       />
@@ -2766,7 +2778,9 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                         <input
                           type="text"
                           value={addressCity}
-                          onChange={(e) => setAddressCity(e.target.value.toUpperCase())}
+                          onChange={(e) =>
+                            setAddressCity(e.target.value.toUpperCase())
+                          }
                           placeholder="Cidade / Vila"
                           className="w-full p-3 border border-slate-300 dark:border-slate-600 rounded-none shadow-none outline-none dark:bg-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500"
                         />
@@ -2851,6 +2865,248 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                             )}
                           </div>
                         </div>
+
+                        {/* Expanded Form */}
+                        {isExpanded && (
+                          <div className="p-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={row.isCustom}
+                                  onChange={(e) =>
+                                    updateManualRow(
+                                      idx,
+                                      "isCustom",
+                                      e.target.checked,
+                                    )
+                                  }
+                                  className="w-4 h-4 text-brand-600 focus:ring-brand-500 rounded border-slate-300 dark:border-slate-600 bg-transparent"
+                                />
+                                <span className="text-sm font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">
+                                  Criar Novo Material
+                                </span>
+                              </label>
+                            </div>
+
+                            {row.isCustom ? (
+                              <div>
+                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                  Descrição do Material
+                                </label>
+                                <div className="flex gap-2">
+                                  <input
+                                    type="text"
+                                    value={row.customDesc}
+                                    onChange={(e) =>
+                                      updateManualRow(
+                                        idx,
+                                        "customDesc",
+                                        e.target.value.toUpperCase(),
+                                      )
+                                    }
+                                    className="w-full py-2 bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 outline-none transition-colors dark:text-white focus:border-brand-500 focus:ring-0 rounded-none uppercase"
+                                    placeholder="DESCRIÇÃO DO MATERIAL"
+                                  />
+                                  <button
+                                    onClick={() => handleCheckSimilarity(idx)}
+                                    className="px-4 py-2 border border-brand-500 text-brand-600 dark:text-brand-400 text-sm font-bold uppercase tracking-widest hover:bg-brand-50 dark:hover:bg-brand-900/30 whitespace-nowrap"
+                                  >
+                                    Verificar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                  Código do Material
+                                </label>
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={row.sku}
+                                    list={`suggestions${idx}`}
+                                    onChange={(e) =>
+                                      updateManualRow(
+                                        idx,
+                                        "sku",
+                                        e.target.value.toUpperCase(),
+                                      )
+                                    }
+                                    className="w-full py-2 bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 outline-none transition-colors dark:text-white focus:border-brand-500 focus:ring-0 rounded-none uppercase"
+                                    placeholder="SKU OU COMPONENTE"
+                                  />
+                                  <datalist id={`suggestions${idx}`}>
+                                    {suggestions.map((s) => (
+                                      <option key={s.sku} value={s.sku}>
+                                        {s.desc}
+                                      </option>
+                                    ))}
+                                  </datalist>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                              <div>
+                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                  Quantidade
+                                </label>
+                                <div className="flex">
+                                  <input
+                                    type="number"
+                                    value={row.qty}
+                                    onChange={(e) =>
+                                      updateManualRow(
+                                        idx,
+                                        "qty",
+                                        e.target.value,
+                                      )
+                                    }
+                                    className="w-full py-2 bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 outline-none transition-colors dark:text-white focus:border-brand-500 focus:ring-0 rounded-none flex-1 font-mono"
+                                    placeholder="0.00"
+                                  />
+                                  {row.isCustom && (
+                                    <select
+                                      value={row.unit}
+                                      onChange={(e) =>
+                                        updateManualRow(
+                                          idx,
+                                          "unit",
+                                          e.target.value.toUpperCase(),
+                                        )
+                                      }
+                                      className="w-24 py-2 border-0 border-b border-slate-300 dark:border-slate-600 bg-transparent text-slate-700 dark:text-white focus:ring-0 outline-none rounded-none uppercase ml-2"
+                                    >
+                                      <option value="UN">UN</option>
+                                      <option value="KG">KG</option>
+                                      <option value="M">M</option>
+                                      <option value="L">L</option>
+                                      <option value="CX">CX</option>
+                                      <option value="ROLO">ROLO</option>
+                                    </select>
+                                  )}
+                                </div>
+                              </div>
+                              {row.isCustom && (
+                                <div>
+                                  <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                    Categoria
+                                  </label>
+                                  <select
+                                    value={row.category}
+                                    onChange={(e) =>
+                                      updateManualRow(
+                                        idx,
+                                        "category",
+                                        e.target.value.toUpperCase(),
+                                      )
+                                    }
+                                    className="w-full py-2 bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 outline-none transition-colors dark:text-white focus:border-brand-500 focus:ring-0 rounded-none uppercase"
+                                  >
+                                    <option value="">Selecione...</option>
+                                    {[
+                                      "ELETRICA",
+                                      "MECANICA",
+                                      "PNEUMATICA",
+                                      "HIDRAULICA",
+                                      "CIVIL",
+                                      "EPI",
+                                      "FERRAMENTA",
+                                      "MAQUINA",
+                                    ].map((c) => (
+                                      <option key={c} value={c}>
+                                        {c}
+                                      </option>
+                                    ))}
+                                    <option value="_OTHER_">OUTRO (A00)</option>
+                                  </select>
+                                </div>
+                              )}
+                            </div>
+
+                            {row.isCustom && row.category === "_OTHER_" && (
+                              <div>
+                                <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-1">
+                                  Nova Categoria Manual
+                                </label>
+                                <input
+                                  type="text"
+                                  value={row.customCategory}
+                                  onChange={(e) =>
+                                    updateManualRow(
+                                      idx,
+                                      "customCategory",
+                                      e.target.value.toUpperCase(),
+                                    )
+                                  }
+                                  className="w-full py-2 bg-transparent border-0 border-b border-slate-300 dark:border-slate-600 outline-none transition-colors dark:text-white focus:border-brand-500 focus:ring-0 rounded-none uppercase"
+                                  placeholder="ESPECIFIQUE A CATEGORIA"
+                                />
+                              </div>
+                            )}
+
+                            <div>
+                              <label className="block text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+                                Foto do Material
+                              </label>
+                              <div className="flex gap-4 items-center">
+                                <div className="relative border border-dashed border-slate-300 dark:border-slate-600 w-24 h-24 flex flex-col items-center justify-center hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                                  {row.image ? (
+                                    <img
+                                      src={row.image}
+                                      className="w-full h-full object-cover"
+                                      alt="Preview"
+                                    />
+                                  ) : (
+                                    <>
+                                      <Camera className="w-6 h-6 text-slate-400 mb-1" />
+                                      <span className="text-[10px] font-bold uppercase text-slate-500">
+                                        Adicionar
+                                      </span>
+                                    </>
+                                  )}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                    onChange={(e) => handlePhotoCapture(idx, e)}
+                                  />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                  <p className="text-xs text-slate-500">
+                                    Anexe ou atualize com novas fotos ou
+                                    diagramas em JPG, PNG.
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Error Flags rendering (Missing Category, duplicate, invalid SKU) */}
+                            {isMissingCategory && (
+                              <div className="text-red-500 text-xs font-bold uppercase">
+                                Categoria obrigatória
+                              </div>
+                            )}
+                            {isInvalidSku && (
+                              <div className="text-red-500 text-xs font-bold uppercase">
+                                SKU não listado, por favor verifique o código ou
+                                active "Criar Novo Material"
+                              </div>
+                            )}
+                            {isDuplicate && (
+                              <div className="text-red-500 text-xs font-bold uppercase">
+                                Aviso: Possível material duplicado (cadastrado)
+                              </div>
+                            )}
+                            {isUnchecked && (
+                              <div className="text-red-500 text-xs font-bold uppercase">
+                                Aviso: Por favor verifique equivalências e
+                                similitude
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
