@@ -2840,14 +2840,18 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                               Item {idx + 1}
                             </span>
                             {!isExpanded && (
-                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px] md:max-w-[300px] flex items-center gap-2">
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate max-w-[150px] md:max-w-[400px] flex items-center gap-2">
                                 {row.image && (
-                                  <Camera className="w-3 h-3 text-brand-600" />
+                                  <Camera className="w-3 h-3 text-brand-600 dark:text-brand-400 flex-shrink-0" />
                                 )}
-                                {row.isCustom
-                                  ? row.customDesc || "(Sem descrição)"
-                                  : row.sku || "(Selecione material)"}
-                                {row.qty ? ` - ${row.qty} un` : ""}
+                                <span className="truncate">
+                                  {row.isCustom
+                                    ? row.customDesc || "(Sem descrição)"
+                                    : row.sku
+                                      ? `${row.sku} - ${getMaterialDescription(row.sku)}`
+                                      : "(Selecione material)"}
+                                  {row.qty ? ` - ${row.qty} un` : ""}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -2950,6 +2954,11 @@ const OrderManager: React.FC<OrderManagerProps> = ({
                                       </option>
                                     ))}
                                   </datalist>
+                                  {row.sku && isKnownSku(row.sku) && (
+                                    <p className="mt-2 text-sm font-medium text-brand-600 dark:text-brand-400">
+                                      {getMaterialDescription(row.sku)}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                             )}
